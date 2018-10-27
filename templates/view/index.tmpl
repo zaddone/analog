@@ -1,0 +1,49 @@
+{{define "index.tmpl"}}
+<!doctype html>
+<html lang="en">
+{{template "head" .}}
+  <body>
+    {{template "top" .}}
+    <main role="main" class="container">
+	<div class="container">
+
+	<div id="accordion">
+	 {{range .accounts}}
+	  <div class="card">
+	    <div class="card-header" id="headingOne">
+	      <h5 class="mb-0">
+		<button class="btn btn-secondary btn-lg btn-block collapsed" data-toggle="collapse" data-target="#collapse{{.uid}}" aria-expanded="true" aria-controls="collapseOne">
+	 		{{.id}} 
+		</button>
+	      </h5>
+	    </div>
+
+	    <div id="collapse{{.uid}}" class="collapse" aria-labelledby="heading{{.uid}}" data-parent="#accordion">
+	      <div class="card-body">
+		<div class="row">
+		{{range .ins}}
+		
+		  <h6>
+		<a data-toggle="tooltip" data-placement="top" title="report" class="btn btn-outline-secondary btn-sm" href="/view/{{.account.uid}}/{{.id}}">{{.name}}</a>
+<!--
+		<a data-toggle="tooltip" data-placement="top" title="{{.displayPrecision}}-{{.minimumTrailingStopDistance}}-run" class="btn btn-outline-secondary btn-sm" href="/run/{{$.account.index}}/{{.name}}">{{.type}}</a>
+-->
+		</h6>
+
+
+		{{end}}
+		</div>
+	      </div>
+	    </div>
+	  </div>
+	  {{end}}
+	</div>
+	 
+	</div>
+	    
+    </main>
+
+    {{template "footer" .}}
+  </body>
+</html>
+{{end}}

@@ -1,0 +1,73 @@
+{{define "run.tmpl"}}
+<!doctype html>
+<html lang="en">
+{{template "head" .}}
+  <body>
+    {{template "top" .}}
+    <main role="main" class="container">
+	<div class="container">
+	<div class="row">
+	{{range $k, $v := .rundbs}}
+	  <div class="col-sm">
+		<div class="card">
+		  <h5 class="card-header">{{$v.account.id}} {{$v.name}} {{$v.type}} </h5>
+		  <div class="card-body">
+		    <h5 class="card-title" id="show{{$k}}"></h5>
+		    <p class="card-text" id="showPrice{{$k}}" ></p>
+		    <a href="javascript:void(0)" onclick="PostOrder({{$v.account.uid}},{{$k}},'buy')" class="btn btn-secondary">buy</a>
+		    <a href="javascript:void(0)" onclick="PostOrder({{$v.account.uid}},{{$k}},'sell')" class="btn btn-secondary">sell</a>
+		    <a href="javascript:void(0)" onclick="Close({{$k}})" class="btn btn-secondary">close</a>
+		  </div>
+		</div>
+	  </div>
+	{{end}}
+	</div>
+	</div>	    
+    </main>
+    {{template "footer" .}}
+<script>
+function Close(id) {
+	$.getJSON('/close/'+id ,function(data) {
+		location.reload();
+	})
+}
+function FindOrder(uid,id,orderid) {
+	$.getJSON('/trades/'+uid+'/'+orderid,function(data) {
+		console.log(data);
+	})
+}
+function PostOrder(uid,id,buy){
+	$.getJSON('/order/'+id+'/'+buy,function(data) {
+		var endtime= (new Date());
+		endtime.setTime(data.orderFillTransaction.time*1000);
+		$('#show'+id).append('<p><a href="javascript:void(0)"  onclick="FindOrder('+uid+','+id+','+data.orderFillTransaction.id+')"  class="btn btn-secondary">'+data.orderFillTransaction.id+'</a> '+endtime.toLocaleString()+'</p><p>'+data.orderFillTransaction.price+' '+data.orderFillTransaction.pl+' <a href="javascript:void(0)" onclick="ClosePositions('+id+','+uid+',\''+data.orderFillTransaction.instrument+'\')"   class="btn btn-secondary" >close</a></p><div id="res'+id+'"></div>');		
+	})
+}	
+function showUnreadNews(id,uid,insname){
+	$.getJSON('/getproxy/'+uid,{url:'/positions/'+insname},function(data) {
+		console.log(data );
+		//var endtime= (new Date());
+		//endtime.setTime(data.time*1000);
+		//var x = Math.pow(10,ro);		
+		$('#showPrice'+id).html('<p>pl:'+data.position.pl+'</p><p>unrealizedPL:'+data.position.unrealizedPL+'</p>');
+	});
+}
+
+function ClosePositions(id,uid,insname){
+	$.getJSON('/getproxy/'+uid,{url:'/positions/'+insname+'/close'},function(data) {
+		console.log(data );
+	});
+}
+/**
+$(function(){	
+	{{range $k, $v := .rundbs}}
+	setInterval('showUnreadNews({{$k}},{{$v.account.uid}}, "{{$v.name}}")',2000);
+	{{end}}
+	//console.log(db.name );
+})
+**/
+</script>
+
+  </body>
+</html>
+{{end}}

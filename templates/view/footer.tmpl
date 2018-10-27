@@ -1,0 +1,39 @@
+{{define "footer"}}
+	<footer class="footer">
+	<div class="container">
+	<span class="text-muted">show me the memony.</span>
+	</div>
+	</footer>
+
+	<script src="https://code.jquery.com/jquery-3.2.1.min.js" ></script>
+	<script>window.jQuery || document.write('<script src="https://code.jquery.com/jquery-min.js"><\/script>')</script>
+
+	<script src="https://v4.bootcss.com/assets/js/vendor/popper.min.js"></script>
+	<script src="https://v4.bootcss.com/dist/js/bootstrap.min.js"></script>
+	<script>
+
+	$(function(){
+	/**
+	  $.getJSON('/run',function(data) {	
+		//console.log(data );
+		data.rundbs.forEach(function(db,index){
+			$('#run').append('<a class="dropdown-item" href="/view/'+db.uid+'/'+db.id+'">'+ db.name+'</a><small id="time'+index+'"></small>');
+			setInterval('showUnreadNews('+index+')',2000);
+			//console.log(db.name );
+		})
+	    		
+	  });
+	**/
+	  $.getJSON('/runall',function(data) {
+		//console.log(data );
+		data.rundbs.forEach(function(db){
+			$('#runall').append('<a class="dropdown-item" href="/view/'+db.account.uid+'/'+db.id+'">'+ db.name+'</a>');
+			//console.log(db.name );
+		})
+	    		
+	  });
+
+	});
+	</script>
+
+{{end}}
