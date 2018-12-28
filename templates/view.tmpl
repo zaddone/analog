@@ -1,0 +1,61 @@
+{{define "view.tmpl"}}
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head" .}}
+<script src="/static/echarts.common.min.js"></script>
+
+</head>
+<body>
+{{template "top" .}}
+<!-- Begin page content -->
+ 
+<main role="main" class="container">
+<div id="main" style="width:1000px;height:400px;"></div>
+</main>
+{{template "footer" .}} 
+
+<script>
+var myChart = echarts.init(document.getElementById('main'));
+var data2 = [];
+var data1 = [];
+function getArgs(){
+    var args = {};
+    var match = null;
+    var search = decodeURIComponent(location.search.substring(1));
+    var reg = /(?:([^&]+)=([^&]+))/g;
+    while((match = reg.exec(search))!==null){
+        args[match[1]] = match[2];
+    }
+    return args;
+}
+
+function request(body){
+	$.getJSON('/openfile',body,function(db) {
+
+		option = {
+		    xAxis: {},
+		    yAxis: {},
+		    legend: {
+       			 left: 'left',
+       			 data: ['db1']
+   		    },
+		    series: [{
+			name: 'db1',
+			symbolSize: 1,
+			data:db.db1,
+			type: 'scatter'
+		    }]
+		};
+		myChart.setOption(option);
+		
+	});
+}
+$(function(){
+	//request({p:"AUD_CAD,200601,1_85368_85317_85376"});
+	request(getArgs());
+});
+</script>
+</body>
+</html>
+{{end}}

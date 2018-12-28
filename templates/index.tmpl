@@ -1,0 +1,102 @@
+{{define "index.tmpl"}}
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head" .}}
+</head>
+<body>
+{{template "top" .}}
+<!-- Begin page content -->
+ 
+<main role="main" class="container">
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb" id="mu">
+    <li class="breadcrumb-item" aria-current="page"><a href="/" >Home</a></li>
+	<li class="breadcrumb-item" aria-current="page" id="t1"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t2"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t3"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t4"></li>
+  </ol>
+</nav>
+<div class="container">
+  <div class="row" id="con">
+
+  </div>
+</div>
+
+</main>
+{{template "footer" .}} 
+
+<script>
+
+function getArgs(){    
+    var args = {};
+    var match = null;
+    var search = decodeURIComponent(location.search.substring(1));
+    var reg = /(?:([^&]+)=([^&]+))/g;
+    while((match = reg.exec(search))!==null){
+        args[match[1]] = match[2];
+    }
+    return args;
+}
+var t1=0,t2=0,t3=0;
+//args = getArgs();
+var url = decodeURIComponent(location.search.substring(1));
+function getUrl(db){
+	var path = "";
+	if (url === "") {
+		path='p='+db.p;
+	}else{
+		path = url+','+db.p;
+	}	
+	if (db.f){
+		return "/?"+path;
+	}else{
+		return '/view?'+path;
+	}
+
+}
+function request(body){
+	q = decodeURIComponent(location.search.substring(1));
+	$.getJSON('/log',body,function(data) {	
+		data.dir.forEach(function(db){
+			$('#con').append('<div class="col-md-2"><a href="'+getUrl(db)+'">'+db.p+'</a></div>'); 
+			li = db.p.split('_');
+			if (li.length===4){
+				tp = parseInt(li[1]);
+				sl = parseInt(li[2]);
+				v =  parseInt(li[3]);
+				if (tp>sl){
+					if (v> tp) {
+						t1++;
+					}else if (v < sl){
+						t2++;
+					}else{
+						t3++;
+					}
+				}else{
+					if (v> sl) {
+						t2++;
+					}else if(v < tp){
+						t1++;
+					}else{
+						t3++;
+					}
+
+				}
+				
+			}
+		});	
+		$('#t1').text(t1); 
+		$('#t2').text(t2); 
+		$('#t3').text(t3); 
+		$('#t4').text(t1/t2); 
+	});
+}
+$(function(){
+	request(getArgs());	
+});
+</script>
+</body>
+</html>
+{{end}}

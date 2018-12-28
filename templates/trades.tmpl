@@ -1,0 +1,53 @@
+{{define "trades.tmpl"}}
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head" .}}
+</head>
+<body>
+{{template "top" .}}
+<!-- Begin page content -->
+ 
+<main role="main" class="container">
+
+<table class="table">
+  <thead>
+    <tr>
+      <th scope="col">#</th>
+      <th scope="col">instrument</th>
+      <th scope="col">openTime</th>
+      <th scope="col">unrealizedPL</th>
+      <th scope="col">realizedPL</th>
+    </tr>
+  </thead>
+  <tbody id="con">
+
+  </tbody>
+</table>
+
+</main>
+{{template "footer" .}} 
+
+<script>
+function show(){
+	$.getJSON('/open',function(data) {
+		var sumPl = 0.0;
+		var sumPlR = 0.0;
+		data.trades.forEach(function(db){
+			DateTime = new Date();
+			DateTime.setTime(parseFloat(db.openTime) * 1000);
+			$('#con').append('<tr><th scope="row"><a target="_blank" href="/closeid/'+db.id+'">'+db.id+'</a></th><td>'+db.instrument+'</td><td>'+DateTime.toLocaleString()+'</td><td>'+db.unrealizedPL+'</td><td>'+db.realizedPL+'</td></tr>'); 
+			sumPl+=parseFloat(db.unrealizedPL);
+			sumPlR+=parseFloat(db.realizedPL);		
+		});
+		$('#con').prepend('<tr><th scope="row">Summary</th><td></td><td></td><td>'+sumPl+'</td><td>'+sumPlR+'</td></tr>'); 		
+	});
+}
+$(function(){
+	show();
+});
+
+</script>
+</body>
+</html>
+{{end}}
