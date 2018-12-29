@@ -288,7 +288,7 @@ func LoadSetPool(ins string, e *Sample){
 	sp := NewSetPool(ins)
 	keyE :=e.KeyName()
 	DateKey := time.Unix( int64(binary.BigEndian.Uint64(keyE[:8])),0)
-	ke :=uint64(DateKey.AddDate(-3,0,0).Unix())
+	ke :=uint64(DateKey.AddDate(-1,0,0).Unix())
 	config.UpdateKvDBWithName(
 		sp.SampDB,
 		[]byte{'1'},
@@ -422,11 +422,10 @@ func (self *SetPool) add(e *Sample) bool {
 	MinSet.DeleteDB(self)
 	self.Diff = maxdiff
 	if self.add(_e) {
-		MinSet.SaveDB(self)
-		//MinSet.update(MinSet.samp)
-	}else{
-		TmpSet.SaveDB(self)
+		//MinSet.SaveDB(self)
+		TmpSet.update(TmpSet.samp)
 	}
+	TmpSet.SaveDB(self)
 	return true
 
 }
