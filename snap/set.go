@@ -418,12 +418,23 @@ func (self *SetPool) add(e *Sample) bool {
 		return true
 	}
 	MinSet.DeleteDB(self)
-	self.Diff = maxdiff
-	if self.add(_e) {
-		//MinSet.SaveDB(self)
-		TmpSet.update(TmpSet.samp)
+
+	//sp := &self
+	for{
+		self.Diff = maxdiff
+		//self.Diff = maxdiff
+		if self.add(_e) {
+			if len(TmpSet.samp) == 0 {
+				break
+			}
+			//MinSet.SaveDB(self)
+			TmpSet.update(TmpSet.samp)
+			_e,maxdiff = TmpSet.FindLong()
+		}else{
+			TmpSet.SaveDB(self)
+			break
+		}
 	}
-	TmpSet.SaveDB(self)
 	return true
 
 }
