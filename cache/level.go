@@ -122,7 +122,9 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		if (self.par.par != nil) && (self.tag > 0 ) {
 			k := make([]byte,8)
 			binary.BigEndian.PutUint64(k,uint64(e.DateTime()))
-			k = append(k,uint8(self.tag))
+			//l := make([]byte,8)
+			//binary.BigEndian.PutUint64(l,uint64(self.duration()))
+			k = append(k,byte(self.tag))
 			//n :=  self.ca.samples[string(k)]
 			sa := snap.NewSample(
 				self.par.list,

@@ -25,7 +25,7 @@ type Set struct {
 
 	samp []*Sample
 	Samplist [][]byte
-	Count [2]int
+	Count [6]int
 	KeyName []byte
 
 }
@@ -56,7 +56,6 @@ func NewSet(sa *Sample) (S *Set) {
 		Ys = append(Ys,y/S.SortSn.LengthY)
 	})
 	S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
-	SetLen++
 	fmt.Println("New",time.Unix(int64(binary.BigEndian.Uint64(sa.KeyName()[:8])),0),SetLen)
 	return
 
@@ -72,6 +71,7 @@ func (self *Set) DeleteDB(sp *SetPool) {
 	if err != nil {
 		panic(err)
 	}
+	SetLen--
 }
 func (self *Set) LoadSamp(sp *SetPool) bool {
 
@@ -104,7 +104,6 @@ func (self *Set) LoadSamp(sp *SetPool) bool {
 	if j == 0 {
 		fmt.Println("delete",SetLen)
 		self.DeleteDB(sp)
-		SetLen--
 		return false
 	}
 	//self.Samplist = sampTag[:j]
@@ -124,6 +123,7 @@ func (self *Set) SaveDB(sp *SetPool){
 	if err != nil {
 		panic(err)
 	}
+	SetLen++
 	return
 }
 func (self *Set) Load(db []byte) {
@@ -159,7 +159,7 @@ func (S *Set) Key() (k []byte){
 func (S *Set) clear(){
 	S.LongSn = &Snap{}
 	S.SortSn = &Snap{}
-	S.Count = [2]int{0,0}
+	S.Count = [6]int{0,0,0,0,0,0}
 	//S.samp = nil
 }
 func (S *Set) update(sa []*Sample) {
@@ -176,6 +176,7 @@ func (S *Set) update(sa []*Sample) {
 		}else{
 			S.Count[1]++
 		}
+		S.Count[int(s.Tag)+2]++
 	}
 	le := float64(len(sa))
 	S.LongSn.LengthX /= le
@@ -230,24 +231,21 @@ func (S *Set) FindLong() (sa *Sample,Max float64) {
 	return
 }
 
-func (self *Set) distance(e *Sample) (errDis float64) {
+func (self *Set) distance(e *Sample) float64 {
 
-	fh := func(n float64) float64 {
-		if n>1{
-			return 1
-		}
-		return n
-	}
-	errDis += float64(e.GetLongDB(int64(self.LongSn.LengthX),func(x,y float64){
-		//fmt.Println(self.LongSn.LengthX,len(self.LongSn.Matrix),x)
-		errDis += fh(math.Abs(self.LongSn.Matrix[int(x)] - y)/self.LongSn.LengthY)
-	}))
-
-	errDis += float64(e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
-		//fmt.Println(len(self.SortSn.Matrix),x)
-		errDis += fh(math.Abs(self.SortSn.Matrix[int(x)] - y)/self.SortSn.LengthY)
-	}))
-	return
+	var longDis,sortDis,l,s float64
+	ld := e.GetLongDB(int64(self.LongSn.LengthX),func(x,y float64){
+		longDis += math.Abs(self.LongSn.Matrix[int(x)] - y)/self.LongSn.LengthY
+		l++
+	})
+	sd := e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
+		sortDis += math.Abs(self.SortSn.Matrix[int(x)] - y)/self.SortSn.LengthY
+		s++
+	})
+	//k1 := float64(ld+sd)/(self.LongSn.LengthX+self.SortSn.LengthX)
+	//k2 := (longDis+sortDis)/(l+s)
+	//k3 :=math.Sqrt2(math.Pow(k1,2)+math.Pow(k2,2))
+	return math.Sqrt(math.Pow(float64(ld+sd)/(self.LongSn.LengthX+self.SortSn.LengthX),2)+math.Pow((longDis+sortDis)/(l+s),2))
 
 }
 
@@ -288,7 +286,7 @@ func LoadSetPool(ins string, e *Sample){
 	sp := NewSetPool(ins)
 	keyE :=e.KeyName()
 	DateKey := time.Unix( int64(binary.BigEndian.Uint64(keyE[:8])),0)
-	ke :=uint64(DateKey.AddDate(-1,0,0).Unix())
+	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
 	config.UpdateKvDBWithName(
 		sp.SampDB,
 		[]byte{'1'},
