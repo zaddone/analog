@@ -12,8 +12,8 @@ type Snap struct {
 	BeginX float64
 	LengthX float64
 	LengthY float64
-	//Wei []float64
-	Matrix []float64
+	Wei []float64
+	//Matrix []float64
 
 }
 
@@ -45,33 +45,47 @@ func NewSnap(es []config.Element) (sn *Snap) {
 		Y[i]  =  (Y[i]  - yMin)/sn.LengthY
 		X[i]  =  (x - begin)/sn.LengthX
 	}
-	Wei := CurveFittingMax(X,Y,nil,0)
-	if  len(Wei) == 0 {
+	sn.Wei = CurveFittingMax(X,Y,nil,0)
+	//fmt.Println("Wei",len(sn.Wei))
+	if  len(sn.Wei) == 0 {
 		return nil
 	}
-	sn.CreateMatrix(Wei)
+
+	//sn.CreateMatrix(Wei)
 
 	return sn
 
 }
-func (self *Snap) CreateMatrix(w []float64) {
 
-	var y,x,t,_x float64
-	self.Matrix = make([]float64,int(self.LengthX)+1)
-	for t=0; t <= self.LengthX; t++{
-		x  = t/self.LengthX
-		y = w[0] +w[1]*x
-		_x = x
-		for _i :=2 ;_i < len(w);_i++ {
-			_x *= x
-			y += w[_i]*_x
-		}
-		y *=self.LengthY
-		self.Matrix[int(t)] = y
+func (self *Snap) GetWeiY(x float64) (y float64) {
+	var _x float64 = x
+	y = self.Wei[0] + self.Wei[1]*_x
+	for _,w := range self.Wei[2:] {
+		//_x = x/self.LengthX
+		_x *= x
+		y += _x*w
+		//y += math.Pow(x,float64(i)) * w
 	}
-
-
+	return
 }
+//func (self *Snap) CreateMatrix(w []float64) {
+//
+//	var y,x,t,_x float64
+//
+//	self.Matrix = make([]float64,int(self.LengthX)+1)
+//	for t=0; t <= self.LengthX; t++{
+//		x  = t/self.LengthX
+//		y = w[0] +w[1]*x
+//		_x = x
+//		for _i :=2 ;_i < len(w);_i++ {
+//			_x *= x
+//			y += w[_i]*_x
+//		}
+//		y *=self.LengthY
+//		self.Matrix[int(t)] = y
+//	}
+//	//fmt.Println(self.LengthX+1,)
+//}
 
 func CurveFittingMax(X,Y,W []float64,vs float64) []float64 {
 	wlen := len(W)
@@ -79,7 +93,10 @@ func CurveFittingMax(X,Y,W []float64,vs float64) []float64 {
 	if wlen <2 {
 		w = make([]float64,2)
 	}else{
-		w = make([]float64,len(W)+1)
+		if wlen>9 {
+			return W
+		}
+		w = make([]float64,wlen+1)
 	}
 	if !fitting.GetCurveFittingWeight(X,Y,w) {
 		return W

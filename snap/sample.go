@@ -114,6 +114,7 @@ func (self *Sample) String() []byte {
 	if err != nil {
 		panic(err)
 	}
+	//fmt.Println("sample",b.Len())
 	return b.Bytes()
 }
 

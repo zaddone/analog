@@ -49,13 +49,17 @@ func NewSet(sa *Sample) (S *Set) {
 		Xl = append(Xl,x/S.LongSn.LengthX)
 		Yl = append(Yl,y/S.LongSn.LengthY)
 	})
-	S.LongSn.CreateMatrix(CurveFittingMax(Xl,Yl,nil,0))
+	S.LongSn.Wei = CurveFittingMax(Xl,Yl,nil,0)
+	//fmt.Println("Weilong",len(S.LongSn.Wei))
+	//S.LongSn.CreateMatrix(CurveFittingMax(Xl,Yl,nil,0))
 
 	sa.GetSortDB(sa.SortDuration(),func(x,y float64){
 		Xs = append(Xs,x/S.SortSn.LengthX)
 		Ys = append(Ys,y/S.SortSn.LengthY)
 	})
-	S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
+	S.SortSn.Wei = CurveFittingMax(Xs,Ys,nil,0)
+	//fmt.Println("Weisort",len(S.SortSn.Wei))
+	//S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
 	fmt.Println("New",time.Unix(int64(binary.BigEndian.Uint64(sa.KeyName()[:8])),0),SetLen)
 	return
 
@@ -72,6 +76,7 @@ func (self *Set) DeleteDB(sp *SetPool) {
 		panic(err)
 	}
 	SetLen--
+	fmt.Println("delete",self.Key(),SetLen)
 }
 func (self *Set) LoadSamp(sp *SetPool) bool {
 
@@ -102,7 +107,6 @@ func (self *Set) LoadSamp(sp *SetPool) bool {
 		panic(err)
 	}
 	if j == 0 {
-		fmt.Println("delete",SetLen)
 		self.DeleteDB(sp)
 		return false
 	}
@@ -141,6 +145,7 @@ func (self *Set) String() []byte {
 	if err != nil {
 		panic(err)
 	}
+	//fmt.Println("setlen",b.Len())
 	return b.Bytes()
 
 
@@ -160,6 +165,7 @@ func (S *Set) clear(){
 	S.LongSn = &Snap{}
 	S.SortSn = &Snap{}
 	S.Count = [6]int{0,0,0,0,0,0}
+	S.KeyName = nil
 	//S.samp = nil
 }
 func (S *Set) update(sa []*Sample) {
@@ -205,13 +211,17 @@ func (S *Set) update(sa []*Sample) {
 		Xl[i] = x / S.LongSn.LengthX
 		Yl[i] = Yl[i] / S.LongSn.LengthY
 	}
-	S.LongSn.CreateMatrix(CurveFittingMax(Xl,Yl,nil,0))
+	S.LongSn.Wei = CurveFittingMax(Xl,Yl,nil,0)
+	//fmt.Println("Weilong",len(S.LongSn.Wei))
+	//S.LongSn.CreateMatrix(CurveFittingMax(Xl,Yl,nil,0))
 
 	for i,x := range Xs {
 		Xs[i] = x / S.SortSn.LengthX
 		Ys[i] = Ys[i] / S.SortSn.LengthY
 	}
-	S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
+	S.SortSn.Wei = CurveFittingMax(Xs,Ys,nil,0)
+	//fmt.Println("Weisort",len(S.SortSn.Wei))
+	//S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
 
 
 }
@@ -235,13 +245,22 @@ func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,sortDis,l,s float64
 	ld := e.GetLongDB(int64(self.LongSn.LengthX),func(x,y float64){
-		longDis += math.Abs(self.LongSn.Matrix[int(x)] - y)/self.LongSn.LengthY
+		longDis += math.Abs(self.LongSn.GetWeiY(x/self.LongSn.LengthX)-y/self.LongSn.LengthY)
 		l++
 	})
+	if longDis == 0 {
+		longDis = 99
+	}
+	//fmt.Println("ld",longDis,l)
 	sd := e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
-		sortDis += math.Abs(self.SortSn.Matrix[int(x)] - y)/self.SortSn.LengthY
+		sortDis += math.Abs(self.SortSn.GetWeiY(x/self.SortSn.LengthX)-y/self.SortSn.LengthY)
 		s++
 	})
+	if sortDis == 0 {
+		sortDis = 99
+	}
+
+	//fmt.Println("sd",sortDis,s)
 	//k1 := float64(ld+sd)/(self.LongSn.LengthX+self.SortSn.LengthX)
 	//k2 := (longDis+sortDis)/(l+s)
 	//k3 :=math.Sqrt2(math.Pow(k1,2)+math.Pow(k2,2))
