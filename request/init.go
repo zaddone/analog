@@ -16,7 +16,7 @@ import(
 )
 var (
 	Header  http.Header
-	Ins_key []byte = []byte("instruments")
+	Ins_key []byte = []byte{1}
 	AccountSummary map[string]interface{}
 )
 func init(){
@@ -99,7 +99,7 @@ func DownAccountProperties() error {
 		if err != nil {
 			return err
 		}
-		return config.UpdateKvDB([]byte("instruments"),func(b *bolt.Bucket)error{
+		return config.UpdateKvDB(Ins_key,func(b *bolt.Bucket)error{
 			for _,_ins := range da.Instruments {
 				var ins oanda.Instrument
 				err = ins.Load(_ins)

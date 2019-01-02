@@ -5,7 +5,13 @@ import(
 	"github.com/zaddone/analog/request"
 	"github.com/zaddone/analog/config"
 	"io"
+	"os"
+	"path/filepath"
+	//"encoding/gob"
+	//"bytes"
 	//"io/ioutil"
+	"bufio"
+	"time"
 	"fmt"
 	"log"
 	"net/url"
@@ -15,36 +21,129 @@ const (
 )
 
 type Candles struct {
-	Mid    [4]float64
+	//Mid    [4]float64
+	Ask    [4]float64
+	Bid    [4]float64
 	Time   int64
-	Volume float64
-	Val    float64
-	Scale  int64
+	//Volume float64
+	val    float64
+	diff   float64
+	scale  int64
 }
 func (self *Candles) Duration() int64 {
-	return self.Scale
+	return self.scale
 }
 func (self *Candles) DateTime() int64 {
 	return self.Time
 }
 func (self *Candles) Middle() float64 {
-	if self.Val == 0 {
-		var sum float64 = 0
-		for _, m := range self.Mid {
-			sum += m
+	if self.val == 0 {
+		for i, m := range self.Ask {
+			self.val += m
+			self.val += self.Bid[i]
 		}
-		self.Val = sum / 4
+		self.val /= 8
 	}
-	return self.Val
+	//fmt.Println("val",self.val)
+	return self.val
 }
 func (self *Candles) Diff() float64 {
-	return (self.Mid[2] - self.Mid[3])
+	if self.diff == 0 {
+		self.diff = self.Ask[2] - self.Bid[3]
+		//self.diff = ((self.Ask[0] - self.Bid[0]) + (self.Ask[1] - self.Bid[1]))/2
+	}
+	//fmt.Println("diff",self.diff)
+	return self.diff
 }
 func (self *Candles) Read(h func(config.Element)) {
 	h(self)
 }
+func (self *Candles) load(db []byte) {
+	err := json.Unmarshal(db,self)
+	//err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(self)
+	//fmt.Println(self,len(db),string(db))
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+}
+func (self *Candles) Save(insName string){
+	da := time.Unix(self.DateTime(),0)
+	pa := filepath.Join(config.Conf.LogPath,insName,da.Format("200601"))
+	//da := time.Unix(self.DateTime(),0).Format("20060102")
+	_,err := os.Stat(pa)
+	if err != nil {
+		err = os.MkdirAll(pa,0700)
+		if err != nil {
+			panic(err)
+		}
+	}
+	f,err := os.OpenFile(filepath.Join(pa,fmt.Sprintf("%d",da.Day())),os.O_APPEND|os.O_CREATE|os.O_RDWR|os.O_SYNC,0600)
+	if err != nil {
+		panic(err)
+	}
 
-func DownCandles(insName string,from int64,hand func(* Candles)) {
+	err = json.NewEncoder(f).Encode(self)
+	if err != nil {
+		panic(err)
+	}
+	//f.Write([]byte{'\n'})
+	f.Close()
+
+}
+func ReadCandles(insName string,scale int64,h func(* Candles)) {
+
+	var from int64
+	err := filepath.Walk(filepath.Join(config.Conf.LogPath,insName),func(p string,info os.FileInfo,err error)error{
+		if info == nil || info.IsDir() {
+			return nil
+		}
+		f,err := os.Open(p)
+		if err != nil {
+			return err
+		}
+		fmt.Println(p)
+		buf := bufio.NewReader(f)
+		for{
+			li,err := buf.ReadSlice('\n')
+			if len(li) >1 {
+				c := &Candles{}
+				c.load(li)
+				c.scale = scale
+				//fmt.Println(c)
+				if from >= c.DateTime(){
+					fmt.Println(insName,from)
+					continue
+					//panic(from)
+				}
+				from = c.DateTime()
+				h(c)
+			}
+			if err != nil {
+				if err != io.EOF {
+					fmt.Println(err)
+				}
+				break
+			}
+		}
+		f.Close()
+		return nil
+
+	})
+	if err != nil {
+		panic(err)
+	}
+	if from == 0 {
+		from = config.GetFromTime()
+	}else{
+		from += scale
+	}
+	//fmt.Println("down",insName,from)
+	DownCandles(insName,from,scale,h)
+
+}
+
+
+func DownCandles(insName string,from int64,scale int64,hand func(* Candles)) {
 
 	var err error
 	var begin int64 = from
@@ -58,7 +157,7 @@ func DownCandles(insName string,from int64,hand func(* Candles)) {
 			insName,
 			url.Values{
 				"granularity": []string{"S5"},
-				"price": []string{"M"},
+				"price": []string{"AB"},
 				"count": []string{fmt.Sprintf("%d", Count)},
 				"from": []string{fmt.Sprintf("%d", from)},
 				//"dailyAlignment":[]string{"3"},
@@ -76,17 +175,19 @@ func DownCandles(insName string,from int64,hand func(* Candles)) {
 			}
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
 				can := NewCandles(c.(map[string]interface{}))
-				can.Scale = 5
+				can.scale = scale
+				can.Save(insName)
 				begin = can.Time
 				hand(can)
 			}
 			return nil
 		})
-		if err != nil {
+		if (err == nil) || (err == io.EOF) {
+			if begin != from {
+				from = begin+scale
+			}
+		}else{
 			log.Println(err)
-		}
-		if begin != from {
-			from = begin+5
 		}
 	}
 }
@@ -94,26 +195,65 @@ func DownCandles(insName string,from int64,hand func(* Candles)) {
 func NewCandles(tmp map[string]interface{}) (c *Candles) {
 	c = &Candles{}
 	var err error
-	Mid := tmp["mid"].(map[string]interface{})
-	if Mid != nil {
-		c.Mid[0], err = strconv.ParseFloat(Mid["o"].(string), 64)
+	//Mid := tmp["mid"].(map[string]interface{})
+	//if Mid != nil {
+	//	c.Mid[0], err = strconv.ParseFloat(Mid["o"].(string), 64)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	c.Mid[1], err = strconv.ParseFloat(Mid["c"].(string), 64)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	c.Mid[2], err = strconv.ParseFloat(Mid["h"].(string), 64)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//	c.Mid[3], err = strconv.ParseFloat(Mid["l"].(string), 64)
+	//	if err != nil {
+	//		panic(err)
+	//	}
+	//}
+	ask := tmp["ask"].(map[string]interface{})
+	if ask != nil {
+		c.Ask[0], err = strconv.ParseFloat(ask["o"].(string), 64)
 		if err != nil {
 			panic(err)
 		}
-		c.Mid[1], err = strconv.ParseFloat(Mid["c"].(string), 64)
+		c.Ask[1], err = strconv.ParseFloat(ask["c"].(string), 64)
 		if err != nil {
 			panic(err)
 		}
-		c.Mid[2], err = strconv.ParseFloat(Mid["h"].(string), 64)
+		c.Ask[2], err = strconv.ParseFloat(ask["h"].(string), 64)
 		if err != nil {
 			panic(err)
 		}
-		c.Mid[3], err = strconv.ParseFloat(Mid["l"].(string), 64)
+		c.Ask[3], err = strconv.ParseFloat(ask["l"].(string), 64)
 		if err != nil {
 			panic(err)
 		}
 	}
-	c.Volume = tmp["volume"].(float64)
+	bid := tmp["bid"].(map[string]interface{})
+	if bid != nil {
+		c.Bid[0], err = strconv.ParseFloat(bid["o"].(string), 64)
+		if err != nil {
+			panic(err)
+		}
+		c.Bid[1], err = strconv.ParseFloat(bid["c"].(string), 64)
+		if err != nil {
+			panic(err)
+		}
+		c.Bid[2], err = strconv.ParseFloat(bid["h"].(string), 64)
+		if err != nil {
+			panic(err)
+		}
+		c.Bid[3], err = strconv.ParseFloat(bid["l"].(string), 64)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	//c.Volume = tmp["volume"].(float64)
 	ti, err := strconv.ParseFloat(tmp["time"].(string), 64)
 	if err != nil {
 		panic(err)

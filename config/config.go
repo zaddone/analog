@@ -189,6 +189,13 @@ func NewConfig()  *Config {
 
 }
 
+func GetFromTime() int64 {
+	t,err := time.Parse(TimeFormat,Conf.BeginTime)
+	if err != nil {
+		panic(err)
+	}
+	return t.Unix()
+}
 func init(){
 	flag.Parse()
 	Conf = NewConfig()

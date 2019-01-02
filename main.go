@@ -51,6 +51,7 @@ func run(){
 
 func syncPrice() {
 	var b *bolt.Bucket
+	//fmt.Println("sync price start")
 	err := config.HandDB(func(db *bolt.DB)error{
 		return db.View(func(tx *bolt.Tx) error {
 			b = tx.Bucket(request.Ins_key)

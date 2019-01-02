@@ -9,14 +9,18 @@ import(
 	"math"
 )
 type Cache struct {
+
 	Ins *oanda.Instrument
 	part *level
+
 	priceChan chan config.Element
+
 	LastE config.Element
 	InsCaches sync.Map
 
 	Cshow [2]float64
 	samples map[string]*snap.Sample
+
 }
 
 func NewCache(ins *oanda.Instrument,insC sync.Map) (c *Cache) {
@@ -27,13 +31,13 @@ func NewCache(ins *oanda.Instrument,insC sync.Map) (c *Cache) {
 		samples:make(map[string]*snap.Sample),
 	}
 	c.part = NewLevel(0,c,nil)
-	from,err := time.Parse(config.TimeFormat,config.Conf.BeginTime)
-	if err != nil {
-		panic(err)
-	}
-	go DownCandles(c.Ins.Name,from.Unix(),func(can *Candles){
-		c.addToChan(can)
-	})
+	//go ReadCandles(c.Ins.Name,5,func(can *Candles){
+	//	c.addToChan(can)
+	//})
+
+	//go DownCandles(c.Ins.Name,from.Unix(),func(can *Candles){
+	//	c.addToChan(can)
+	//})
 	return c
 }
 
@@ -90,6 +94,9 @@ func (self *Cache) Follow(t int64,w *sync.WaitGroup){
 }
 
 func (self *Cache) Run(hand func(t int64)){
+	go ReadCandles(self.Ins.Name,5,func(can *Candles){
+		self.addToChan(can)
+	})
 	for{
 		e :=<-self.priceChan
 		//fmt.Println(time.Unix(e.DateTime(),0))

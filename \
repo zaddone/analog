@@ -278,7 +278,7 @@ type SetPool struct {
 	//e *Sample
 	CountApp int
 	Diff float64
-	tmpSample map[string]*Sample
+	tmpSample []*Sample
 }
 func NewSetPool(ins string) (sp *SetPool) {
 	p:=filepath.Join("db",ins)
@@ -291,7 +291,6 @@ func NewSetPool(ins string) (sp *SetPool) {
 	}
 	sp = &SetPool {
 		u:[]byte("pool"),
-		tmpSample:make(map[string]*Sample),
 		//e:e,
 		SampDB:filepath.Join(p,config.Conf.SampleDbPath),
 		PoolDB:filepath.Join(p,config.Conf.PoolDbPath),
@@ -444,16 +443,8 @@ func (self *SetPool) add(e *Sample) bool {
 	MinSet.DeleteDB(self)
 	//sp := &self
 	self.Diff = maxdiff
-	var k string
 	for{
-		k = string(_e.KeyName())
-		if self.tmpSample[k] != nil {
-			return false
-			//NewSet(_e).SaveDB(self)
-			//break
-		}
-		self.tmpSample[k] = _e
-
+		self.
 		if self.add(_e) {
 			le :=len(TmpSet.samp)
 			if le == 0 {
@@ -464,8 +455,10 @@ func (self *SetPool) add(e *Sample) bool {
 			}
 			//MinSet.SaveDB(self)
 			TmpSet.update(TmpSet.samp)
-			_e,self.Diff = TmpSet.FindLong()
-
+			_e,maxdiff = TmpSet.FindLong()
+			//if maxdiff < self.Diff {
+			self.Diff = maxdiff
+			//}
 		}else{
 			TmpSet.SaveDB(self)
 			break
@@ -476,7 +469,9 @@ func (self *SetPool) add(e *Sample) bool {
 }
 func (self *SetPool) Add(e *Sample) {
 
-	self.add(e)
+	if !self.add(e) {
+		panic(0)
+	}
 
 }
 
