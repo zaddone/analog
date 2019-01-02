@@ -50,16 +50,14 @@ func NewSet(sa *Sample) (S *Set) {
 		Yl = append(Yl,y/S.LongSn.LengthY)
 	})
 	S.LongSn.Wei = CurveFittingMax(Xl,Yl,nil,0)
-	//fmt.Println("Weilong",len(S.LongSn.Wei))
-	//S.LongSn.CreateMatrix(CurveFittingMax(Xl,Yl,nil,0))
 
 	sa.GetSortDB(sa.SortDuration(),func(x,y float64){
 		Xs = append(Xs,x/S.SortSn.LengthX)
 		Ys = append(Ys,y/S.SortSn.LengthY)
 	})
 	S.SortSn.Wei = CurveFittingMax(Xs,Ys,nil,0)
-	//fmt.Println("Weisort",len(S.SortSn.Wei))
-	//S.SortSn.CreateMatrix(CurveFittingMax(Xs,Ys,nil,0))
+	S.SetCount(sa)
+
 	fmt.Println("New",time.Unix(int64(binary.BigEndian.Uint64(sa.KeyName()[:8])),0),SetLen)
 	return
 
@@ -168,6 +166,15 @@ func (S *Set) clear(){
 	S.KeyName = nil
 	//S.samp = nil
 }
+
+func (S *Set) SetCount(e *Sample) {
+	if e.Dis>0 {
+		S.Count[0]++
+	}else{
+		S.Count[1]++
+	}
+	S.Count[int(e.Tag)+2]++
+}
 func (S *Set) update(sa []*Sample) {
 	S.clear()
 	S.samp = sa
@@ -176,13 +183,7 @@ func (S *Set) update(sa []*Sample) {
 		S.Samplist[_i] = s.KeyName()
 		S.LongSn.LengthX += float64(s.LongDuration())
 		S.SortSn.LengthX += float64(s.SortDuration())
-
-		if s.Dis>0 {
-			S.Count[0]++
-		}else{
-			S.Count[1]++
-		}
-		S.Count[int(s.Tag)+2]++
+		S.SetCount(s)
 	}
 	le := float64(len(sa))
 	S.LongSn.LengthX /= le
@@ -249,7 +250,7 @@ func (self *Set) distance(e *Sample) float64 {
 		l++
 	})
 	if longDis == 0 {
-		longDis = 99
+		longDis = 9999
 	}
 	//fmt.Println("ld",longDis,l)
 	sd := e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
@@ -257,7 +258,7 @@ func (self *Set) distance(e *Sample) float64 {
 		s++
 	})
 	if sortDis == 0 {
-		sortDis = 99
+		sortDis = 9999
 	}
 
 	//fmt.Println("sd",sortDis,s)
@@ -443,8 +444,12 @@ func (self *SetPool) add(e *Sample) bool {
 		self.Diff = maxdiff
 		//self.Diff = maxdiff
 		if self.add(_e) {
-			if len(TmpSet.samp) == 0 {
+			le :=len(TmpSet.samp)
+			if le == 0 {
 				break
+			}else if le == 1 {
+				_e = TmpSet.samp[0]
+				continue
 			}
 			//MinSet.SaveDB(self)
 			TmpSet.update(TmpSet.samp)

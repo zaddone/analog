@@ -126,7 +126,7 @@ func (self *Cache) AddPrice(p config.Element) {
 		if math.Abs(diff) > sa.Diff {
 			sa.Dis = diff
 			delete(self.samples,k)
-			go snap.LoadSetPool(self.Ins.Name,sa)
+			snap.LoadSetPool(self.Ins.Name,sa)
 		}
 	}
 	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >300) {
