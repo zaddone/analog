@@ -19,6 +19,15 @@ import(
 const (
 	Count = 5000
 )
+var Loc *time.Location
+func init(){
+
+	var err error
+	Loc,err = time.LoadLocation("Etc/GMT-3")
+	if err != nil {
+		panic(err)
+	}
+}
 
 type Candles struct {
 	//Mid    [4]float64
@@ -66,31 +75,32 @@ func (self *Candles) load(db []byte) {
 		panic(err)
 	}
 }
-func (self *Candles) Save(insName string){
-	da := time.Unix(self.DateTime(),0)
-	pa := filepath.Join(config.Conf.LogPath,insName,da.Format("200601"))
-	//da := time.Unix(self.DateTime(),0).Format("20060102")
-	_,err := os.Stat(pa)
-	if err != nil {
-		err = os.MkdirAll(pa,0700)
-		if err != nil {
-			panic(err)
-		}
-	}
-	f,err := os.OpenFile(filepath.Join(pa,fmt.Sprintf("%d",da.Day())),os.O_APPEND|os.O_CREATE|os.O_RDWR|os.O_SYNC,0600)
-	if err != nil {
-		panic(err)
-	}
-
-	err = json.NewEncoder(f).Encode(self)
-	if err != nil {
-		panic(err)
-	}
-	//f.Write([]byte{'\n'})
-	f.Close()
-
-}
-func ReadCandles(insName string,scale int64,h func(* Candles)) {
+//func (self *Candles) Save(insName string) (path string,f *os.File) {
+//	da := time.Unix(self.DateTime(),0)
+//	path = filepath.Join(config.Conf.LogPath,insName,da.Format("200601"))
+//	//da := time.Unix(self.DateTime(),0).Format("20060102")
+//	_,err := os.Stat(path)
+//	if err != nil {
+//		err = os.MkdirAll(path,0700)
+//		if err != nil {
+//			panic(err)
+//		}
+//	}
+//	f,err = os.OpenFile(filepath.Join(path,fmt.Sprintf("%d",da.Day())),os.O_APPEND|os.O_CREATE|os.O_RDWR|os.O_SYNC,0600)
+//	if err != nil {
+//		panic(err)
+//	}
+//
+//	err = json.NewEncoder(f).Encode(self)
+//	if err != nil {
+//		panic(err)
+//	}
+//	//f.Write([]byte{'\n'})
+//	return
+//	//f.Close()
+//
+//}
+func ReadCandles(insName string,scale int64,h func(* Candles)bool) {
 
 	var from int64
 	err := filepath.Walk(filepath.Join(config.Conf.LogPath,insName),func(p string,info os.FileInfo,err error)error{
@@ -111,12 +121,14 @@ func ReadCandles(insName string,scale int64,h func(* Candles)) {
 				c.scale = scale
 				//fmt.Println(c)
 				if from >= c.DateTime(){
-					fmt.Println(insName,from)
+					//fmt.Println(insName,from)
 					continue
 					//panic(from)
 				}
 				from = c.DateTime()
-				h(c)
+				if !h(c) {
+					return io.EOF
+				}
 			}
 			if err != nil {
 				if err != io.EOF {
@@ -130,6 +142,9 @@ func ReadCandles(insName string,scale int64,h func(* Candles)) {
 
 	})
 	if err != nil {
+		if err == io.EOF {
+			return
+		}
 		panic(err)
 	}
 	if from == 0 {
@@ -143,10 +158,48 @@ func ReadCandles(insName string,scale int64,h func(* Candles)) {
 }
 
 
-func DownCandles(insName string,from int64,scale int64,hand func(* Candles)) {
+func DownCandles(insName string,from int64,scale int64,hand func(* Candles)bool) {
 
 	var err error
 	var begin int64 = from
+	var fi *os.File = nil
+	defer func(){
+		if fi != nil {
+			fi.Close()
+		}
+	}()
+	var dir,file string
+	var date time.Time
+	save := func(can *Candles){
+		date = time.Unix(can.Time,0).In(Loc)
+		file = fmt.Sprintf("%d",date.Day())
+		if (fi != nil) && (fi.Name()  == file){
+			err = json.NewEncoder(fi).Encode(can)
+			if err != nil {
+				panic(err)
+			}
+		}else{
+			fi.Close()
+			dir = filepath.Join(config.Conf.LogPath,insName,date.Format("200601"))
+			_,err = os.Stat(dir)
+			if err != nil {
+				err = os.MkdirAll(dir,0700)
+				if err != nil {
+					panic(err)
+				}
+			}
+			fi,err = os.OpenFile(filepath.Join(dir,file),os.O_APPEND|os.O_CREATE|os.O_RDWR,0600)
+			if err != nil {
+				panic(err)
+			}
+			err = json.NewEncoder(fi).Encode(can)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+
+
 	for{
 		err = request.ClientHttp(
 		0,
@@ -176,16 +229,21 @@ func DownCandles(insName string,from int64,scale int64,hand func(* Candles)) {
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
 				can := NewCandles(c.(map[string]interface{}))
 				can.scale = scale
-				can.Save(insName)
 				begin = can.Time
-				hand(can)
+				save(can)
+				//can.Save(insName)
+				if !hand(can) {
+					return io.EOF
+				}
 			}
 			return nil
 		})
-		if (err == nil) || (err == io.EOF) {
+		if (err == nil){
 			if begin != from {
 				from = begin+scale
 			}
+		}else if err == io.EOF {
+			return
 		}else{
 			log.Println(err)
 		}

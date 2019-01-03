@@ -10,13 +10,13 @@ import(
 	"bytes"
 	"path/filepath"
 	"os"
-	"time"
-)
+	"time")
 var (
 	SetLen int = 0
 	MaxTime int64
 	MaxApp int64
 )
+
 
 type Set struct {
 
@@ -58,23 +58,24 @@ func NewSet(sa *Sample) (S *Set) {
 	S.SortSn.Wei = CurveFittingMax(Xs,Ys,nil,0)
 	S.SetCount(sa)
 
-	fmt.Println("New",time.Unix(int64(binary.BigEndian.Uint64(sa.KeyName()[:8])),0),SetLen)
+	//fmt.Println("New",time.Unix(int64(binary.BigEndian.Uint64(sa.KeyName()[:8])),0),SetLen)
 	return
 
 }
 func (self *Set) DeleteDB(sp *SetPool) {
-	err := config.UpdateKvDBWithName(
-		sp.PoolDB,
-		sp.u,
-		func(db *bolt.Bucket)error{
-			return db.Delete(self.Key())
-		},
-	)
+	err := sp.PoolDB.Update(func(tx *bolt.Tx) error{
+		db,err := tx.CreateBucketIfNotExists([]byte{1})
+		if err != nil {
+			return err
+		}
+		return db.Delete(self.Key())
+	})
 	if err != nil {
 		panic(err)
 	}
+	sp.PoolDB.Sync()
 	SetLen--
-	fmt.Println("delete",self.Key(),SetLen)
+	//fmt.Println("delete",self.Key(),SetLen)
 }
 func (self *Set) LoadSamp(sp *SetPool) bool {
 
@@ -82,25 +83,24 @@ func (self *Set) LoadSamp(sp *SetPool) bool {
 	//sampTag := make([][]byte,Le)
 	var sa *Sample
 	var j int
-	err := config.ViewKvDBWithName(
-		sp.SampDB,
-		//sp.u,
-		[]byte{'1'},
-		func(db *bolt.Bucket)error{
-			for _,k := range self.Samplist {
-				sa = &Sample{}
-				v := db.Get(k)
-				if len(v) == 0 {
-					continue
-				}
-				//sampTag[j] = k
-				sa.load(v)
-				self.samp[j] = sa
-				j++
-			}
+	err := sp.SampDB.View(func(tx *bolt.Tx)error{
+		db := tx.Bucket([]byte{1})
+		if db == nil {
 			return nil
-		},
-	)
+		}
+		for _,k := range self.Samplist {
+			sa = &Sample{}
+			v := db.Get(k)
+			if len(v) == 0 {
+				continue
+			}
+			//sampTag[j] = k
+			sa.load(v)
+			self.samp[j] = sa
+			j++
+		}
+		return nil
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -115,16 +115,17 @@ func (self *Set) LoadSamp(sp *SetPool) bool {
 }
 
 func (self *Set) SaveDB(sp *SetPool){
-	err := config.UpdateKvDBWithName(
-		sp.PoolDB,
-		sp.u,
-		func(db *bolt.Bucket)error{
-			return db.Put(self.Key(),self.String())
-		},
-	)
+	err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
+		db, err := tx.CreateBucketIfNotExists([]byte{1})
+		if err != nil {
+			return err
+		}
+		return db.Put(self.Key(),self.String())
+	})
 	if err != nil {
 		panic(err)
 	}
+	sp.PoolDB.Sync()
 	SetLen++
 	return
 }
@@ -245,40 +246,49 @@ func (S *Set) FindLong() (sa *Sample,Max float64) {
 func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,sortDis,l,s float64
-	ld := e.GetLongDB(int64(self.LongSn.LengthX),func(x,y float64){
+	ld := float64(e.GetLongDB(int64(self.LongSn.LengthX),func(x,y float64){
 		longDis += math.Abs(self.LongSn.GetWeiY(x/self.LongSn.LengthX)-y/self.LongSn.LengthY)
 		l++
-	})
+	}))
+	ld /= self.LongSn.LengthX
 	if longDis == 0 {
-		longDis = 9999
+		longDis = 99
 	}
-	//fmt.Println("ld",longDis,l)
-	sd := e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
+	sd := float64(e.GetSortDB(int64(self.SortSn.LengthX),func(x,y float64){
 		sortDis += math.Abs(self.SortSn.GetWeiY(x/self.SortSn.LengthX)-y/self.SortSn.LengthY)
 		s++
-	})
+	}))
+	sd /= self.SortSn.LengthX
 	if sortDis == 0 {
-		sortDis = 9999
+		sortDis = 99
 	}
-
-	//fmt.Println("sd",sortDis,s)
-	//k1 := float64(ld+sd)/(self.LongSn.LengthX+self.SortSn.LengthX)
-	//k2 := (longDis+sortDis)/(l+s)
-	//k3 :=math.Sqrt2(math.Pow(k1,2)+math.Pow(k2,2))
-	return math.Sqrt(math.Pow(float64(ld+sd)/(self.LongSn.LengthX+self.SortSn.LengthX),2)+math.Pow((longDis+sortDis)/(l+s),2))
+	//long := math.Sqrt(math.Pow(ld,2)+math.Pow(sd,2))
+	//dis := math.Sqrt(math.Pow(longDis/l,2)+math.Pow(sortDis/s,2))
+	return math.Sqrt(math.Pow(math.Sqrt(math.Pow(ld,2)+math.Pow(sd,2)),2)+math.Pow(math.Sqrt(math.Pow(longDis/l,2)+math.Pow(sortDis/s,2)),2))
 
 }
 
 type SetPool struct {
 	//pool []*Set
-	SampDB string
-	PoolDB string
-	u []byte
-	LastKey [][]byte
+
+	SampDB *bolt.DB
+	PoolDB *bolt.DB
+
+	//u []byte
+	//LastKey [][]byte
 	//e *Sample
-	CountApp int
+	//CountApp int
+
 	Diff float64
 	tmpSample map[string]*Sample
+}
+func (self *SetPool)Close(){
+	self.SampDB.Close()
+	self.PoolDB.Close()
+}
+func (self *SetPool)clear(){
+	self.Diff = 0
+	self.tmpSample = map[string]*Sample{}
 }
 func NewSetPool(ins string) (sp *SetPool) {
 	p:=filepath.Join("db",ins)
@@ -290,53 +300,63 @@ func NewSetPool(ins string) (sp *SetPool) {
 		}
 	}
 	sp = &SetPool {
-		u:[]byte("pool"),
-		tmpSample:make(map[string]*Sample),
+		//u:[]byte("pool"),
+		tmpSample:map[string]*Sample{},
 		//e:e,
-		SampDB:filepath.Join(p,config.Conf.SampleDbPath),
-		PoolDB:filepath.Join(p,config.Conf.PoolDbPath),
+		//SampDB:filepath.Join(p,config.Conf.SampleDbPath),
+		//PoolDB:filepath.Join(p,config.Conf.PoolDbPath),
+	}
+	sp.SampDB,err = bolt.Open(filepath.Join(p,config.Conf.SampleDbPath),0600,nil)
+	if err != nil {
+		panic(err)
+	}
+	sp.PoolDB,err = bolt.Open(filepath.Join(p,config.Conf.PoolDbPath),0600,nil)
+	if err != nil {
+		panic(err)
 	}
 	return sp
 }
 
-func FindSetPool(ins string, e *Sample) (s *Set) {
-	s,_ = NewSetPool(ins).Find(e)
-	return
-}
-
-func LoadSetPool(ins string, e *Sample){
-	sp := NewSetPool(ins)
-	keyE :=e.KeyName()
-	DateKey := time.Unix( int64(binary.BigEndian.Uint64(keyE[:8])),0)
-	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
-	config.UpdateKvDBWithName(
-		sp.SampDB,
-		[]byte{'1'},
-		func(db *bolt.Bucket)error{
-			c := db.Cursor()
-			for{
-				k,_ := c.First()
-				if k == nil {
-					break
-				}
-				if binary.BigEndian.Uint64(k[:8])<ke {
-					fmt.Println("delete",k,keyE)
-					db.Delete(k)
-				}else{
-					break
-				}
-			}
-			return db.Put(keyE,e.String())
-		},
-	)
-	timeB := time.Now().Unix()
-	sp.Add(e)
-	dif := time.Now().Unix() - timeB
-	if dif > MaxTime {
-		MaxTime = dif
-		fmt.Println("times",MaxTime,sp.CountApp)
-	}
-}
+//func FindSetPool(ins string, e *Sample) (s *Set) {
+//	s,_ = NewSetPool(ins).Find(e)
+//	return
+//}
+//func LoadSetPool(ins string, e *Sample){
+//	sp := NewSetPool(ins)
+//	keyE :=e.KeyName()
+//	DateKey := time.Unix( int64(binary.BigEndian.Uint64(keyE[:8])),0)
+//	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
+//	err := sp.SampDB.Update(func(tx *bolt.Tx)error{
+//		db, err := tx.CreateBucketIfNotExists([]byte{1})
+//		if err != nil {
+//			return err
+//		}
+//		c := db.Cursor()
+//		for{
+//			k,_ := c.First()
+//			if k == nil {
+//				break
+//			}
+//			if binary.BigEndian.Uint64(k[:8])<ke {
+//				fmt.Println("delete",k,keyE)
+//				db.Delete(k)
+//			}else{
+//				break
+//			}
+//		}
+//		return db.Put(keyE,e.String())
+//	})
+//	if err != nil {
+//		panic(err)
+//	}
+//	timeB := time.Now().Unix()
+//	sp.Add(e)
+//	dif := time.Now().Unix() - timeB
+//	if dif > MaxTime {
+//		MaxTime = dif
+//		fmt.Println("times",MaxTime,sp.CountApp)
+//	}
+//}
 func (self *SetPool) Find(e *Sample) (MinSet *Set,diffErr float64) {
 
 	dur := uint64(e.LongDur + e.SortDur)
@@ -347,52 +367,64 @@ func (self *SetPool) Find(e *Sample) (MinSet *Set,diffErr float64) {
 	MinSet = &Set{}
 	MinKey := make([]byte,16)
 	var k,v []byte
-	err := config.ViewKvDBWithName(
-		self.PoolDB,
-		self.u,
-		func(db *bolt.Bucket)error{
-			c := db.Cursor()
-			//k,v = c.Seek(key)
-			//fmt.Println("next",key)
-			for k,v = c.Seek(key);k!= nil;k,v = c.Next() {
-				//fmt.Println(k,diff)
-				if (diffErr!=0) &&
-				(float64(binary.BigEndian.Uint64(k[:8]) - dur) > diffErr) {
-					break
-				}
-				S.Load(v)
-				diff = S.distance(e)
-				if (diffErr == 0) || (diff < diffErr) {
-					MinSet.Load(v)
-					diffErr = diff
-					copy(MinKey , k)
-				}
-			}
-			c.Seek(key)
-			//fmt.Println("prev",key)
-			for k,v = c.Prev(); k!= nil;k,v = c.Prev() {
-				//fmt.Println(k,diff)
-				if (diffErr!=0) &&
-				(float64(dur - binary.BigEndian.Uint64(k[:8])) > diffErr) {
-					break
-				}
-				S.Load(v)
-				diff = S.distance(e)
-				if (diffErr == 0) || (diff < diffErr) {
-					MinSet.Load(v)
-					diffErr = diff
-					copy(MinKey , k)
-				}
-			}
+	//var i int
+	err := self.PoolDB.View(func(tx *bolt.Tx)error{
+		db := tx.Bucket([]byte{1})
+		if db == nil {
 			return nil
-		},
-	)
+		}
+		c := db.Cursor()
+		for k,v = c.Seek(key);k!= nil;k,v = c.Next() {
+			//i++
+			S.Load(v)
+			diff = S.distance(e)
+			//fmt.Println("next",i,k,S.Count[0]+S.Count[1],diff,diffErr)
+			if (diffErr == 0) || (diff < diffErr) {
+				MinSet.Load(v)
+				diffErr = diff
+				copy(MinKey , k)
+				//i=0
+			}else{
+				//if i>5{
+				if diff/diffErr >2 {
+					break
+				}
+				//i++
+			}
+		}
+		//for ;i>0;i--{
+		//	c.Prev()
+		//}
+		c.Seek(key)
+		//i = 0
+		for k,v = c.Prev(); k!= nil;k,v = c.Prev() {
+			//i++
+			S.Load(v)
+			diff = S.distance(e)
+			//fmt.Println("prev",i,k,S.Count[0]+S.Count[1],diff,diffErr)
+			if (diffErr == 0) || (diff < diffErr) {
+				MinSet.Load(v)
+				diffErr = diff
+				copy(MinKey , k)
+				//i=0
+			}else{
+				if diff/diffErr >2 {
+				//if i>5{
+					break
+				}
+				//i++
+			}
+		}
+		return nil
+	})
+
 	if err != nil {
 		panic(err)
 	}
 	if diffErr == 0 {
 		return nil,diffErr
 	}
+	//fmt.Println(key,MinKey)
 
 	//err = config.UpdateKvDBWithName(
 	//	self.PoolDB,
@@ -410,14 +442,14 @@ func (self *SetPool) Find(e *Sample) (MinSet *Set,diffErr float64) {
 
 }
 
-func (self *SetPool) SameKey(k []byte) bool {
-	for _,k_ := range self.LastKey {
-		if bytes.Equal(k,k_){
-			return true
-		}
-	}
-	return false
-}
+//func (self *SetPool) SameKey(k []byte) bool {
+//	for _,k_ := range self.LastKey {
+//		if bytes.Equal(k,k_){
+//			return true
+//		}
+//	}
+//	return false
+//}
 
 func (self *SetPool) add(e *Sample) bool {
 
@@ -448,9 +480,8 @@ func (self *SetPool) add(e *Sample) bool {
 	for{
 		k = string(_e.KeyName())
 		if self.tmpSample[k] != nil {
-			return false
-			//NewSet(_e).SaveDB(self)
-			//break
+			NewSet(_e).SaveDB(self)
+			break
 		}
 		self.tmpSample[k] = _e
 
@@ -467,16 +498,55 @@ func (self *SetPool) add(e *Sample) bool {
 			_e,self.Diff = TmpSet.FindLong()
 
 		}else{
-			TmpSet.SaveDB(self)
+
 			break
 		}
 	}
+	TmpSet.SaveDB(self)
 	return true
 
 }
-func (self *SetPool) Add(e *Sample) {
+func (sp *SetPool) Add(e *Sample) {
+	keyE := e.KeyName()
+	DateKey := time.Unix( int64(binary.BigEndian.Uint64(keyE[:8])),0)
+	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
+	err := sp.SampDB.Update(func(tx *bolt.Tx)error{
+		db, err := tx.CreateBucketIfNotExists([]byte{1})
+		if err != nil {
+			return err
+		}
+		c := db.Cursor()
+		for{
+			k,_ := c.First()
+			if k == nil {
+				break
+			}
+			if binary.BigEndian.Uint64(k[:8])<ke {
+				//fmt.Println("delete",k,keyE)
+				db.Delete(k)
+			}else{
+				break
+			}
+		}
+		return db.Put(keyE,e.String())
+	})
+	sp.SampDB.Sync()
+	if err != nil {
+		panic(err)
+	}
+	//fmt.Println("save sample",keyE)
+	timeB := time.Now().Unix()
+	if !sp.add(e){
+		NewSet(e).SaveDB(sp)
+	}
+	sp.clear()
 
-	self.add(e)
+	dif := time.Now().Unix() - timeB
+	if dif > MaxTime {
+		MaxTime = dif
+		fmt.Println("times",MaxTime)
+	}
+	//self.add(e)
 
 }
 

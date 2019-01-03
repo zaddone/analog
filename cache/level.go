@@ -142,9 +142,10 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				}(),
 			)
 			self.ca.samples[string(k)] = sa
-			set := snap.FindSetPool(self.ca.Ins.Name,sa)
+			set,_ := self.ca.setPool.Find(sa)
+			//set := snap.FindSetPool(self.ca.Ins.Name,sa)
 			if set != nil {
-				fmt.Println(set.Count)
+				fmt.Println(set.Count,snap.SetLen)
 			}
 		}
 

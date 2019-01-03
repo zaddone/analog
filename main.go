@@ -1,6 +1,6 @@
 package main
 import (
-	//"fmt"
+	"fmt"
 	"github.com/zaddone/analog/request"
 	"github.com/zaddone/analog/cache"
 	"github.com/zaddone/analog/config"
@@ -17,7 +17,7 @@ var (
 )
 func main() {
 
-	syncPrice()
+	//syncPrice()
 	run()
 	//server.Router.Run(config.Conf.Port)
 	//var cmd string
@@ -32,6 +32,7 @@ func main() {
 
 }
 func run(){
+	Test()
 	if insCache,ok := InsSet.Load(config.Conf.InsName);ok {
 		//var w sync.WaitGroup
 		insCache.(*cache.Cache).Run(func(t int64){
@@ -68,7 +69,7 @@ func syncPrice() {
 				if strings.Contains(_ins.Name,kins[0]) ||
 				strings.Contains(_ins.Name,kins[1]){
 				//if _ins.Type == "CURRENCY" {
-					InsSet.Store(string(k),cache.NewCache(_ins,InsSet))
+					InsSet.Store(string(k),cache.NewCache(_ins))
 				}
 				//Ins = append(Ins,string(k))
 				return nil
@@ -85,5 +86,41 @@ func syncPrice() {
 		}
 		syncPrice()
 	}
+
+}
+func Test(){
+	var b *bolt.Bucket
+	err := config.HandDB(func(db *bolt.DB)error{
+		return db.View(func(tx *bolt.Tx) error {
+			b = tx.Bucket(request.Ins_key)
+			if b == nil {
+				return nil
+			}
+			_ins := &oanda.Instrument{}
+			err := json.Unmarshal(b.Get([]byte(config.Conf.InsName)),_ins)
+			if err != nil {
+				panic(err)
+			}
+			InsSet.Store(config.Conf.InsName,cache.NewCache(_ins))
+			return nil
+		})
+	})
+	if err != nil {
+		panic(err)
+	}
+	if b == nil {
+		err = request.DownAccountProperties()
+		if err != nil {
+			panic(err)
+		}
+		Test()
+	}
+}
+func Close(){
+	fmt.Println("close")
+	InsSet.Range(func(k,v interface{})bool{
+		v.(*cache.Cache).Close()
+		return true
+	})
 
 }

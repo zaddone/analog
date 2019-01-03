@@ -6,7 +6,7 @@ import(
 	"time"
 	"fmt"
 	"sync"
-	"math"
+	//"math"
 )
 type Cache struct {
 
@@ -14,31 +14,36 @@ type Cache struct {
 	part *level
 
 	priceChan chan config.Element
+	stop chan bool
 
 	LastE config.Element
-	InsCaches sync.Map
+	//InsCaches sync.Map
 
 	Cshow [2]float64
 	samples map[string]*snap.Sample
 
+	setPool *snap.SetPool
+
 }
 
-func NewCache(ins *oanda.Instrument,insC sync.Map) (c *Cache) {
+func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache{
-		InsCaches:insC,
+		//InsCaches:insC,
 		Ins:ins,
 		priceChan:make(chan config.Element,5000),
 		samples:make(map[string]*snap.Sample),
+		setPool:snap.NewSetPool(ins.Name),
 	}
 	c.part = NewLevel(0,c,nil)
 	//go ReadCandles(c.Ins.Name,5,func(can *Candles){
 	//	c.addToChan(can)
 	//})
-
-	//go DownCandles(c.Ins.Name,from.Unix(),func(can *Candles){
-	//	c.addToChan(can)
-	//})
 	return c
+}
+func (self *Cache) Close(){
+	close(self.stop)
+	close(self.priceChan)
+	self.setPool.Close()
 }
 
 func (self *Cache) findDurationSame (dur int64) (l *level,min int64) {
@@ -94,8 +99,14 @@ func (self *Cache) Follow(t int64,w *sync.WaitGroup){
 }
 
 func (self *Cache) Run(hand func(t int64)){
-	go ReadCandles(self.Ins.Name,5,func(can *Candles){
-		self.addToChan(can)
+	go ReadCandles(self.Ins.Name,5,func(can *Candles) bool{
+		select{
+		case <-self.stop:
+			return false
+		default:
+			self.addToChan(can)
+			return true
+		}
 	})
 	for{
 		e :=<-self.priceChan
@@ -126,14 +137,12 @@ func (self *Cache) GetLastElement() config.Element {
 }
 
 func (self *Cache) AddPrice(p config.Element) {
-	mid := p.Middle()
 	var diff float64
 	for k,sa := range self.samples {
-		diff = mid - sa.GetEndEle().Middle()
-		if math.Abs(diff) > sa.Diff {
-			sa.Dis = diff
+		diff = sa.Check(p)
+		if diff != 0 {
 			delete(self.samples,k)
-			snap.LoadSetPool(self.Ins.Name,sa)
+			self.setPool.Add(sa)
 		}
 	}
 	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >300) {

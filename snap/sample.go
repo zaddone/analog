@@ -137,6 +137,13 @@ func (self *Sample) KeyName() (k []byte) {
 //	return append(k_,k...)
 //
 //}
+func (self *Sample) Check(e config.Element) (diff float64){
+
+	if (e.DateTime() - self.endEle.DateTime()) > self.SortDur {
+		self.Dis = e.Middle() - self.endEle.Middle()
+	}
+	return self.Dis
+}
 func (self *Sample) LongDuration() int64 {
 	return self.LongDur
 }
