@@ -38,6 +38,15 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 	//go ReadCandles(c.Ins.Name,5,func(can *Candles){
 	//	c.addToChan(can)
 	//})
+	go ReadCandles(ins.Name,5,func(can *Candles) bool{
+		select{
+		case <-c.stop:
+			return false
+		default:
+			c.addToChan(can)
+			return true
+		}
+	})
 	return c
 }
 func (self *Cache) Close(){
@@ -99,15 +108,6 @@ func (self *Cache) Follow(t int64,w *sync.WaitGroup){
 }
 
 func (self *Cache) Run(hand func(t int64)){
-	go ReadCandles(self.Ins.Name,5,func(can *Candles) bool{
-		select{
-		case <-self.stop:
-			return false
-		default:
-			self.addToChan(can)
-			return true
-		}
-	})
 	for{
 		e :=<-self.priceChan
 		//fmt.Println(time.Unix(e.DateTime(),0))

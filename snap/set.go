@@ -478,31 +478,23 @@ func (self *SetPool) add(e *Sample) bool {
 	self.Diff = maxdiff
 	var k string
 	for{
+		if !self.add(_e) {
+			TmpSet.SaveDB(self)
+			break
+		}
+		le :=len(TmpSet.samp)
+		if le == 0 {
+			break
+		}
+		TmpSet.update(TmpSet.samp)
+		_e,self.Diff = TmpSet.FindLong()
 		k = string(_e.KeyName())
 		if self.tmpSample[k] != nil {
-			NewSet(_e).SaveDB(self)
+			TmpSet.SaveDB(self)
 			break
 		}
 		self.tmpSample[k] = _e
-
-		if self.add(_e) {
-			le :=len(TmpSet.samp)
-			if le == 0 {
-				break
-			}else if le == 1 {
-				_e = TmpSet.samp[0]
-				continue
-			}
-			//MinSet.SaveDB(self)
-			TmpSet.update(TmpSet.samp)
-			_e,self.Diff = TmpSet.FindLong()
-
-		}else{
-
-			break
-		}
 	}
-	TmpSet.SaveDB(self)
 	return true
 
 }

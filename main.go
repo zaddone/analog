@@ -5,7 +5,7 @@ import (
 	"github.com/zaddone/analog/cache"
 	"github.com/zaddone/analog/config"
 	//"github.com/zaddone/analog/printit"
-	"strings"
+	//"strings"
 	"github.com/zaddone/operate/oanda"
 	"encoding/json"
 	"sync"
@@ -32,18 +32,19 @@ func main() {
 
 }
 func run(){
-	Test()
+	//Test()
+	syncPrice()
 	if insCache,ok := InsSet.Load(config.Conf.InsName);ok {
-		//var w sync.WaitGroup
+		var w sync.WaitGroup
 		insCache.(*cache.Cache).Run(func(t int64){
-			//InsSet.Range(func(k interface{},v interface{})bool {
-			//	if k.(string) != config.Conf.InsName {
-			//		w.Add(1)
-			//		go v.(*cache.Cache).Follow(t,&w)
-			//	}
-			//	return true
-			//})
-			//w.Wait()
+			InsSet.Range(func(k interface{},v interface{})bool {
+				if k.(string) != config.Conf.InsName {
+					w.Add(1)
+					go v.(*cache.Cache).Follow(t,&w)
+				}
+				return true
+			})
+			w.Wait()
 		})
 	}else{
 		panic("run err"+config.Conf.InsName)
@@ -65,13 +66,14 @@ func syncPrice() {
 				if err != nil {
 					panic(err)
 				}
-				kins := strings.Split(config.Conf.InsName,"_")
-				if strings.Contains(_ins.Name,kins[0]) ||
-				strings.Contains(_ins.Name,kins[1]){
-				//if _ins.Type == "CURRENCY" {
-					InsSet.Store(string(k),cache.NewCache(_ins))
-				}
+				//kins := strings.Split(config.Conf.InsName,"_")
+				//if strings.Contains(_ins.Name,kins[0]) ||
+				//strings.Contains(_ins.Name,kins[1]){
+				////if _ins.Type == "CURRENCY" {
+				//	InsSet.Store(string(k),cache.NewCache(_ins))
+				//}
 				//Ins = append(Ins,string(k))
+				InsSet.Store(string(k),cache.NewCache(_ins))
 				return nil
 			})
 		})

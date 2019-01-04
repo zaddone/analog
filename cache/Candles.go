@@ -172,7 +172,7 @@ func DownCandles(insName string,from int64,scale int64,hand func(* Candles)bool)
 	var date time.Time
 	save := func(can *Candles){
 		date = time.Unix(can.Time,0).In(Loc)
-		file = fmt.Sprintf("%d",date.Day())
+		file = date.Format("20060102")
 		if (fi != nil) && (fi.Name()  == file){
 			err = json.NewEncoder(fi).Encode(can)
 			if err != nil {
