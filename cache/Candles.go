@@ -2,22 +2,24 @@ package cache
 import(
 	"strconv"
 	"encoding/json"
-	"github.com/zaddone/analog/request"
+	//"github.com/zaddone/analog/request"
 	"github.com/zaddone/analog/config"
+	//"github.com/boltdb/bolt"
 	"io"
-	"os"
-	"path/filepath"
-	//"encoding/gob"
-	//"bytes"
+	//"os"
+	//"path/filepath"
+	"encoding/gob"
+	"bytes"
 	//"io/ioutil"
-	"bufio"
+	//"bufio"
 	"time"
 	"fmt"
-	"log"
-	"net/url"
+	//"log"
+	//"net/url"
+	//"encoding/binary"
 )
 const (
-	Count = 5000
+	//Count = 5000
 )
 var Loc *time.Location
 func init(){
@@ -67,11 +69,33 @@ func (self *Candles) Diff() float64 {
 func (self *Candles) Read(h func(config.Element)) {
 	h(self)
 }
+func NewCandlesWithDB(db []byte) (c *Candles) {
+
+	c = &Candles{}
+	err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(c)
+	if err != nil {
+		fmt.Println(string(db))
+		//return nil
+		panic(err)
+	}
+	//fmt.Println(c)
+	return c
+}
+
+func (self *Candles) GetByte() (db []byte) {
+	var err error
+	db,err = json.Marshal(self)
+	if err != nil {
+		panic(err)
+	}
+	return db
+}
 func (self *Candles) load(db []byte) {
 	err := json.Unmarshal(db,self)
 	//err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(self)
 	//fmt.Println(self,len(db),string(db))
 	if err != nil && err != io.EOF {
+		fmt.Println(string(db))
 		panic(err)
 	}
 }
@@ -100,155 +124,155 @@ func (self *Candles) load(db []byte) {
 //	//f.Close()
 //
 //}
-func ReadCandles(insName string,scale int64,h func(* Candles)bool) {
-
-	var from int64
-	err := filepath.Walk(filepath.Join(config.Conf.LogPath,insName),func(p string,info os.FileInfo,err error)error{
-		if info == nil || info.IsDir() {
-			return nil
-		}
-		f,err := os.Open(p)
-		if err != nil {
-			return err
-		}
-		fmt.Println(p)
-		buf := bufio.NewReader(f)
-		for{
-			li,err := buf.ReadSlice('\n')
-			if len(li) >1 {
-				c := &Candles{}
-				c.load(li)
-				c.scale = scale
-				//fmt.Println(c)
-				if from >= c.DateTime(){
-					//fmt.Println(insName,from)
-					continue
-					//panic(from)
-				}
-				from = c.DateTime()
-				if !h(c) {
-					return io.EOF
-				}
-			}
-			if err != nil {
-				if err != io.EOF {
-					fmt.Println(err)
-				}
-				break
-			}
-		}
-		f.Close()
-		return nil
-
-	})
-	if err != nil {
-		if err == io.EOF {
-			return
-		}
-		panic(err)
-	}
-	if from == 0 {
-		from = config.GetFromTime()
-	}else{
-		from += scale
-	}
-	//fmt.Println("down",insName,from)
-	DownCandles(insName,from,scale,h)
-
-}
-
-
-func DownCandles(insName string,from int64,scale int64,hand func(* Candles)bool) {
-
-	var err error
-	var begin int64 = from
-	var fi *os.File = nil
-	defer func(){
-		if fi != nil {
-			fi.Close()
-		}
-	}()
-	var dir,file string
-	var date time.Time
-	save := func(can *Candles){
-		date = time.Unix(can.Time,0).In(Loc)
-		file = date.Format("20060102")
-		if (fi != nil) && (fi.Name()  == file){
-			err = json.NewEncoder(fi).Encode(can)
-			if err != nil {
-				panic(err)
-			}
-		}else{
-			fi.Close()
-			dir = filepath.Join(config.Conf.LogPath,insName,date.Format("200601"))
-			_,err = os.Stat(dir)
-			if err != nil {
-				err = os.MkdirAll(dir,0700)
-				if err != nil {
-					panic(err)
-				}
-			}
-			fi,err = os.OpenFile(filepath.Join(dir,file),os.O_APPEND|os.O_CREATE|os.O_RDWR,0600)
-			if err != nil {
-				panic(err)
-			}
-			err = json.NewEncoder(fi).Encode(can)
-			if err != nil {
-				panic(err)
-			}
-		}
-	}
+//func ReadCandles(insName string,scale int64,h func(* Candles)bool) {
+//
+//	var from int64
+//	err := filepath.Walk(filepath.Join(config.Conf.LogPath,insName),func(p string,info os.FileInfo,err error)error{
+//		if info == nil || info.IsDir() {
+//			return nil
+//		}
+//		f,err := os.Open(p)
+//		if err != nil {
+//			return err
+//		}
+//		fmt.Println(p)
+//		buf := bufio.NewReader(f)
+//		for{
+//			li,err := buf.ReadSlice('\n')
+//			if len(li) >1 {
+//				c := &Candles{}
+//				c.load(li)
+//				c.scale = scale
+//				//fmt.Println(c)
+//				if from >= c.DateTime(){
+//					//fmt.Println(insName,from)
+//					continue
+//					//panic(from)
+//				}
+//				from = c.DateTime()
+//				if !h(c) {
+//					return io.EOF
+//				}
+//			}
+//			if err != nil {
+//				if err != io.EOF {
+//					fmt.Println(err)
+//				}
+//				break
+//			}
+//		}
+//		f.Close()
+//		return nil
+//
+//	})
+//	if err != nil {
+//		if err == io.EOF {
+//			return
+//		}
+//		panic(err)
+//	}
+//	if from == 0 {
+//		from = config.GetFromTime()
+//	}else{
+//		from += scale
+//	}
+//	//fmt.Println("down",insName,from)
+//	DownCandles(insName,from,scale,h)
+//
+//}
 
 
-	for{
-		err = request.ClientHttp(
-		0,
-		"GET",
-		fmt.Sprintf(
-			"%s/instruments/%s/candles?%s",
-			config.Host,
-			insName,
-			url.Values{
-				"granularity": []string{"S5"},
-				"price": []string{"AB"},
-				"count": []string{fmt.Sprintf("%d", Count)},
-				"from": []string{fmt.Sprintf("%d", from)},
-				//"dailyAlignment":[]string{"3"},
-			}.Encode(),
-		),
-		nil,
-		func(statusCode int,body io.Reader)(er error){
-			if statusCode != 200 {
-				return fmt.Errorf("%d",statusCode)
-			}
-			var da interface{}
-			er = json.NewDecoder(body).Decode(&da)
-			if er != nil {
-				return er
-			}
-			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
-				can := NewCandles(c.(map[string]interface{}))
-				can.scale = scale
-				begin = can.Time
-				save(can)
-				//can.Save(insName)
-				if !hand(can) {
-					return io.EOF
-				}
-			}
-			return nil
-		})
-		if (err == nil){
-			if begin != from {
-				from = begin+scale
-			}
-		}else if err == io.EOF {
-			return
-		}else{
-			log.Println(err)
-		}
-	}
-}
+//func DownCandles(insName string,from int64,scale int64,hand func(* Candles)bool) {
+//
+//	var err error
+//	var begin int64 = from
+//	var fi *os.File = nil
+//	defer func(){
+//		if fi != nil {
+//			fi.Close()
+//		}
+//	}()
+//	var dir,file string
+//	var date time.Time
+//	save := func(can *Candles){
+//		date = time.Unix(can.Time,0).In(Loc)
+//		file = date.Format("20060102")
+//		if (fi != nil) && (fi.Name()  == file){
+//			err = json.NewEncoder(fi).Encode(can)
+//			if err != nil {
+//				panic(err)
+//			}
+//		}else{
+//			fi.Close()
+//			dir = filepath.Join(config.Conf.LogPath,insName,date.Format("200601"))
+//			_,err = os.Stat(dir)
+//			if err != nil {
+//				err = os.MkdirAll(dir,0700)
+//				if err != nil {
+//					panic(err)
+//				}
+//			}
+//			fi,err = os.OpenFile(filepath.Join(dir,file),os.O_APPEND|os.O_CREATE|os.O_RDWR,0600)
+//			if err != nil {
+//				panic(err)
+//			}
+//			err = json.NewEncoder(fi).Encode(can)
+//			if err != nil {
+//				panic(err)
+//			}
+//		}
+//	}
+//
+//
+//	for{
+//		err = request.ClientHttp(
+//		0,
+//		"GET",
+//		fmt.Sprintf(
+//			"%s/instruments/%s/candles?%s",
+//			config.Host,
+//			insName,
+//			url.Values{
+//				"granularity": []string{"S5"},
+//				"price": []string{"AB"},
+//				"count": []string{fmt.Sprintf("%d", Count)},
+//				"from": []string{fmt.Sprintf("%d", from)},
+//				//"dailyAlignment":[]string{"3"},
+//			}.Encode(),
+//		),
+//		nil,
+//		func(statusCode int,body io.Reader)(er error){
+//			if statusCode != 200 {
+//				return fmt.Errorf("%d",statusCode)
+//			}
+//			var da interface{}
+//			er = json.NewDecoder(body).Decode(&da)
+//			if er != nil {
+//				return er
+//			}
+//			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
+//				can := NewCandles(c.(map[string]interface{}))
+//				can.scale = scale
+//				begin = can.Time
+//				save(can)
+//				//can.Save(insName)
+//				if !hand(can) {
+//					return io.EOF
+//				}
+//			}
+//			return nil
+//		})
+//		if (err == nil){
+//			if begin != from {
+//				from = begin+scale
+//			}
+//		}else if err == io.EOF {
+//			return
+//		}else{
+//			log.Println(err)
+//		}
+//	}
+//}
 
 func NewCandles(tmp map[string]interface{}) (c *Candles) {
 	c = &Candles{}

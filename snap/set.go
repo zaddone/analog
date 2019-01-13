@@ -35,11 +35,11 @@ func NewSet(sa *Sample) (S *Set) {
 		Samplist:[][]byte{sa.Key},
 		LongSn:&Snap{
 			LengthX:float64(sa.LongDuration()),
-			LengthY:sa.YLongMax - sa.YLongMin,
+			LengthY:sa.yLongMax - sa.yLongMin,
 		},
 		SortSn:&Snap{
 			LengthX:float64(sa.SortDuration()),
-			LengthY:sa.YSortMax - sa.YSortMin,
+			LengthY:sa.ySortMax - sa.ySortMin,
 		},
 	}
 
@@ -282,6 +282,32 @@ type SetPool struct {
 	Diff float64
 	tmpSample map[string]*Sample
 }
+
+func (self *SetPool) FindSame(sa *Sample) (sa_ *Sample) {
+	_S,_:= self.Find(sa)
+	if _S == nil {
+		return nil
+	}
+	if !_S.LoadSamp(self){
+		//return nil
+		return self.FindSame(sa)
+	}
+	S := NewSet(sa)
+	var d,mid float64
+	for _,s := range _S.samp {
+		d = S.distance(s)
+		if (mid == 0) || (d<mid) {
+			sa_ = s
+			mid = d
+		}
+	}
+	if sa.Tag != sa_.Tag{
+		return nil
+	}
+	return
+
+
+}
 func (self *SetPool)Close(){
 	self.SampDB.Close()
 	self.PoolDB.Close()
@@ -359,7 +385,7 @@ func NewSetPool(ins string) (sp *SetPool) {
 //}
 func (self *SetPool) Find(e *Sample) (MinSet *Set,diffErr float64) {
 
-	dur := uint64(e.LongDur + e.SortDur)
+	dur := uint64(e.LongDuration() + e.SortDuration())
 	key := make([]byte,16)
 	binary.BigEndian.PutUint64(key,dur)
 	var diff float64

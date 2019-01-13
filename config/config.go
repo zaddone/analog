@@ -185,6 +185,11 @@ func NewConfig()  *Config {
 	//if *InsName != "" {
 	//	c.InsName = *InsName
 	//}
+	if _,err = os.Stat(c.LogPath); err != nil {
+		if err = os.MkdirAll(c.LogPath,0700);err != nil {
+			panic(err)
+		}
+	}
 	return &c
 
 }

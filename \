@@ -1,0 +1,343 @@
+package cache
+import(
+	"github.com/zaddone/operate/oanda"
+	"github.com/zaddone/analog/request"
+	"github.com/zaddone/analog/config"
+	"github.com/zaddone/analog/snap"
+	"github.com/boltdb/bolt"
+	//"time"
+	"fmt"
+	"log"
+	"net/url"
+	"sync"
+	//"math"
+	"io"
+	"encoding/binary"
+	"encoding/json"
+
+	"encoding/gob"
+	"bytes"
+
+	"path/filepath"
+)
+const(
+	Scale int64 = 5
+	Count = 5000
+)
+var (
+	Bucket  = []byte{1}
+)
+type Cache struct {
+
+	Ins *oanda.Instrument
+	part *level
+
+	//priceChan chan config.Element
+	CandlesChan chan *Candles
+	stop chan bool
+
+	//LastE config.Element
+	lastKey [8]byte
+	CacheAll []*Cache
+	//InsCaches sync.Map
+	//Cshow [2]float64
+	samples map[string]*snap.Sample
+	setPool *snap.SetPool
+	CacheDB *bolt.DB
+
+}
+
+func (self *Cache) SaveCandles (c *Candles) {
+	select{
+	case self.CandlesChan <- c:
+	default:
+
+		var buf bytes.Buffer
+		encode := gob.NewEncoder(&buf)
+		k:=make([]byte,8)
+
+		//err := self.CacheDB.Batch(func(tx *bolt.Tx)error {
+		err := self.CacheDB.Update(func(tx *bolt.Tx)error {
+			b,err := tx.CreateBucketIfNotExists(Bucket)
+			if err != nil {
+				return err
+			}
+			for{
+				select{
+				case _c :=<-self.CandlesChan:
+
+					binary.BigEndian.PutUint64(k,uint64(_c.DateTime()))
+					if err=encode.Encode(_c); err != nil {
+						panic(err)
+					}
+					b.Put(k,buf.Bytes())
+					buf.Reset()
+
+					//b.Put(k,_c.GetByte())
+				default:
+					return nil
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+		//self.CacheDB.Sync()
+		self.SaveCandles(c)
+	}
+
+}
+
+func (self *Cache) DownCandles ( from int64, h func(*Candles)bool){
+	if from == 0 {
+		from = config.GetFromTime()
+	}else{
+		from += Scale
+	}
+	var err error
+	var begin int64
+	for{
+		err = request.ClientHttp(
+		0,
+		"GET",
+		fmt.Sprintf(
+			"%s/instruments/%s/candles?%s",
+			config.Host,
+			self.Ins.Name,
+			url.Values{
+				"granularity": []string{"S5"},
+				"price": []string{"AB"},
+				"count": []string{fmt.Sprintf("%d", Count)},
+				"from": []string{fmt.Sprintf("%d", from)},
+				//"dailyAlignment":[]string{"3"},
+			}.Encode(),
+		),
+		nil,
+		func(statusCode int,body io.Reader)(er error){
+			if statusCode != 200 {
+				return fmt.Errorf("%d",statusCode)
+			}
+			var da interface{}
+			er = json.NewDecoder(body).Decode(&da)
+			if er != nil {
+				return er
+			}
+			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
+				can := NewCandles(c.(map[string]interface{}))
+				//can.scale = scale
+				begin = can.Time
+				self.SaveCandles(can)
+				if h != nil && !h(can) {
+					return io.EOF
+				}
+
+			}
+			return nil
+		})
+		if (err != nil) {
+			if (err == io.EOF) {
+				return
+			}
+			log.Println(err)
+		}
+		if begin != from {
+			from = begin+Scale
+		}
+	}
+}
+
+func (self *Cache) loadCandles (k []byte,h func(*Candles) bool){
+
+	var v []byte
+	//var V [300]byte
+	var K [8]byte
+	//copy(K[:],k)
+	//V = make([]byte,1024*8)
+	var err error
+	ca := make(chan *Candles,Count)
+	for{
+
+		//if err = self.CacheDB.Batch(func(tx *bolt.Tx)error{
+		if err = self.CacheDB.View(func(tx *bolt.Tx)error{
+			b := tx.Bucket(Bucket)
+			if b == nil {
+				return nil
+			}
+			c := b.Cursor()
+			if k == nil {
+				k,v = c.First()
+			}else{
+				k,v = c.Seek(K[:])
+			}
+			G:
+			for {
+				if v == nil {
+					break G
+				}
+				//c__ := &Candles{}
+				//c__.load(v)
+
+				//fmt.Println(len(V),len(v))
+				//copy(V[:],v)
+				//fmt.Println(v)
+				select{
+				case ca <- NewCandlesWithDB(v):
+				//case ca <- v:
+					k,v = c.Next()
+				default:
+					break G
+				}
+			}
+			copy(K[:],k)
+			return nil
+		});err != nil {
+			panic(err)
+		}
+		G:
+		for {
+			select{
+			case c_ := <-ca:
+				if !h(c_){
+				//if !h(NewCandlesWithDB(v_)){
+					return
+				}
+			default:
+				break G
+			}
+		}
+	}
+}
+
+func NewCache(ins *oanda.Instrument) (c *Cache) {
+	c = &Cache {
+		//InsCaches:insC,
+		Ins:ins,
+		//priceChan:make(chan config.Element,Count),
+		samples:make(map[string]*snap.Sample),
+		setPool:snap.NewSetPool(ins.Name),
+		CandlesChan:make(chan *Candles,Count),
+	}
+
+	db,err := bolt.Open(filepath.Join(config.Conf.LogPath,ins.Name),0600,nil)
+	if err != nil {
+		panic(err)
+	}
+	c.CacheDB = db
+	c.part = NewLevel(0,c,nil)
+
+	var from int64
+	if err = c.CacheDB.View(func(tx *bolt.Tx)error{
+		b := tx.Bucket(Bucket)
+		if b != nil {
+			k,_ := b.Cursor().Last()
+			from = int64(binary.BigEndian.Uint64(k))
+		}
+		return nil
+	}); err != nil {
+		panic(err)
+	}
+	go c.DownCandles(from,nil)
+	return c
+}
+func (self *Cache) Close(){
+	close(self.stop)
+	//close(self.priceChan)
+	self.setPool.Close()
+}
+
+func (self *Cache) findDurationSame (dur int64) (l *level,min int64) {
+
+	var v int64
+	self.part.readUp(func(_l *level){
+		v = func(_v int64 ) int64{
+			if _v<0 {
+				return -_v
+			}
+			return _v
+		}(dur - _l.duration())
+		if  (min == 0) ||
+			(v < min) {
+			min = v
+			l = _l
+		}
+	})
+	return
+
+}
+
+func (self *Cache) Follow(t int64,w *sync.WaitGroup){
+
+	xin := self.Ins.Integer()
+	var dt int64
+	self.loadCandles(self.lastKey[:],func(c *Candles) bool{
+		if c == nil {
+			return true
+		}
+		dt = c.DateTime()
+		if dt<= t {
+			self.AddPrice(&eNode{
+				middle:c.Middle()*xin,
+				diff:c.Diff()*xin,
+				dateTime:dt,
+				duration:c.Duration(),
+			})
+
+		}else{
+			binary.BigEndian.PutUint64(self.lastKey[:],uint64(dt))
+			return false
+		}
+		return true
+	})
+	w.Done()
+
+}
+
+func (self *Cache) Run(hand func(t int64)){
+	xin := self.Ins.Integer()
+	self.loadCandles(nil,func(c *Candles) bool {
+		if c == nil {
+			return true
+		}
+		select{
+		case <-self.stop:
+			return false
+		default:
+			self.AddPrice(&eNode{
+				middle:c.Middle()*xin,
+				diff:c.Diff()*xin,
+				dateTime:c.DateTime(),
+				duration:c.Duration(),
+			})
+			if hand != nil {
+				hand(c.DateTime())
+			}
+		}
+		return true
+	})
+}
+
+func (self *Cache) GetLastElement() config.Element {
+
+	le := len(self.part.list)
+	if le == 0 {
+		return nil
+	}
+	return self.part.list[le-1]
+
+}
+
+func (self *Cache) AddPrice(p config.Element) {
+	var diff float64
+	for k,sa := range self.samples {
+		diff = sa.Check(p)
+		if diff != 0 {
+			delete(self.samples,k)
+			self.setPool.Add(sa)
+		}
+	}
+	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >300) {
+		self.part = NewLevel(0,self,nil)
+	}
+	self.part.add(p,self.Ins)
+}

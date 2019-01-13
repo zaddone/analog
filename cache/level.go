@@ -4,12 +4,12 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/snap"
 	"math"
-	"fmt"
+	//"fmt"
 	"encoding/binary"
 )
 const(
-	MaxTag = 5
-	TimeOut = 14400
+	MaxTag = 6
+	//TimeOut = 14400
 )
 
 type level struct {
@@ -114,7 +114,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	self.update = true
 	if self.par == nil {
 		tag := self.tag+1
-		if tag < MaxTag{
+		if tag < MaxTag {
 			self.par = NewLevel(tag,self.ca,self)
 			self.par.add(NewNode(self.list[:self.maxid]...),ins)
 		}
@@ -142,13 +142,12 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				}(),
 			)
 			self.ca.samples[string(k)] = sa
-			set,_ := self.ca.setPool.Find(sa)
+			sa_ := self.ca.setPool.FindSame(sa)
 			//set := snap.FindSetPool(self.ca.Ins.Name,sa)
-			if set != nil {
-				fmt.Println(set.Count,snap.SetLen)
+			if sa_ != nil  {
+				//fmt.Println(sa_)
 			}
 		}
-
 		self.par.add(NewNode(self.list[:self.maxid]...),ins)
 	}
 

@@ -12,29 +12,32 @@ import(
 type Sample struct {
 
 	//longEs []config.Element
+	xLongMin int64
+	xLongMax int64
+	yLongMin float64
+	yLongMax float64
+
 	LongDur int64
-	XLongMin int64
-	XLongMax int64
-	YLongMin float64
-	YLongMax float64
 	LongX []int64
 	LongY []float64
 
 	//sortEs []config.Element
+	xSortMin int64
+	xSortMax int64
+	ySortMin float64
+	ySortMax float64
+
 	SortDur int64
-	XSortMin int64
-	XSortMax int64
-	YSortMin float64
-	YSortMax float64
 	SortX []int64
 	SortY []float64
-
 
 	Dis float64
 	Tag byte
 	Diff float64
-	endEle config.Element
 	Key []byte
+	Map []byte
+
+	endEle config.Element
 
 }
 
@@ -51,20 +54,20 @@ func NewSample(le []config.Element,se []config.Element,diff float64,key []byte,t
 
 	Len := len(le)
 	end :=le[Len-1]
-	sa.XLongMax = end.DateTime()+end.Duration()
-	sa.XLongMin = le[0].DateTime()
-	sa.LongDur = sa.XLongMax - sa.XLongMin
+	sa.xLongMax = end.DateTime()+end.Duration()
+	sa.xLongMin = le[0].DateTime()
+	sa.LongDur = sa.xLongMax - sa.xLongMin
 	sa.LongX = make([]int64,Len)
 	sa.LongY = make([]float64,Len)
 	for i,e := range le {
 		//x = e_.DateTime()
 		e.Read(func(e_ config.Element){
 			y = e_.Middle()
-			if (sa.YLongMin == 0) || (y < sa.YLongMin){
-				sa.YLongMin = y
+			if (sa.yLongMin == 0) || (y < sa.yLongMin){
+				sa.yLongMin = y
 			}
-			if (sa.YLongMax < y) {
-				sa.YLongMax = y
+			if (sa.yLongMax < y) {
+				sa.yLongMax = y
 			}
 			sa.LongY[i] = y
 			sa.LongX[i] = e_.DateTime()
@@ -76,19 +79,19 @@ func NewSample(le []config.Element,se []config.Element,diff float64,key []byte,t
 	Len = len(se)
 	end = se[Len-1]
 	sa.endEle = end
-	sa.XSortMax = end.DateTime()+end.Duration()
-	sa.XSortMin = se[0].DateTime()
-	sa.SortDur = sa.XSortMax - sa.XSortMin
+	sa.xSortMax = end.DateTime()+end.Duration()
+	sa.xSortMin = se[0].DateTime()
+	sa.SortDur = sa.xSortMax - sa.xSortMin
 	sa.SortX = make([]int64,Len)
 	sa.SortY = make([]float64,Len)
 	for i,e := range se {
 		e.Read(func(e_ config.Element){
 			y = e_.Middle()
-			if (sa.YSortMin == 0) || (y < sa.YSortMin){
-				sa.YSortMin = y
+			if (sa.ySortMin == 0) || (y < sa.ySortMin){
+				sa.ySortMin = y
 			}
-			if (sa.YSortMax < y) {
-				sa.YSortMax = y
+			if (sa.ySortMax < y) {
+				sa.ySortMax = y
 			}
 			sa.SortY[i] = y
 			sa.SortX[i] = e_.DateTime()
@@ -107,6 +110,28 @@ func (self *Sample) load(db []byte) {
 	if err != nil {
 		panic(err)
 	}
+	self.xLongMin = self.LongX[0]
+	self.xLongMax = self.xLongMin + self.LongDur
+	for _,y := range self.LongY {
+		if (self.yLongMin == 0) || (y < self.yLongMin){
+			self.yLongMin = y
+		}
+		if (self.yLongMax < y) {
+			self.yLongMax = y
+		}
+	}
+
+	self.xSortMin = self.SortX[0]
+	self.xSortMax = self.xSortMin + self.SortDur
+	for _,y := range self.SortY {
+		if (self.ySortMin == 0) || (y < self.ySortMin){
+			self.ySortMin = y
+		}
+		if (self.ySortMax < y) {
+			self.ySortMax = y
+		}
+	}
+
 }
 func (self *Sample) String() []byte {
 	var b bytes.Buffer
@@ -239,7 +264,7 @@ func (self *Sample) GetSortDB(dur int64,f func(x,y float64)) (durdiff int64) {
 	durdiff = self.SortDur - dur
 	if durdiff <= 0 {
 		for i,x := range self.SortX {
-			f(float64(x - self.XSortMin),self.SortY[i]-self.YSortMin)
+			f(float64(x - self.xSortMin),self.SortY[i]-self.ySortMin)
 		}
 		return -durdiff
 	}
@@ -249,7 +274,7 @@ func (self *Sample) GetSortDB(dur int64,f func(x,y float64)) (durdiff int64) {
 	//	l--
 	//}
 	var yMin  float64
-	kill := self.XSortMin + dur
+	kill := self.xSortMin + dur
 	for i,y := range self.SortY {
 		if self.SortX[i] >= kill {
 			l = i
@@ -261,7 +286,7 @@ func (self *Sample) GetSortDB(dur int64,f func(x,y float64)) (durdiff int64) {
 	}
 	for i,x := range self.SortX[:l] {
 		//fmt.Println(i,l)
-		f(float64(x-self.XSortMin),self.SortY[i]-yMin)
+		f(float64(x-self.xSortMin),self.SortY[i]-yMin)
 	}
 
 	return
@@ -271,12 +296,12 @@ func (self *Sample) GetLongDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	durdiff = self.LongDur - dur
 	if durdiff <= 0 {
 		for i,x := range self.LongX {
-			f(float64(x - self.XLongMin),self.LongY[i] -self.YLongMin)
+			f(float64(x - self.xLongMin),self.LongY[i] -self.yLongMin)
 		}
 		return -durdiff
 	}
 	//var l int
-	kill := self.XLongMin + durdiff
+	kill := self.xLongMin + durdiff
 	//l := find(self.XLongMax - dur,self.LongX)
 	//if !_f {
 	//	l++
