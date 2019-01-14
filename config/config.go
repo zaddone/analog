@@ -82,7 +82,7 @@ type Config struct {
 	Units int
 	//Granularity []*Gran
 	LogPath string
-	//DbPath string
+	DbPath string
 	KvDbPath string
 	SampleDbPath string
 	PoolDbPath string
@@ -169,12 +169,12 @@ func NewConfig()  *Config {
 		c.Server = true
 		c.LogPath = "TrLog"
 		c.WeiLen = 4
-		//c.DbPath = "db.db"
+		c.DbPath = "dbCache"
 		c.KvDbPath = "kvdb.db"
 		c.SampleDbPath = "Sample.db"
 		c.PoolDbPath = "pool.db"
 		c.Val = 3
-		c.BeginTime = "2006-01-02T15:04:05"
+		c.BeginTime = "2006-01-01T00:00:00"
 		//c.LoadGranularity()
 		c.Save()
 	}else{

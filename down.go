@@ -14,11 +14,8 @@ import(
 func main(){
 	loadCacheDown()
 	for{
-		<- time.After(time.Second *3600)
+		<-time.After(time.Second *3600)
 	}
-	//c:=make(chan os.Signal)
-	//signal.Notify(c)
-	//fmt.Println("get signal:",<-c)
 }
 func loadCacheDown(){
 	var b *bolt.Bucket

@@ -41,6 +41,7 @@ type Candles struct {
 	diff   float64
 	scale  int64
 }
+
 func (self *Candles) Duration() int64 {
 	return self.scale
 }
