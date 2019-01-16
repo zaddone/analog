@@ -3,6 +3,8 @@ import(
 	//"fmt"
 	//"os"
 	//"os/signal"
+	//"syscall"
+
 	"time"
 	"github.com/zaddone/analog/cache"
 	"github.com/zaddone/analog/request"
@@ -10,12 +12,25 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/operate/oanda"
 	"encoding/json"
+
+)
+var (
+	cachelist []*cache.Cache
 )
 func main(){
 	loadCacheDown()
 	for{
-		<-time.After(time.Second *3600)
+		time.Sleep(time.Second*3600)
 	}
+	//c := make(chan os.Signal)
+	//signal.Notify(c,syscall.SIGBUS, syscall.SIGINT, syscall.SIGTERM)
+	//fmt.Println("receive signal:", <-c)
+	//for _,ca := range cachelist {
+	//	ca.Close()
+	//}
+
+
+
 }
 func loadCacheDown(){
 	var b *bolt.Bucket
@@ -31,7 +46,9 @@ func loadCacheDown(){
 				if err != nil {
 					panic(err)
 				}
-				go cache.NewCache(_ins).RunDown()
+				ca :=cache.NewCache(_ins)
+				go ca.RunDown()
+				cachelist = append(cachelist,ca)
 				return nil
 			})
 		})

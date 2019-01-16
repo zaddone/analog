@@ -30,7 +30,7 @@ func main(){
 				panic(err)
 			}
 			FirstCache = cache.NewCache(_ins)
-			FirstCache.SetSnap()
+			FirstCache.SetPool()
 			return nil
 
 		})
@@ -52,7 +52,6 @@ func main(){
 			fmt.Println(time.Unix(t,0),FirstCache.Cshow[1]/FirstCache.Cshow[0],FirstCache.Cshow)
 		}
 	})
-
 	fmt.Println("read cache over")
 
 }

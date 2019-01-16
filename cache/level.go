@@ -2,10 +2,11 @@ package cache
 import(
 	"github.com/zaddone/operate/oanda"
 	"github.com/zaddone/analog/config"
-	"github.com/zaddone/analog/snap"
+	"github.com/zaddone/analog/cluster"
 	"math"
-	//"fmt"
-	"encoding/binary"
+	"fmt"
+	"time"
+	//"encoding/binary"
 )
 const(
 	MaxTag = 6
@@ -114,41 +115,31 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	self.update = true
 	if self.par == nil {
 		tag := self.tag+1
-		if tag < MaxTag {
+		//fmt.Println(tag)
+		//if tag < MaxTag {
 			self.par = NewLevel(tag,self.ca,self)
 			self.par.add(NewNode(self.list[:self.maxid]...),ins)
-		}
+		//}
 	}else{
-		if (self.par.par != nil) && (self.tag > 0 ) {
-			k := make([]byte,8)
-			binary.BigEndian.PutUint64(k,uint64(e.DateTime()))
-			//l := make([]byte,8)
-			//binary.BigEndian.PutUint64(l,uint64(self.duration()))
-			k = append(k,byte(self.tag))
-			//n :=  self.ca.samples[string(k)]
-			sa := snap.NewSample(
-				self.par.list,
-				self.list,
-				absMax,
-				k,
-				func() (b byte) {
-					if self.par.dis>0 {
-						b = byte(1)<<uint(1)
+		node := NewbNode(self.list[:self.maxid]...)
+		if (self.par.par != nil){
+			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
+				self.ca.pool.Add(cluster.NewSample(self.par.list, node))
+				// Clustering self.par.list, node
+			}else{
+				salist := self.ca.pool.FindSet(cluster.NewSample(append(self.par.list, node),nil))
+				if salist != nil {
+					se :=&cluster.Set{}
+					for _,e := range salist {
+						se.SetCount(e)
 					}
-					if self.dis >0 {
-						b ++
-					}
-					return
-				}(),
-			)
-			self.ca.samples[string(k)] = sa
-			sa_ := self.ca.setPool.FindSame(sa)
-			//set := snap.FindSetPool(self.ca.Ins.Name,sa)
-			if sa_ != nil  {
-				//fmt.Println(sa_)
+					fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),se.Count)
+				}
+
+				//order post  append(self.par.list,node)
 			}
 		}
-		self.par.add(NewNode(self.list[:self.maxid]...),ins)
+		self.par.add(node,ins)
 	}
 
 	self.tp = self.list[0]

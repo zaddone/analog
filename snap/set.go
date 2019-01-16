@@ -10,7 +10,8 @@ import(
 	"bytes"
 	"path/filepath"
 	"os"
-	"time")
+	"time"
+)
 var (
 	SetLen int = 0
 	MaxTime int64

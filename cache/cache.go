@@ -3,8 +3,8 @@ import(
 	"github.com/zaddone/operate/oanda"
 	"github.com/zaddone/analog/request"
 	"github.com/zaddone/analog/config"
-	"github.com/zaddone/analog/snap"
-	"github.com/boltdb/bolt"
+	"github.com/zaddone/analog/cluster"
+	//"github.com/boltdb/bolt"
 	"time"
 	"fmt"
 	"log"
@@ -13,23 +13,24 @@ import(
 	"os"
 	//"math"
 	"io"
-	"encoding/binary"
+	//"encoding/binary"
 	"encoding/json"
-
-	"encoding/gob"
-	"bytes"
-
+	//"encoding/gob"
+	//"bytes"
 	"path/filepath"
 	"bufio"
+	"strings"
 )
 const(
 	Scale int64 = 5
 	Count = 5000
 	OutTime int64 = 604800
 )
+
 var (
 	Bucket  = []byte{1}
 )
+
 type Cache struct {
 
 	Ins *oanda.Instrument
@@ -44,141 +45,122 @@ type Cache struct {
 	CacheAll []*Cache
 	//InsCaches sync.Map
 	Cshow [2]float64
-	samples map[string]*snap.Sample
-	setPool *snap.SetPool
-	//TimeList []*TimeFile
-	//TimeList []string
 
-	CacheDB *bolt.DB
+	pool *cluster.Pool
 
 }
 
 func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
-		//InsCaches:insC,
 		Ins:ins,
-		//priceChan:make(chan config.Element,Count),
-		samples:make(map[string]*snap.Sample),
-		//setPool:snap.NewSetPool(ins.Name),
+		//samples:make(map[string]*snap.Sample),
 		CandlesChan:make(chan *Candles,Count),
+		stop:make(chan bool),
+		//pool:cluster.NewPool(ins.Name),
 	}
 	c.part = NewLevel(0,c,nil)
 	return c
 }
 
-func (self *Cache) SaveCandles(c *Candles){
-	select{
-	case self.CandlesChan <- c:
-		return
-	default:
+func (self *Cache) syncSaveCandles(){
 
-		k:=make([]byte,8)
-		//err := self.CacheDB.Batch(func(tx *bolt.Tx)error {
-		err := self.CacheDB.Update(func(tx *bolt.Tx)error {
-			b,err := tx.CreateBucketIfNotExists(Bucket)
-			if err != nil {
+	var file *os.File = nil
+	SaveToFile := func(can_ *Candles){
+		df := time.Unix(can_.DateTime(),0).In(Loc)
+		fname := df.Format("20060102")
+		var err error
+		if file != nil {
+			if file.Name() == fname {
+
+				if err = json.NewEncoder(file).Encode(can_);err != nil {
+					panic(err)
+				}
+				return
+			}else{
+				file.Close()
+			}
+		}
+		p := filepath.Join(config.Conf.LogPath,self.Ins.Name,df.Format("200601"))
+		if _,err = os.Stat(p); err != nil {
+			if err = os.MkdirAll(p,0700);err != nil {
 				panic(err)
 			}
-			var endTime int64
-			G:
-			for{
-				select{
-				case _c :=<-self.CandlesChan:
-					endTime = _c.DateTime()
-					binary.BigEndian.PutUint64(k,uint64(endTime))
-					var buf bytes.Buffer
-					if err=gob.NewEncoder(&buf).Encode(_c); err != nil {
-						panic(err)
-					}
-					b.Put(k,buf.Bytes())
-				default:
-					break G
-				}
-			}
-			if endTime == 0 {
-				return nil
-			}
-			var file *os.File = nil
-			defer func(){
-				if file != nil {
-					file.Close()
-				}
-			}()
-			SaveToFile := func(can_ *Candles){
-				df := time.Unix(can_.DateTime(),0).In(Loc)
-				fname := df.Format("20060102")
-				var err error
-				if file != nil {
-					if file.Name() == fname {
-
-						if err = json.NewEncoder(file).Encode(can_);err != nil {
-							panic(err)
-						}
-						return
-					}else{
-						file.Close()
-					}
-				}
-				p := filepath.Join(config.Conf.LogPath,self.Ins.Name,df.Format("200601"))
-				if _,err = os.Stat(p); err != nil {
-					if err = os.MkdirAll(p,0700);err != nil {
-						panic(err)
-					}
-				}
-				p = filepath.Join(p,fname)
-				if file,err = os.OpenFile(p,os.O_APPEND|os.O_CREATE|os.O_RDWR,0700); err != nil {
-					panic(err)
-				}else{
-					if err = json.NewEncoder(file).Encode(can_);err != nil {
-						fmt.Println(can_)
-						panic(err)
-					}
-				}
-			}
-			cu := b.Cursor()
-			var can Candles
-			for k,v := cu.First();v!=nil;k,v = cu.Next(){
-				if (endTime - int64(binary.BigEndian.Uint64(k)))< OutTime {
-					break
-				}
-				err = gob.NewDecoder(bytes.NewBuffer(v)).Decode(&can)
-				if err != nil {
-					panic(err)
-				}
-
-				b.Delete(k)
-				SaveToFile(&can)
-			}
-			return nil
-		})
-		if err != nil {
+		}
+		p = filepath.Join(p,fname)
+		if file,err = os.OpenFile(p,os.O_APPEND|os.O_CREATE|os.O_RDWR,0700); err != nil {
 			panic(err)
+		}else{
+			if err = json.NewEncoder(file).Encode(can_);err != nil {
+				fmt.Println(can_)
+				panic(err)
+			}
 		}
 	}
-	self.SaveCandles(c)
+	for{
+	select{
+	case <-self.stop:
+		return
+	case c := <-self.CandlesChan:
+		SaveToFile(c)
+	}
+	}
+	if file != nil {
+		file.Close()
+		file = nil
+	}
 
+}
+
+func (self *Cache) FindLastTime() int64 {
+	var lastfile string
+	err := filepath.Walk(filepath.Join(config.Conf.LogPath,self.Ins.Name),func(p string,info os.FileInfo,er error)error{
+		if er != nil {
+			return er
+		}
+		if info.IsDir() {
+			return nil
+		}
+		lastfile = p
+		return nil
+	})
+	if err != nil {
+		fmt.Println(err)
+		return 0
+	}
+	if len(lastfile) == 0 {
+		return 0
+	}
+	f,err := os.Open(lastfile)
+	if err != nil {
+		return 0
+		//panic(err)
+	}
+
+	buf := bufio.NewReader(f)
+	endCandles := new(Candles)
+	for {
+		li,err := buf.ReadSlice('\n')
+		if len(li) >1 {
+			endCandles.load(li)
+		}
+		if err != nil {
+			if err != io.EOF {
+				panic(err)
+				break
+			}
+		}
+	}
+	f.Close()
+	return endCandles.DateTime()
 }
 
 func (self *Cache) DownCan (h func(*Candles)bool){
 
-	var from int64
-	var err error
-
-	if err = self.CacheDB.View(func(tx *bolt.Tx)error{
-		b := tx.Bucket(Bucket)
-		if b == nil {
-			return io.EOF
-		}
-		k,_ := b.Cursor().Last()
-		if k == nil {
-			return io.EOF
-		}
-		from  = int64(binary.BigEndian.Uint64(k)) + Scale
-		return nil
-
-	});err != nil {
+	from := self.FindLastTime()
+	if from == 0 {
 		from = config.GetFromTime()
 	}
+	var err error
 	var begin int64
 	for{
 		err = request.ClientHttp(
@@ -198,13 +180,14 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 		),
 		nil,
 		func(statusCode int,body io.Reader)(er error){
-			if statusCode != 200 {
-				return fmt.Errorf("%d",statusCode)
-			}
 			var da interface{}
 			er = json.NewDecoder(body).Decode(&da)
 			if er != nil {
 				return er
+			}
+			if statusCode != 200 {
+				//fmt.Println(from)
+				return fmt.Errorf("%d %v",statusCode,da)
 			}
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
 				can := NewCandles(c.(map[string]interface{}))
@@ -219,11 +202,22 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 			if (err == io.EOF) {
 				return
 			}
-			log.Println(err)
+			if strings.HasPrefix(err.Error(),"400") {
+				log.Println(self.Ins.Name,err)
+				return
+			}
 			from = begin
+			//time.After(from)
+			//time.Sleep(time.Second*5)
+
+			//return
 		}else{
 			from = begin + Scale
 		}
+		//N := from - time.Now().Unix()
+		//if N>0 {
+		//	time.After(time.Second*time.Duration(N))
+		//}
 	}
 }
 
@@ -244,7 +238,7 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 					c.load(li)
 					if from >= c.DateTime() {
 						fmt.Println(p,from,c.DateTime(),time.Unix(from,0).In(Loc),time.Unix(c.DateTime(),0).In(Loc))
-						panic(0)
+						//panic(0)
 						self.Cshow[1]++
 						continue
 					}
@@ -271,46 +265,34 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 		}
 	}
 }
-func (self *Cache) SetCacheDB() {
-	dir := config.Conf.DbPath
-	var err error
-	if _,err = os.Stat(dir);err != nil {
-		err = os.MkdirAll(dir,0700)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	self.CacheDB,err = bolt.Open(filepath.Join(dir,self.Ins.Name),0600,nil)
-	if err != nil {
-		panic(err)
-	}
-
+func (self *Cache) SetPool(){
+	self.pool = cluster.NewPool(self.Ins.Name)
+	//self.setPool = snap.NewSetPool(self.Ins.Name)
 }
-
-
-func (self *Cache) SetSnap(){
-	self.setPool = snap.NewSetPool(self.Ins.Name)
-}
-
 func (self *Cache) RunDown(){
-	self.SetCacheDB()
+	//self.SetCacheDB()
+	go self.syncSaveCandles()
 	self.DownCan(func(can *Candles)bool{
 		select{
 		case <-self.stop:
 			return false
 		default:
-			self.SaveCandles(can)
+			self.CandlesChan <- can
+			//self.SaveCandles(can)
 			return true
 		}
 	})
+	self.Close()
 }
 func (self *Cache) Close(){
-	close(self.stop)
-	//close(self.priceChan)
-	self.setPool.Close()
-	if self.CacheDB != nil {
-		self.CacheDB.Close()
+	if self.stop != nil {
+		fmt.Println(self.Ins.Name,"close")
+		close(self.stop)
+		self.stop = nil
+
+		if self.pool != nil {
+			self.pool.Close()
+		}
 	}
 }
 
@@ -387,38 +369,6 @@ func (self *Cache) Read(hand func(t int64)){
 	})
 }
 
-//func (self *Cache) Run(hand func(t int64)){
-//	xin := self.Ins.Integer()
-//	var from int64
-//	for{
-//		select{
-//		case <-self.stop:
-//			return
-//		case <-time.After(time.Second*5):
-//			self.loadCandlesFile(0,from,func(c *Candles) bool {
-//				if c == nil {
-//					return true
-//				}
-//				select{
-//				case <-self.stop:
-//					return false
-//				default:
-//					from = c.DateTime()
-//					self.AddPrice(&eNode{
-//						middle:c.Middle()*xin,
-//						diff:c.Diff()*xin,
-//						dateTime:from,
-//						duration:c.Duration(),
-//					})
-//					if hand != nil {
-//						hand(from)
-//					}
-//				}
-//				return true
-//			})
-//		}
-//	}
-//}
 
 func (self *Cache) GetLastElement() config.Element {
 
@@ -431,15 +381,7 @@ func (self *Cache) GetLastElement() config.Element {
 }
 
 func (self *Cache) AddPrice(p config.Element) {
-	var diff float64
-	for k,sa := range self.samples {
-		diff = sa.Check(p)
-		if diff != 0 {
-			delete(self.samples,k)
-			self.setPool.Add(sa)
-		}
-	}
-	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >300) {
+	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
 		self.part = NewLevel(0,self,nil)
 	}
 	self.part.add(p,self.Ins)
