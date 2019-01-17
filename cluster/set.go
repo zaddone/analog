@@ -12,7 +12,7 @@ type Set struct {
 	Sn *Snap
 	samp []*Sample
 	Samplist [][]byte
-	Count [6]int
+	Count [4]int
 	KeyName []byte
 }
 func NewSet(sa *Sample) (S *Set) {
@@ -34,26 +34,35 @@ func NewSet(sa *Sample) (S *Set) {
 	return
 
 }
-func (S *Set) findSame(e *Sample) (e_ *Sample) {
-	se := NewSet(e)
-	var min float64
-	for _,_e := range S.samp{
-		d := se.distance(_e)
-		if min ==0 || min > d {
-			e_ = _e
+func (self *Set)CheckCountMax(n int) bool {
+	nv := self.Count[n]
+	for _i,v := range self.Count {
+		if _i == n {
+			continue
+		}
+		if nv < v {
+			return false
+		}
+	}
+	return true
+}
+func (self *Set) FindSame(e *Sample,sp *Pool) (e_ *Sample) {
+	if self.samp == nil && !self.loadSamp(sp) {
+		return nil
+	}
+	S := NewSet(e)
+	var min,d float64
+	for _,_e := range self.samp {
+		d = S.distance(_e)
+		if min == 0  || min >d {
 			min = d
+			e_ = _e
 		}
 	}
 	return
 }
-
 func (S *Set) SetCount(e *Sample) {
-	if e.Dis>0 {
-		S.Count[0]++
-	}else{
-		S.Count[1]++
-	}
-	S.Count[int(e.Tag)+2]++
+	S.Count[int(e.Tag)]++
 }
 func (self *Set)saveDB(sp *Pool){
 	err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
@@ -107,7 +116,7 @@ func (self *Set) toByte() []byte {
 
 func (S *Set) clear(){
 	S.Sn = &Snap{}
-	S.Count = [6]int{0,0,0,0,0,0}
+	S.Count = [4]int{0,0,0,0}
 	S.KeyName = nil
 	//S.samp = nil
 }
@@ -192,15 +201,18 @@ func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,l float64
 	ld := float64(e.GetDB(int64(self.Sn.LengthX),func(x,y float64){
-		longDis += math.Abs(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY)
+		longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
 		l++
 	}))
+	longDis /= l
+	//return (longDis+ld)/(l+ld)
+
 	ld /= self.Sn.LengthX
-	if longDis == 0 {
-		longDis = 99
-	}else{
-		longDis /= l
-	}
+	//if longDis == 0 {
+	//	longDis = 99
+	//}else{
+	//	longDis /= l
+	//}
 	return math.Sqrt(math.Pow(longDis,2) + math.Pow(ld,2))
 	//return math.Sqrt(math.Pow(math.Sqrt(math.Pow(ld,2)+math.Pow(sd,2)),2)+math.Pow(math.Sqrt(math.Pow(longDis/l,2)+math.Pow(sortDis/s,2)),2))
 

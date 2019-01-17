@@ -4,8 +4,9 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/cluster"
 	"math"
-	"fmt"
-	"time"
+	"bytes"
+	//"fmt"
+	//"time"
 	//"encoding/binary"
 )
 const(
@@ -123,17 +124,33 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	}else{
 		node := NewbNode(self.list[:self.maxid]...)
 		if (self.par.par != nil){
+
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
-				self.ca.pool.Add(cluster.NewSample(self.par.list, node))
+				ea := cluster.NewSample(self.par.list, node)
+				self.ca.pool.Add(ea)
+
+				set := self.ca.pool.FindSet(ea)
+
+				self.ca.Cshow[3]++
+				if set != nil {
+					_ea := set.FindSame(ea,self.ca.pool)
+					if bytes.Equal(_ea.Key ,ea.Key){
+						self.ca.Cshow[4]++
+					}
+				}
+
 				// Clustering self.par.list, node
 			}else{
-				salist := self.ca.pool.FindSet(cluster.NewSample(append(self.par.list, node),nil))
-				if salist != nil {
-					se :=&cluster.Set{}
-					for _,e := range salist {
-						se.SetCount(e)
+				ea := cluster.NewSample(append(self.par.list, node),nil)
+				set := self.ca.pool.FindSet(ea)
+				//if set != nil && set.CheckCountMax(int(ea.Key[8])) {
+				if set != nil {
+					if _ea := set.FindSame(ea,self.ca.pool); _ea != nil && _ea.Key[8] == ea.Key[8] {
+						ea.SetEndElement(self.ca.GetLastElement())
+						self.ca.tmpSample[string(ea.Key)] = ea
+						self.ca.Cshow[0]++
+					//fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),set.Count,ea.Key[8])
 					}
-					fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),se.Count)
 				}
 
 				//order post  append(self.par.list,node)

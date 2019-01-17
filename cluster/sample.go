@@ -20,10 +20,11 @@ type Sample struct {
 	Dis float64
 	DurDis int64
 	Tag byte
+	diff float64
 
 	Key []byte
-	Same []byte
-	//endEle config.Element
+	//Same []byte
+	endEle config.Element
 
 }
 func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
@@ -31,9 +32,12 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 		sa = &Sample{
 			Dis:e.Diff(),
 			DurDis:e.Duration(),
+			diff : eles[len(eles)-1].Diff(),
 		}
 	}else{
-		sa = &Sample{}
+		sa = &Sample{
+			diff : eles[len(eles)-1].Diff(),
+		}
 	}
 	var y float64
 	for _,ele := range eles {
@@ -70,6 +74,18 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	return
 
 }
+
+func (self *Sample) GetDiff() float64 {
+	return self.diff
+}
+func (self *Sample) GetEndElement() config.Element {
+	return self.endEle
+}
+
+func (self *Sample) SetEndElement(e config.Element) {
+	self.endEle  = e
+}
+
 func (self *Sample) toByte() []byte {
 	var b bytes.Buffer
 	err := gob.NewEncoder(&b).Encode(self)

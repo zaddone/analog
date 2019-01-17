@@ -52,42 +52,8 @@ func (self *Pool) clear(){
 	self.Diff = 0
 
 }
-func (self *Pool) FindSet(e *Sample) (salist []*Sample) {
-	Set,_ := self.find(e)
-	if Set == nil {
-		return nil
-	}
-	if !Set.loadSamp(self) {
-		return nil
-	}
-	e_ := Set.findSame(e)
-	if e_.Tag != e.Tag {
-		return nil
-	}
-	sKey := e_.Same
-	if sKey == nil {
-		return nil
-	}
-	salist = []*Sample{e_}
-	self.SampDB.View(func(tx *bolt.Tx)error{
-		db := tx.Bucket([]byte{1})
-		if db == nil {
-			return nil
-		}
-		for{
-			v := db.Get(sKey)
-			if v == nil {
-				return nil
-			}
-			sa := &Sample{}
-			sa.load(v)
-			salist = append(salist,sa)
-			sKey = sa.Same
-			if sKey == nil {
-				return nil
-			}
-		}
-	})
+func (self *Pool) FindSet(e *Sample) (set *Set) {
+	set,_ = self.find(e)
 	return
 
 }
@@ -102,12 +68,12 @@ func (self *Pool) add(e *Sample) bool{
 	if !MinSet.loadSamp(self) {
 		return self.add(e)
 	}
-	if e.Same == nil {
-		e_ := MinSet.findSame(e)
-		if e_.Tag == e.Tag {
-			e.Same = e_.Key
-		}
-	}
+	//if e.Same == nil {
+	//	e_ := MinSet.findSame(e)
+	//	if e_.Tag == e.Tag {
+	//		e.Same = e_.Key
+	//	}
+	//}
 	if (self.Diff!=0) && (diff>self.Diff) {
 		return false
 	}

@@ -11,7 +11,7 @@ import(
 	"net/url"
 	//"sync"
 	"os"
-	//"math"
+	"math"
 	"io"
 	//"encoding/binary"
 	"encoding/json"
@@ -44,16 +44,17 @@ type Cache struct {
 	lastKey [8]byte
 	CacheAll []*Cache
 	//InsCaches sync.Map
-	Cshow [2]float64
+	Cshow [5]float64
 
 	pool *cluster.Pool
+	tmpSample map[string]*cluster.Sample
 
 }
 
 func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
 		Ins:ins,
-		//samples:make(map[string]*snap.Sample),
+		tmpSample:make(map[string]*cluster.Sample),
 		CandlesChan:make(chan *Candles,Count),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
@@ -237,12 +238,12 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 					c := &Candles{}
 					c.load(li)
 					if from >= c.DateTime() {
-						fmt.Println(p,from,c.DateTime(),time.Unix(from,0).In(Loc),time.Unix(c.DateTime(),0).In(Loc))
+						//fmt.Println(p,from,c.DateTime(),time.Unix(from,0).In(Loc),time.Unix(c.DateTime(),0).In(Loc))
 						//panic(0)
-						self.Cshow[1]++
+						//self.Cshow[1]++
 						continue
 					}
-					self.Cshow[0]++
+					//self.Cshow[0]++
 					from = c.DateTime()
 					if !h(c) {
 						return io.EOF
@@ -381,6 +382,19 @@ func (self *Cache) GetLastElement() config.Element {
 }
 
 func (self *Cache) AddPrice(p config.Element) {
+	for k,e :=range self.tmpSample {
+		d := p.Middle() - e.GetEndElement().Middle()
+		if math.Abs(d) > math.Abs(e.GetDiff()) {
+			if (d>0) == (e.GetDiff()>0) {
+				self.Cshow[1]++
+			}else{
+				self.Cshow[2]++
+			}
+			delete(self.tmpSample,k)
+		}
+	}
+
+
 	if e := self.GetLastElement(); (e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
 		self.part = NewLevel(0,self,nil)
 	}
