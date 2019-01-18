@@ -86,6 +86,7 @@ type Config struct {
 	KvDbPath string
 	SampleDbPath string
 	PoolDbPath string
+	ClusterPath string
 
 	Val float64
 
@@ -173,6 +174,7 @@ func NewConfig()  *Config {
 		c.KvDbPath = "kvdb.db"
 		c.SampleDbPath = "Sample.db"
 		c.PoolDbPath = "pool.db"
+		c.ClusterPath = "Clusterdb"
 		c.Val = 3
 		c.BeginTime = "2006-01-01T00:00:00"
 		//c.LoadGranularity()

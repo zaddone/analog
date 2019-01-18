@@ -136,23 +136,38 @@ func (self *Cache) FindLastTime() int64 {
 		return 0
 		//panic(err)
 	}
-
+	//fmt.Println(lastfile)
 	buf := bufio.NewReader(f)
-	endCandles := new(Candles)
+	var li,endli []byte
 	for {
-		li,err := buf.ReadSlice('\n')
+		li,err = buf.ReadSlice('\n')
 		if len(li) >1 {
-			endCandles.load(li)
+			endli = li
+			//fmt.Println()
+				//fmt.Println(lastfile)
+				//f.Close()
+				//err = os.Remove(lastfile)
+				//if err != nil {
+				//	panic(err)
+				//}
+				//return self.FindLastTime()
 		}
 		if err != nil {
 			if err != io.EOF {
 				panic(err)
-				break
 			}
+			break
 		}
 	}
 	f.Close()
+
+	endCandles := &Candles{}
+	err = endCandles.load(endli)
+	if err != nil {
+		panic(err)
+	}
 	return endCandles.DateTime()
+
 }
 
 func (self *Cache) DownCan (h func(*Candles)bool){
@@ -163,6 +178,7 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 	}
 	var err error
 	var begin int64
+	fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
 	for{
 		err = request.ClientHttp(
 		0,
@@ -236,7 +252,11 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 				li,err := buf.ReadSlice('\n')
 				if len(li) >1 {
 					c := &Candles{}
-					c.load(li)
+					err = c.load(li)
+					if err != nil {
+						fmt.Println(p)
+						panic(err)
+					}
 					if from >= c.DateTime() {
 						//fmt.Println(p,from,c.DateTime(),time.Unix(from,0).In(Loc),time.Unix(c.DateTime(),0).In(Loc))
 						//panic(0)

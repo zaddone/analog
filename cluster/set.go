@@ -165,6 +165,21 @@ func (self *Set) loadSamp(sp *Pool) bool {
 	return true
 
 }
+func (S *Set) findLong() (sa *Sample,Max float64) {
+
+	var d float64
+	var id int
+	for i,s := range S.samp {
+		d  = S.distance(s)
+		if d > Max {
+			Max = d
+			sa = s
+			id = i
+		}
+	}
+	S.samp = append(S.samp[:id],S.samp[id+1:]...)
+	return
+}
 
 func (S *Set) update(sa []*Sample) {
 

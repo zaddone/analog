@@ -14,9 +14,9 @@ import(
 	"encoding/json"
 
 )
-var (
-	cachelist []*cache.Cache
-)
+//var (
+//	cachelist []*cache.Cache
+//)
 func main(){
 	loadCacheDown()
 	for{
@@ -47,8 +47,9 @@ func loadCacheDown(){
 					panic(err)
 				}
 				ca :=cache.NewCache(_ins)
+				//fmt.Println("run",_ins.Name)
 				go ca.RunDown()
-				cachelist = append(cachelist,ca)
+				//cachelist = append(cachelist,ca)
 				return nil
 			})
 		})

@@ -91,14 +91,16 @@ func (self *Candles) GetByte() (db []byte) {
 	}
 	return db
 }
-func (self *Candles) load(db []byte) {
+func (self *Candles) load(db []byte) error {
 	err := json.Unmarshal(db,self)
 	//err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(self)
 	//fmt.Println(self,len(db),string(db))
 	if err != nil && err != io.EOF {
-		fmt.Println(string(db))
-		panic(err)
+		//fmt.Println(string(db))
+		return err
+		//panic(err)
 	}
+	return nil
 }
 //func (self *Candles) Save(insName string) (path string,f *os.File) {
 //	da := time.Unix(self.DateTime(),0)

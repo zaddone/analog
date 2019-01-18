@@ -49,7 +49,7 @@ func main(){
 		}
 		if t - begin >= 604800 {
 			begin = t
-			fmt.Println(time.Unix(t,0),FirstCache.Cshow[1]/FirstCache.Cshow[0],FirstCache.Cshow)
+			fmt.Println(time.Unix(t,0),FirstCache.Cshow[3]/FirstCache.Cshow[4],FirstCache.Cshow[0]/FirstCache.Cshow[1],FirstCache.Cshow)
 			FirstCache.Cshow = [5]float64{0,0,0,0,0}
 		}
 	})

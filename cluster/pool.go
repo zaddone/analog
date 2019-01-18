@@ -22,7 +22,7 @@ type Pool struct {
 }
 func NewPool(ins string) (po *Pool) {
 
-	p:=filepath.Join("db",ins)
+	p:=filepath.Join(config.Conf.ClusterPath,ins)
 	_,err := os.Stat(p)
 	if err != nil {
 		err = os.MkdirAll(p,0700)
@@ -68,27 +68,26 @@ func (self *Pool) add(e *Sample) bool{
 	if !MinSet.loadSamp(self) {
 		return self.add(e)
 	}
-	//if e.Same == nil {
-	//	e_ := MinSet.findSame(e)
-	//	if e_.Tag == e.Tag {
-	//		e.Same = e_.Key
-	//	}
-	//}
 	if (self.Diff!=0) && (diff>self.Diff) {
 		return false
 	}
 	TmpSet := &Set{}
 	TmpSet.update(append(MinSet.samp,e))
-	_e,maxdiff := TmpSet.findLong()
+	_e, _ := TmpSet.findLong()
 	if _e == e {
 		NewSet(e).saveDB(self)
 		return true
 	}
 
 	MinSet.deleteDB(self)
-	self.Diff = maxdiff
+	//self.Diff = maxdiff
 	var k string
+	var TmpSet_ *Set
 	for{
+		TmpSet_ = &Set{}
+		TmpSet_.update(TmpSet.samp)
+		self.Diff = TmpSet_.distance(_e)
+
 		if !self.add(_e) {
 			TmpSet.saveDB(self)
 			break
@@ -96,9 +95,16 @@ func (self *Pool) add(e *Sample) bool{
 		le :=len(TmpSet.samp)
 		if le == 0 {
 			break
+		}else if le == 1 {
+			if !self.add(TmpSet.samp[0]){
+				TmpSet_.saveDB(self)
+			}
+			break
 		}
-		TmpSet.update(TmpSet.samp)
-		_e,self.Diff = TmpSet.findLong()
+
+		TmpSet = TmpSet_
+		//TmpSet.update(TmpSet.samp)
+		_e,_ = TmpSet.findLong()
 		k = string(_e.KeyName())
 		if self.tmpSample[k] != nil {
 			TmpSet.saveDB(self)
@@ -164,21 +170,6 @@ func (self *Pool) find(e *Sample) (MinSet *Set,diffErr float64) {
 
 }
 
-func (S *Set) findLong() (sa *Sample,Max float64) {
-
-	var d float64
-	var id int
-	for i,s := range S.samp {
-		d  = S.distance(s)
-		if d > Max {
-			Max = d
-			sa = s
-			id = i
-		}
-	}
-	S.samp = append(S.samp[:id],S.samp[id+1:]...)
-	return
-}
 func (sp *Pool) Add(e *Sample) {
 	DateKey := time.Unix( int64(binary.BigEndian.Uint64(e.Key[:8])),0)
 	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
