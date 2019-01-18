@@ -7,6 +7,7 @@ import(
 	"path/filepath"
 	"encoding/binary"
 	"os"
+	"bytes"
 )
 var (
 	MaxTime int64
@@ -62,8 +63,9 @@ func (self *Pool) add(e *Sample) bool{
 
 	MinSet,diff := self.find(e)
 	if MinSet == nil {
-		NewSet(e).saveDB(self)
-		return true
+		return false
+		//NewSet(e).saveDB(self)
+		//return true
 	}
 	if !MinSet.loadSamp(self) {
 		return self.add(e)
@@ -74,7 +76,7 @@ func (self *Pool) add(e *Sample) bool{
 	TmpSet := &Set{}
 	TmpSet.update(append(MinSet.samp,e))
 	_e, _ := TmpSet.findLong()
-	if _e == e {
+	if bytes.Equal(_e.KeyName(),e.KeyName()) {
 		NewSet(e).saveDB(self)
 		return true
 	}
@@ -84,24 +86,24 @@ func (self *Pool) add(e *Sample) bool{
 	var k string
 	var TmpSet_ *Set
 	for{
+
+		le :=len(TmpSet.samp)
+		if le == 1 {
+			if !self.add(TmpSet.samp[0]){
+				NewSet(TmpSet.samp[0]).saveDB(self)
+			}
+			break
+			
+		}else if le == 0 {
+			panic(0)
+		}
 		TmpSet_ = &Set{}
 		TmpSet_.update(TmpSet.samp)
 		self.Diff = TmpSet_.distance(_e)
-
 		if !self.add(_e) {
 			TmpSet.saveDB(self)
 			break
 		}
-		le :=len(TmpSet.samp)
-		if le == 0 {
-			break
-		}else if le == 1 {
-			if !self.add(TmpSet.samp[0]){
-				TmpSet_.saveDB(self)
-			}
-			break
-		}
-
 		TmpSet = TmpSet_
 		//TmpSet.update(TmpSet.samp)
 		_e,_ = TmpSet.findLong()

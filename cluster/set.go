@@ -219,16 +219,14 @@ func (self *Set) distance(e *Sample) float64 {
 		longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
 		l++
 	}))
-	longDis /= l
 	//return (longDis+ld)/(l+ld)
 
-	ld /= self.Sn.LengthX
 	//if longDis == 0 {
 	//	longDis = 99
 	//}else{
 	//	longDis /= l
 	//}
-	return math.Sqrt(math.Pow(longDis,2) + math.Pow(ld,2))
+	return math.Sqrt(math.Pow(longDis/l,2) + math.Pow(ld/self.Sn.LengthX,2))
 	//return math.Sqrt(math.Pow(math.Sqrt(math.Pow(ld,2)+math.Pow(sd,2)),2)+math.Pow(math.Sqrt(math.Pow(longDis/l,2)+math.Pow(sortDis/s,2)),2))
 
 }
