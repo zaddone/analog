@@ -17,7 +17,7 @@ const (
 )
 var (
 	FileName   = flag.String("c", "conf.log", "config log")
-	//InsName   = flag.String("n", "", "Sample EUR_JPY|EUR_USD")
+	InsName   = flag.String("n", "", "Sample EUR_JPY")
 	Conf *Config
 	Granularity = []*Gran{
 			&Gran{"S5",5},
@@ -73,7 +73,8 @@ type Config struct {
 	Proxy string
 	Templates string
 	BeginTime string
-	WeiLen int
+	WeiMax int
+	WeiMin int
 	//BEGINTIME string
 	Port string
 	InsName string
@@ -87,6 +88,7 @@ type Config struct {
 	SampleDbPath string
 	PoolDbPath string
 	ClusterPath string
+	DisPool float64
 
 	Val float64
 
@@ -169,12 +171,14 @@ func NewConfig()  *Config {
 		c.InsName = "EUR_USD"
 		c.Server = true
 		c.LogPath = "TrLog"
-		c.WeiLen = 4
+		c.WeiMin = 4
+		c.WeiMax = 7
 		c.DbPath = "dbCache"
 		c.KvDbPath = "kvdb.db"
 		c.SampleDbPath = "Sample.db"
 		c.PoolDbPath = "pool.db"
 		c.ClusterPath = "Clusterdb"
+		c.DisPool = 0.5
 		c.Val = 3
 		c.BeginTime = "2006-01-01T00:00:00"
 		//c.LoadGranularity()
@@ -184,9 +188,9 @@ func NewConfig()  *Config {
 			log.Fatal(err)
 		}
 	}
-	//if *InsName != "" {
-	//	c.InsName = *InsName
-	//}
+	if *InsName != "" {
+		c.InsName = *InsName
+	}
 	if _,err = os.Stat(c.LogPath); err != nil {
 		if err = os.MkdirAll(c.LogPath,0700);err != nil {
 			panic(err)

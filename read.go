@@ -47,7 +47,7 @@ func main(){
 		if begin == 0 {
 			begin = t
 		}
-		if t - begin >= 604800 {
+		if (t - begin) >= 604800 {
 			begin = t
 			fmt.Printf("%s %.2f %.2f,%.0f\r\n",time.Unix(t,0),FirstCache.Cshow[4]/FirstCache.Cshow[3],FirstCache.Cshow[1]/FirstCache.Cshow[0],FirstCache.Cshow)
 			FirstCache.Cshow = [5]float64{0,0,0,0,0}

@@ -23,7 +23,7 @@ type Pool struct {
 }
 func NewPool(ins string) (po *Pool) {
 
-	p:=filepath.Join(config.Conf.ClusterPath,ins)
+	p := filepath.Join(config.Conf.ClusterPath,ins)
 	_,err := os.Stat(p)
 	if err != nil {
 		err = os.MkdirAll(p,0700)
@@ -118,10 +118,9 @@ func (self *Pool) find(e *Sample) (MinSet *Set,diffErr float64) {
 	key := make([]byte,16)
 	binary.BigEndian.PutUint64(key,uint64(e.Duration()))
 	var diff float64
-	S :=  &Set{}
-	MinSet = &Set{}
-	MinKey := make([]byte,16)
+	//var MinSet *Set
 	var k,v []byte
+	//var t int
 	err := self.PoolDB.View(func(tx *bolt.Tx)error{
 		db := tx.Bucket([]byte{1})
 		if db == nil {
@@ -129,28 +128,30 @@ func (self *Pool) find(e *Sample) (MinSet *Set,diffErr float64) {
 		}
 		c := db.Cursor()
 		for k,v = c.Seek(key);k!= nil;k,v = c.Next() {
+			//t++
+			S := &Set{}
 			S.load(v)
 			diff = S.distance(e)
 			if (diffErr == 0) || (diff < diffErr) {
-				MinSet.load(v)
+				MinSet = S
 				diffErr = diff
-				copy(MinKey , k)
 			}else{
-				if diff/diffErr >2 {
+				if diff > config.Conf.DisPool {
 					break
 				}
 			}
 		}
 		c.Seek(key)
 		for k,v = c.Prev(); k!= nil;k,v = c.Prev() {
+			//t++
+			S := &Set{}
 			S.load(v)
 			diff = S.distance(e)
 			if (diffErr == 0) || (diff < diffErr) {
-				MinSet.load(v)
+				MinSet = S
 				diffErr = diff
-				copy(MinKey , k)
 			}else{
-				if diff/diffErr >2 {
+				if diff > config.Conf.DisPool {
 					break
 				}
 			}
@@ -161,6 +162,7 @@ func (self *Pool) find(e *Sample) (MinSet *Set,diffErr float64) {
 	if err != nil {
 		panic(err)
 	}
+	//fmt.Println(t)
 	if diffErr == 0 {
 		return nil,diffErr
 	}

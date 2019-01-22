@@ -212,6 +212,7 @@ func (S *Set) update(sa []*Sample) {
 	S.Sn.Wei = CurveFittingMax(X,Y,nil,0)
 
 }
+
 func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,l float64

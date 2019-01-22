@@ -134,7 +134,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				self.ca.Cshow[3]++
 				if set != nil {
 					_ea := set.FindSame(ea,self.ca.pool)
-					if bytes.Equal(_ea.Key ,ea.Key){
+					if (_ea != nil) &&  bytes.Equal(_ea.Key ,ea.Key){
 						self.ca.Cshow[4]++
 					}
 				}

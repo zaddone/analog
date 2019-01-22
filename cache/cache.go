@@ -23,7 +23,7 @@ import(
 )
 const(
 	Scale int64 = 5
-	Count = 5000
+	Count = 100
 	OutTime int64 = 604800
 )
 
@@ -170,7 +170,8 @@ func (self *Cache) FindLastTime() int64 {
 
 }
 
-func (self *Cache) DownCan (h func(*Candles)bool){
+func (self *Cache) downCan (h func(*Candles)bool){
+
 
 	from := self.FindLastTime()
 	if from == 0 {
@@ -180,6 +181,13 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 	var begin int64
 	fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
 	for{
+		u :=url.Values{
+				"granularity": []string{"S5"},
+				"price": []string{"AB"},
+				"count": []string{fmt.Sprintf("%d", Count)},
+				"from": []string{fmt.Sprintf("%d", from)},
+				//"dailyAlignment":[]string{"3"},
+			}.Encode()
 		err = request.ClientHttp(
 		0,
 		"GET",
@@ -187,13 +195,7 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 			"%s/instruments/%s/candles?%s",
 			config.Host,
 			self.Ins.Name,
-			url.Values{
-				"granularity": []string{"S5"},
-				"price": []string{"AB"},
-				"count": []string{fmt.Sprintf("%d", Count)},
-				"from": []string{fmt.Sprintf("%d", from)},
-				//"dailyAlignment":[]string{"3"},
-			}.Encode(),
+			u,
 		),
 		nil,
 		func(statusCode int,body io.Reader)(er error){
@@ -203,7 +205,7 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 				return er
 			}
 			if statusCode != 200 {
-				//fmt.Println(from)
+				fmt.Println(u)
 				return fmt.Errorf("%d %v",statusCode,da)
 			}
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
@@ -236,6 +238,17 @@ func (self *Cache) DownCan (h func(*Candles)bool){
 		//	time.After(time.Second*time.Duration(N))
 		//}
 	}
+}
+
+func (self *Cache) readAndDownCandles(h func(*Candles) bool){
+	self.readCandles(h)
+	//self.downCan(h)
+	go self.syncSaveCandles()
+	self.downCan(func(can *Candles)bool{
+		self.CandlesChan <- can
+		return h(can)
+	})
+
 }
 
 func (self *Cache) readCandles(h func(*Candles) bool){
@@ -293,7 +306,7 @@ func (self *Cache) SetPool(){
 func (self *Cache) RunDown(){
 	//self.SetCacheDB()
 	go self.syncSaveCandles()
-	self.DownCan(func(can *Candles)bool{
+	self.downCan(func(can *Candles)bool{
 		select{
 		case <-self.stop:
 			return false
@@ -368,7 +381,7 @@ func (self *Cache) Read(hand func(t int64)){
 
 	xin := self.Ins.Integer()
 	var from int64
-	self.readCandles(func(c *Candles) bool {
+	self.readAndDownCandles(func(c *Candles) bool {
 
 		select{
 		case <-self.stop:

@@ -69,10 +69,10 @@ func (self *Snap) GetWeiY(x float64) (y float64) {
 func CurveFittingMax(X,Y,W []float64,vs float64) []float64 {
 	wlen := len(W)
 	var w []float64
-	if wlen <2 {
-		w = make([]float64,2)
+	if wlen < config.Conf.WeiMin {
+		w = make([]float64,config.Conf.WeiMin)
 	}else{
-		if wlen>9 {
+		if wlen > config.Conf.WeiMax {
 			return W
 		}
 		w = make([]float64,wlen+1)
