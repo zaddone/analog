@@ -123,7 +123,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		//}
 	}else{
 		node := NewbNode(self.list[:self.maxid]...)
-		if (self.par.par != nil){
+		if (self.par.par != nil && self.ca.pool != nil){
 
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
 				ea := cluster.NewSample(self.par.list, node)

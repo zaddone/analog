@@ -10,43 +10,50 @@ import (
 	"time"
 	//"sync"
 )
+
 type cacheList struct {
 	//sync.Mutex
 	//sync.Mutex
 	cas []*_cache
-	minC chan *_cache
+	//minC chan *_cache
 }
+
 func NewCacheList() *cacheList {
 	return &cacheList{
-		minC:make(chan *_cache),
+		//minC:make(chan *_cache,1),
 	}
 }
 
-func (self *cacheList) findMin(){
+func (self *cacheList) findMin() {
 
-	var C *_cache
+	var I int
 	var minVal int64
-	for _,c := range self.cas {
-		if (minVal==0) || (c.val !=0 && c.val<minVal) {
+	for i,c := range self.cas {
+		if (c.val != 0)  && ((minVal==0) || (c.val<minVal)) {
 			minVal = c.val
-			C = c
+			I = i
 		}
 	}
-	if C != nil {
-		self.minC <- C
+	if minVal != 0 {
+		self.cas[I].run()
+		return
+		//self.minC <- self.cas[I]
 	}
+	time.Sleep(time.Second)
+	self.findMin()
+	//panic(0)
 
 }
 
 
-func (self *cacheList) run(){
-	for{
-
-		c := <-self.minC
-		fmt.Printf("%s %s\r",c.ca.Ins.Name,time.Unix(c.val,0))
-		c.run()
-	}
-}
+//func (self *cacheList) run(){
+//	for{
+//
+//		c := <-self.minC
+//		fmt.Printf("%s %s\r",c.ca.Ins.Name,time.Unix(c.val,0))
+//		c.run()
+//	}
+//}
 type _cache struct {
 	cas *cacheList
 	ca *cache.Cache
@@ -68,13 +75,15 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	go c.ca.Read(func(t int64){
 		c.val = t
 		<-c.wait
-		c.cas.findMin()
+
+		go c.cas.findMin()
 	})
 	return c
 }
 
 func (self *_cache) run() {
 	//self.val = 0
+	fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
 	self.wait<-true
 }
 
@@ -82,11 +91,14 @@ var (
 	InsList *cacheList = NewCacheList()
 )
 func main() {
+
 	loadCache()
-	go InsList.run()
+	//go InsList.run()
+
 	InsList.findMin()
 
-	fmt.Println(time.Now())
+
+	fmt.Println("wait",time.Now())
 	t := time.Tick(time.Second * 3600)
 	for e := range t {
 		fmt.Println(e)

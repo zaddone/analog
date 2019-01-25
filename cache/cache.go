@@ -179,7 +179,7 @@ func (self *Cache) downCan (h func(*Candles)bool){
 	}
 	var err error
 	var begin int64
-	fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
+	//fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
 	for{
 		u :=url.Values{
 				"granularity": []string{"S5"},
@@ -385,42 +385,38 @@ func (self *Cache) Read(hand func(t int64)){
 	xin := self.Ins.Integer()
 	var from,begin int64
 	self.readAndDownCandles(func(c *Candles) bool {
-		select{
-		case <-self.stop:
-			return false
-		default:
-			from = c.DateTime()
-			if hand != nil {
-				hand(from)
-			}
-			self.AddPrice(&eNode{
-				middle:c.Middle()*xin,
-				diff:c.Diff()*xin,
-				dateTime:from,
-				duration:c.Duration(),
-			})
-			if (from - begin) >= 604800 {
-				if f,err := os.OpenFile(
-				filepath.Join(config.Conf.ClusterPath,self.Ins.Name,"log"),
-				os.O_APPEND|os.O_CREATE|os.O_RDWR,
-				0700,);
-				err == nil {
-				f.WriteString(
-					fmt.Sprintf(
-						"%s %.2f %.2f,%.0f\r\n",
-						time.Unix(from,0),
-						self.Cshow[4]/self.Cshow[3],
-						self.Cshow[1]/self.Cshow[0],
-						self.Cshow,
-					))
-				f.Close()
-				}else{
-					panic(err)
-				}
-				self.Cshow = [5]float64{0,0,0,0,0}
-			}
-			begin = from
+		from = c.DateTime()
+		if hand != nil {
+			hand(from)
 		}
+		self.AddPrice(&eNode{
+			middle:c.Middle()*xin,
+			diff:c.Diff()*xin,
+			dateTime:from,
+			duration:c.Duration(),
+		})
+		if (self.pool != nil) && ((from - begin) >= 604800) {
+			if f,err := os.OpenFile(
+			filepath.Join(config.Conf.ClusterPath,self.Ins.Name,"log"),
+			os.O_APPEND|os.O_CREATE|os.O_RDWR,
+			0700,);
+			err == nil {
+			f.WriteString(
+				fmt.Sprintf(
+					"%s %.2f %.2f,%.0f\r\n",
+					time.Unix(from,0),
+					self.Cshow[4]/self.Cshow[3],
+					self.Cshow[1]/self.Cshow[0],
+					self.Cshow,
+				))
+			f.Close()
+			}else{
+				panic(err)
+			}
+			self.Cshow = [5]float64{0,0,0,0,0}
+		}
+		begin = from
+		
 		return true
 	})
 }
