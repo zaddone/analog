@@ -83,7 +83,7 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 
 func (self *_cache) run() {
 	//self.val = 0
-	fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
+	//fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
 	self.wait<-true
 }
 
