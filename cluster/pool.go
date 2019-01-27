@@ -7,7 +7,7 @@ import(
 	"path/filepath"
 	"encoding/binary"
 	"os"
-	"bytes"
+	//"bytes"
 	"sync"
 )
 var (
@@ -73,74 +73,147 @@ func (self *Pool) clear(){
 	self.Diff = 0
 
 }
+
 func (self *Pool) FindSet(e *Sample) (set *Set) {
+
 	set,_ = self.find(e)
 	return
 
 }
 
-func (self *Pool) add(e *Sample,w *sync.WaitGroup) bool{
+func (self *Pool) add(e *Sample,_diff float64) bool{
 
 	MinSet,diff := self.find(e)
 	if MinSet == nil {
 		return false
-		//NewSet(e).saveDB(self)
-		//return true
 	}
 	if !MinSet.loadSamp(self) {
-		return self.add(e,w)
+		return self.add(e,_diff)
 	}
-	if (self.Diff!=0) && (diff>self.Diff) {
+	if (_diff!=0) && (diff>_diff) {
 		return false
 	}
+
 	TmpSet := &Set{}
 	TmpSet.update(append(MinSet.samp,e))
-	if len(TmpSet.samp) < 4 {
+	le := len(TmpSet.samp)
+	if le < 3 {
 		MinSet.deleteDB(self)
 		TmpSet.saveDB(self)
 		return true
 	}
-
-	var _e *Sample
-	_e, self.Diff = TmpSet.findLong()
-	if bytes.Equal(_e.KeyName(),e.KeyName()) {
-		NewSet(e).saveDB(self)
+	_e, diff := TmpSet.findLong()
+	if _e == e {
+		NewSet(_e).saveDB(self)
 		return true
 	}
 	MinSet.deleteDB(self)
 
-	w.Add(1)
-	go func(s *Set,p *Pool,__e *Sample,_w *sync.WaitGroup){
-		var k string
-		var TmpSet_ *Set
-		defer _w.Done()
-		for{
-			le := len(s.samp)
-			if le > 0 {
-				TmpSet_ = &Set{}
-				TmpSet_.update(s.samp)
-				p.Diff = TmpSet_.distance(__e)
-			}
-			if !p.add(__e,_w) {
-				s.saveDB(p)
-				break
-			}
-			if le == 0 {
-				break
-			}
-			s = TmpSet_
-			__e,p.Diff = s.findLong()
-			k = string(__e.KeyName())
-			if _,ok:= p.tmpSample.Load(k);ok {
-				s.saveDB(p)
-				break
-			}
-			p.tmpSample.Store(k,__e)
+	self.tmpSample.Store(string(e.KeyName()),e)
+	//var _e *Sample
+	var tmp_e []*Sample
+	var w sync.WaitGroup
+	for{
+		if _,ok := self.tmpSample.Load(string(_e.KeyName()));ok{
+			NewSet(_e).saveDB(self)
+		}else{
+			w.Add(1)
+			go func(_w *sync.WaitGroup,__e *Sample){
+				if !self.add(__e,diff){
+					tmp_e = append(tmp_e,__e)
+				}
+				_w.Done()
+			}(&w,_e)
 		}
-	}(TmpSet,self.Copy(),_e,w)
+
+		_e, diff = TmpSet.findLong()
+		if _e == nil {
+			break
+		}
+		//TmpSet.update(TmpSet.samp)
+	}
+	w.Wait()
+	le_1 := len(tmp_e)
+	if le_1 == 0 {
+		return true
+	}
+	if le_1 != le {
+		TmpSet.update(tmp_e)
+	}
+	TmpSet.saveDB(self)
 	return true
 
 }
+
+//func (self *Pool) addBak(e *Sample,w *sync.WaitGroup,level int) bool{
+//
+//	MinSet,diff := self.find(e)
+//	if MinSet == nil {
+//		return false
+//		//NewSet(e).saveDB(self)
+//		//return true
+//	}
+//	if !MinSet.loadSamp(self) {
+//		return self.add(e,w,level)
+//	}
+//	if (self.Diff!=0) && (diff>self.Diff) {
+//		return false
+//	}
+//	TmpSet := &Set{}
+//	TmpSet.update(append(MinSet.samp,e))
+//	if len(TmpSet.samp) < 4 {
+//		MinSet.deleteDB(self)
+//		TmpSet.saveDB(self)
+//		return true
+//	}
+//
+//	var _e *Sample
+//	_e, self.Diff = TmpSet.findLong()
+//	if bytes.Equal(_e.KeyName(),e.KeyName()) {
+//		NewSet(e).saveDB(self)
+//		return true
+//	}
+//	if level > config.Conf.FindLevel {
+//		return false
+//	}
+//	MinSet.deleteDB(self)
+//	w.Add(1)
+//	go func(s *Set,p *Pool,__e *Sample,_w *sync.WaitGroup){
+//		var k string
+//		var TmpSet_ *Set
+//		defer _w.Done()
+//		//var tmpE []*Sample
+//		for{
+//			le := len(s.samp)
+//			if le > 0 {
+//				TmpSet_ = &Set{}
+//				TmpSet_.update(s.samp)
+//				p.Diff = TmpSet_.distance(__e)
+//			}
+//			if !p.add(__e,_w,level+1) {
+//				s.saveDB(p)
+//				break
+//				//tmpE = append(tmpE,__e)
+//			}
+//			if le == 0 {
+//				break
+//			}
+//			s = TmpSet_
+//			__e,p.Diff = s.findLong()
+//			k = string(__e.KeyName())
+//			if _,ok:= p.tmpSample.Load(k);ok {
+//				s.saveDB(p)
+//				break
+//			}
+//			p.tmpSample.Store(k,__e)
+//		}
+//		//if len(tmpE) > 0 {
+//		//	TmpSet_ = &Set{}
+//		//}
+//	}(TmpSet,self.Copy(),_e,w)
+//	return true
+//
+//}
 
 func (self *Pool) find(e *Sample) (*Set,float64) {
 	key := make([]byte,16)
@@ -220,31 +293,37 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 }
 
 func (sp *Pool) Add(e *Sample) {
-	sp.tag = e.Key[8]>>1
-	DateKey := time.Unix( int64(binary.BigEndian.Uint64(e.Key[:8])),0)
-	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
-	err := sp.SampDB.Update(func(tx *bolt.Tx)error{
-		db, err := tx.CreateBucketIfNotExists([]byte{1})
-		if err != nil {
-			return err
-		}
-		c := db.Cursor()
-		for k,_ := c.First();k!=nil;k,_ = c.Next() {
-			if binary.BigEndian.Uint64(k[:8])<ke {
-				db.Delete(k)
-			}else{
-				break
+
+	go func(_e *Sample){
+		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.Key[:8])),0)
+		ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
+		err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
+		//err := sp.SampDB.Update(func(tx *bolt.Tx)error{
+			db, err := tx.CreateBucketIfNotExists([]byte{1})
+			if err != nil {
+				return err
 			}
+			c := db.Cursor()
+			for k,_ := c.First();k!=nil;k,_ = c.Next() {
+				if binary.BigEndian.Uint64(k[:8])<ke {
+					db.Delete(k)
+				}else{
+					break
+				}
+			}
+			return db.Put(_e.Key,_e.toByte())
+		})
+		if err != nil {
+			panic(err)
 		}
-		return db.Put(e.Key,e.toByte())
-	})
-	if err != nil {
-		panic(err)
-	}
+	}(e)
+
+	sp.tag = e.Key[8]>>1
+
 	timeB := time.Now().Unix()
 	sp.clear()
 	var w sync.WaitGroup
-	if !sp.add(e,&w){
+	if !sp.add(e,0){
 		NewSet(e).saveDB(sp)
 	}
 	w.Wait()

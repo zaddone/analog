@@ -92,6 +92,8 @@ type Config struct {
 
 	Val float64
 
+	FindLevel int
+
 }
 
 func GetGran(t int64) *Gran{
@@ -182,6 +184,7 @@ func NewConfig()  *Config {
 		c.DisPool = 0.5
 		c.Val = 3
 		c.BeginTime = "2006-01-01T00:00:00"
+		c.FindLevel = 2
 		//c.LoadGranularity()
 		c.Save()
 	}else{
