@@ -21,6 +21,7 @@ type Pool struct {
 
 	Diff float64
 	tmpSample *sync.Map
+	tag byte
 	//tmpSample map[string]*Sample
 }
 
@@ -57,6 +58,7 @@ func (self *Pool) Copy() *Pool {
 		SampDB:self.SampDB,
 		Diff:self.Diff,
 		tmpSample:self.tmpSample,
+		tag:self.tag,
 	}
 
 }
@@ -98,7 +100,6 @@ func (self *Pool) add(e *Sample,w *sync.WaitGroup) bool{
 		TmpSet.saveDB(self)
 		return true
 	}
-
 
 	var _e *Sample
 	_e, self.Diff = TmpSet.findLong()
@@ -151,7 +152,7 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 	go func(_w *sync.WaitGroup){
 		var diff float64
 		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{1})
+			db := tx.Bucket([]byte{self.tag})
 			if db == nil {
 				return nil
 			}
@@ -165,7 +166,7 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 					S_1 = S
 					diff_1 = diff
 				}else{
-					if diff_1 > config.Conf.DisPool {
+					if diff_1/diff < config.Conf.DisPool {
 						break
 					}
 				}
@@ -180,7 +181,7 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 	go func(_w *sync.WaitGroup){
 		var diff float64
 		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{1})
+			db := tx.Bucket([]byte{self.tag})
 			if db == nil {
 				return nil
 			}
@@ -194,7 +195,7 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 					S_2 = S
 					diff_2 = diff
 				}else{
-					if diff_2 > config.Conf.DisPool {
+					if diff_2/diff < config.Conf.DisPool {
 						break
 					}
 				}
@@ -219,6 +220,7 @@ func (self *Pool) find(e *Sample) (*Set,float64) {
 }
 
 func (sp *Pool) Add(e *Sample) {
+	sp.tag = e.Key[8]>>1
 	DateKey := time.Unix( int64(binary.BigEndian.Uint64(e.Key[:8])),0)
 	ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
 	err := sp.SampDB.Update(func(tx *bolt.Tx)error{

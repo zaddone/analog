@@ -93,6 +93,7 @@ type Config struct {
 	Val float64
 
 }
+
 func GetGran(t int64) *Gran{
 
 	var lastgr *Gran = nil

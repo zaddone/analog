@@ -142,7 +142,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
 				// Clustering self.par.list, node
 			}else{
-				go func(){
+				//go func(){
 				ea := cluster.NewSample(append(self.par.list, node),nil)
 				set := self.ca.pool.FindSet(ea)
 				if set != nil && set.CheckCountMax(int(ea.Key[8])) {
@@ -153,7 +153,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 						self.ca.Cshow[0]++
 					//}
 				}
-				}()
+				//}()
 
 				//order post  append(self.par.list,node)
 			}

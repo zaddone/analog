@@ -43,7 +43,7 @@ func NewSnap(es []config.Element) (sn *Snap) {
 		Y[i]  =  (Y[i]  - yMin)/sn.LengthY
 		X[i]  =  (x - begin)/sn.LengthX
 	}
-	sn.Wei = CurveFittingMax(X,Y,nil,0)
+	sn.Wei = CurveFitting(X,Y,nil)
 	//fmt.Println("Wei",len(sn.Wei))
 	if  len(sn.Wei) == 0 {
 		return nil
@@ -66,13 +66,28 @@ func (self *Snap) GetWeiY(x float64) (y float64) {
 	}
 	return
 }
+
+func CurveFitting(X,Y,w []float64) []float64 {
+
+	wlen := len(w)
+	if wlen < config.Conf.WeiMin {
+		w = make([]float64,config.Conf.WeiMin)
+	}
+
+	if !fitting.GetCurveFittingWeight(X,Y,w) {
+		return nil
+	}
+	return w
+
+}
+
 func CurveFittingMax(X,Y,W []float64,vs float64) []float64 {
 	wlen := len(W)
 	var w []float64
 	if wlen < config.Conf.WeiMin {
 		w = make([]float64,config.Conf.WeiMin)
 	}else{
-		if wlen > config.Conf.WeiMax {
+		if wlen >= config.Conf.WeiMax {
 			return W
 		}
 		w = make([]float64,wlen+1)

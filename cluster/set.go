@@ -29,7 +29,7 @@ func NewSet(sa *Sample) (S *Set) {
 		X = append(X,x/S.Sn.LengthX)
 		Y = append(Y,y/S.Sn.LengthY)
 	})
-	S.Sn.Wei = CurveFittingMax(X,Y,nil,0)
+	S.Sn.Wei = CurveFitting(X,Y,nil)
 	S.SetCount(sa)
 	return
 
@@ -66,7 +66,7 @@ func (S *Set) SetCount(e *Sample) {
 }
 func (self *Set)saveDB(sp *Pool){
 	err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
-		db, err := tx.CreateBucketIfNotExists([]byte{1})
+		db, err := tx.CreateBucketIfNotExists([]byte{sp.tag})
 		if err != nil {
 			return err
 		}
@@ -81,7 +81,7 @@ func (self *Set)saveDB(sp *Pool){
 func (self *Set) deleteDB(sp *Pool) {
 
 	err := sp.PoolDB.Update(func(tx *bolt.Tx) error{
-		db,err := tx.CreateBucketIfNotExists([]byte{1})
+		db,err := tx.CreateBucketIfNotExists([]byte{sp.tag})
 		if err != nil {
 			return err
 		}
@@ -209,7 +209,7 @@ func (S *Set) update(sa []*Sample) {
 		X[i] = x / S.Sn.LengthX
 		Y[i] = Y[i] / S.Sn.LengthY
 	}
-	S.Sn.Wei = CurveFittingMax(X,Y,nil,0)
+	S.Sn.Wei = CurveFitting(X,Y,nil)
 
 }
 
