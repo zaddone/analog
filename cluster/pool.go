@@ -115,7 +115,8 @@ func (self *Pool) add(e *Sample,_diff float64) bool{
 	var w sync.WaitGroup
 	for{
 		if _,ok := self.tmpSample.Load(string(_e.KeyName()));ok{
-			NewSet(_e).saveDB(self)
+			//NewSet(_e).saveDB(self)
+			tmp_e = append(tmp_e,_e)
 		}else{
 			w.Add(1)
 			go func(_w *sync.WaitGroup,__e *Sample){
@@ -125,7 +126,11 @@ func (self *Pool) add(e *Sample,_diff float64) bool{
 				_w.Done()
 			}(&w,_e)
 		}
+		if len(TmpSet.samp) == 0 {
+			break
+		}
 
+		TmpSet.update(TmpSet.samp)
 		_e, diff = TmpSet.findLong()
 		if _e == nil {
 			break
