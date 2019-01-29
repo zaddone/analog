@@ -186,6 +186,25 @@ func (S *Set) findLong() (sa *Sample,Max float64) {
 
 }
 
+func (self *Set) SectionCheck(e *Sample) bool {
+
+	k_ := binary.BigEndian.Uint64(e.KeyName()[:8])
+	var min,max uint64 = k_,k_
+	for _,ks_ := range self.Samplist {
+		k := binary.BigEndian.Uint64(ks_[:8])
+		if min>k {
+			min = k
+		}else if max<k {
+			max = k
+		}
+	}
+	if (min == k_) || (max == k_) {
+		return false
+	}
+	return true
+
+}
+
 func (S *Set) update(sa []*Sample) {
 
 	S.clear()

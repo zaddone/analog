@@ -129,6 +129,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				ea := cluster.NewSample(self.par.list, node)
 				self.ca.pool.Add(ea)
 
+				if config.Conf.Debug {
 				go func(e *cluster.Sample){
 					set := self.ca.pool.FindSet(e)
 					self.ca.Cshow[3]++
@@ -139,6 +140,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 						}
 					}
 				}(ea)
+				}
 
 				// Clustering self.par.list, node
 			}else{

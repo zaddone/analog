@@ -3,4 +3,6 @@
 *.db
 *.go.swp
 analog
+read
 /TrLog/
+/Clusterdb/

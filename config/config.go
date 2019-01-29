@@ -75,6 +75,7 @@ type Config struct {
 	BeginTime string
 	WeiMax int
 	WeiMin int
+	Debug bool
 	//BEGINTIME string
 	Port string
 	InsName string
@@ -185,6 +186,7 @@ func NewConfig()  *Config {
 		c.Val = 3
 		c.BeginTime = "2006-01-01T00:00:00"
 		c.FindLevel = 2
+		c.Debug = true
 		//c.LoadGranularity()
 		c.Save()
 	}else{
