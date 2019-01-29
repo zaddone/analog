@@ -78,8 +78,11 @@ func (self *Pool) FindSet(e *Sample) (set *Set) {
 
 	set = &Set{}
 	s_ := self.findSet(e)
+	if len(s_) == 0 {
+		return nil
+	}
 	for _,s := range s_ {
-		set.samp = append(set.samp,s.samp...)
+		set.Samplist = append(set.Samplist,s.Samplist...)
 		for _i,v := range s.Count {
 			set.Count[_i]+=v
 		}
