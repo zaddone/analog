@@ -46,6 +46,15 @@ func (self *Set)CheckCountMax(n int) bool {
 	}
 	return true
 }
+
+func (self *Set) FindSameKey(k []byte) bool {
+	for _,_k := range self.Samplist {
+		if bytes.Equal(_k,k){
+			return true
+		}
+	}
+	return false
+}
 func (self *Set) FindSame(e *Sample,sp *Pool) (e_ *Sample) {
 	if self.samp == nil && !self.loadSamp(sp) {
 		return nil
@@ -184,6 +193,21 @@ func (S *Set) findLong() (sa *Sample,Max float64) {
 	S.samp = append(S.samp[:id],S.samp[id+1:]...)
 	return
 
+}
+
+func (self *Set) SectionDiff() uint64 {
+
+	min := binary.BigEndian.Uint64(self.Samplist[0][:8])
+	max := min
+	for _,ks_ := range self.Samplist[1:] {
+		k := binary.BigEndian.Uint64(ks_[:8])
+		if min>k {
+			min = k
+		}else if max<k {
+			max = k
+		}
+	}
+	return max-min
 }
 
 func (self *Set) SectionCheck(e *Sample) bool {

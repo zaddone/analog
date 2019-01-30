@@ -4,7 +4,7 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/cluster"
 	"math"
-	"bytes"
+	//"bytes"
 	//"fmt"
 	//"time"
 	//"encoding/binary"
@@ -134,8 +134,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 					set := self.ca.pool.FindSet(e)
 					self.ca.Cshow[3]++
 					if set != nil {
-						_ea := set.FindSame(e,self.ca.pool)
-						if (_ea != nil) &&  bytes.Equal(_ea.Key ,e.Key){
+						if set.FindSameKey(e.Key){
 							self.ca.Cshow[4]++
 						}
 					}

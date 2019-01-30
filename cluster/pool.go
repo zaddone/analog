@@ -75,18 +75,20 @@ func (self *Pool) clear(){
 }
 
 func (self *Pool) FindSet(e *Sample) (set *Set) {
+	set,_ = self.find(e)
 
-	set = &Set{}
-	s_ := self.findSet(e)
-	if len(s_) == 0 {
-		return nil
-	}
-	for _,s := range s_ {
-		set.Samplist = append(set.Samplist,s.Samplist...)
-		for _i,v := range s.Count {
-			set.Count[_i]+=v
-		}
-	}
+	//self.tag = e.Key[8]>>1
+	//set = &Set{}
+	//s_ := self.findSet(e)
+	//if len(s_) == 0 {
+	//	return nil
+	//}
+	//for _,s := range s_ {
+	//	set.Samplist = append(set.Samplist,s.Samplist...)
+	//	for _i,v := range s.Count {
+	//		set.Count[_i]+=v
+	//	}
+	//}
 	return
 
 }
@@ -168,286 +170,89 @@ func (self *Pool) add(e *Sample,_diff float64,level int) bool{
 
 }
 
-//func (self *Pool) addBak(e *Sample,w *sync.WaitGroup,level int) bool{
-//
-//	MinSet,diff := self.find(e)
-//	if MinSet == nil {
-//		return false
-//		//NewSet(e).saveDB(self)
-//		//return true
-//	}
-//	if !MinSet.loadSamp(self) {
-//		return self.add(e,w,level)
-//	}
-//	if (self.Diff!=0) && (diff>self.Diff) {
-//		return false
-//	}
-//	TmpSet := &Set{}
-//	TmpSet.update(append(MinSet.samp,e))
-//	if len(TmpSet.samp) < 4 {
-//		MinSet.deleteDB(self)
-//		TmpSet.saveDB(self)
-//		return true
-//	}
-//
-//	var _e *Sample
-//	_e, self.Diff = TmpSet.findLong()
-//	if bytes.Equal(_e.KeyName(),e.KeyName()) {
-//		NewSet(e).saveDB(self)
-//		return true
-//	}
-//	if level > config.Conf.FindLevel {
-//		return false
-//	}
-//	MinSet.deleteDB(self)
-//	w.Add(1)
-//	go func(s *Set,p *Pool,__e *Sample,_w *sync.WaitGroup){
-//		var k string
-//		var TmpSet_ *Set
-//		defer _w.Done()
-//		//var tmpE []*Sample
-//		for{
-//			le := len(s.samp)
-//			if le > 0 {
-//				TmpSet_ = &Set{}
-//				TmpSet_.update(s.samp)
-//				p.Diff = TmpSet_.distance(__e)
-//			}
-//			if !p.add(__e,_w,level+1) {
-//				s.saveDB(p)
-//				break
-//				//tmpE = append(tmpE,__e)
-//			}
-//			if le == 0 {
-//				break
-//			}
-//			s = TmpSet_
-//			__e,p.Diff = s.findLong()
-//			k = string(__e.KeyName())
-//			if _,ok:= p.tmpSample.Load(k);ok {
-//				s.saveDB(p)
-//				break
-//			}
-//			p.tmpSample.Store(k,__e)
-//		}
-//		//if len(tmpE) > 0 {
-//		//	TmpSet_ = &Set{}
-//		//}
-//	}(TmpSet,self.Copy(),_e,w)
-//	return true
-//
-//}
-
-func (self *Pool) findSet(e *Sample) (s_ []*Set) {
-
-	key := make([]byte,16)
-	binary.BigEndian.PutUint64(key,uint64(e.Duration()))
-	SetChan := make(chan *Set,100)
-	var w,w_1 sync.WaitGroup
-	w_1.Add(1)
-	go func(_w *sync.WaitGroup){
-		for s := range SetChan{
-			s_ = append(s_,s )
-		}
-		_w.Done()
-	}(&w_1)
-	w.Add(2)
-	go func(_w *sync.WaitGroup){
-		var diff,sum,count float64
-		var S *Set
-		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{self.tag})
-			if db == nil {
-				return nil
-			}
-			c := db.Cursor()
-			for k,v := c.Seek(key);k!= nil;k,v = c.Next() {
-				count++
-				S = &Set{}
-				S.load(v)
-				SetChan <-S
-
-				diff = S.distance(e)
-				sum += diff
-
-				if !S.SectionCheck(e) &&
-				(sum/count < diff) {
-					break
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			panic(err)
-		}
-		_w.Done()
-	}(&w)
-	go func(_w *sync.WaitGroup){
-		var diff,sum,count float64
-		var S *Set
-		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{self.tag})
-			if db == nil {
-				return nil
-			}
-			c := db.Cursor()
-			c.Seek(key)
-			for k,v := c.Prev(); k != nil;k,v = c.Prev() {
-				count++
-				S = &Set{}
-				S.load(v)
-				SetChan <-S
-
-				diff = S.distance(e)
-				sum += diff
-				if !S.SectionCheck(e) &&
-				(sum/count < diff) {
-					break
-				}
-			}
-			return nil
-		})
-		if err != nil {
-			panic(err)
-		}
-		_w.Done()
-	}(&w)
-	w.Wait()
-	close(SetChan)
-
-	w_1.Wait()
-	return
-
-}
-
 func (self *Pool) find(e *Sample) (*Set, float64) {
-
+	dur := uint64(e.Duration())
 	key := make([]byte,16)
-	binary.BigEndian.PutUint64(key,uint64(e.Duration()))
-
-	var diff_1,diff_2 float64
-	var S_1,S_2 *Set
-	var w sync.WaitGroup
-	w.Add(2)
-	go func(_w *sync.WaitGroup){
-		var diff,sum,count float64
-		var S *Set
-		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{self.tag})
-			if db == nil {
-				return nil
-			}
-			c := db.Cursor()
-			for k,v := c.Seek(key);k!= nil;k,v = c.Next() {
-				count++
-				S = &Set{}
-				S.load(v)
-				diff = S.distance(e)
-				sum += diff
-				if (diff_1 == 0) || (diff_1 > diff) {
-					S_1 = S
-					diff_1 = diff
-				}else if !S.SectionCheck(e) && (sum/count < diff) {
+	binary.BigEndian.PutUint64(key,dur)
+	var diff,minDiff float64
+	var minS,S *Set
+	err := self.PoolDB.View(func(tx *bolt.Tx)error{
+		db := tx.Bucket([]byte{self.tag})
+		if db == nil {
+			return nil
+		}
+		c := db.Cursor()
+		next := func(du uint64){
+			for _k,_v := c.Next();_k != nil;_k,_v = c.Next(){
+				if (binary.BigEndian.Uint64(_k[:8]) - dur)>du {
 					break
 				}
-			}
-			return nil
-		})
-		if err != nil {
-			panic(err)
-		}
-		_w.Done()
-	}(&w)
-	go func(_w *sync.WaitGroup){
-		var diff,sum,count float64
-		var S *Set
-		err := self.PoolDB.View(func(tx *bolt.Tx)error{
-			db := tx.Bucket([]byte{self.tag})
-			if db == nil {
-				return nil
-			}
-			c := db.Cursor()
-			c.Seek(key)
-			for k,v := c.Prev(); k != nil;k,v = c.Prev() {
-				count++
 				S = &Set{}
-				S.load(v)
+				S.load(_v)
 				diff = S.distance(e)
-				sum += diff
-				if (diff_2 == 0) || (diff_2 > diff) {
-					S_2 = S
-					diff_2 = diff
-				}else if !S.SectionCheck(e) && (sum/count < diff) {
-					break
+				if diff<minDiff {
+					minDiff = diff
+					minS = S
 				}
 			}
-			return nil
-		})
-		if err != nil {
-			panic(err)
 		}
-		_w.Done()
-	}(&w)
-	w.Wait()
-
-	if (diff_1==0) && (diff_2==0) {
-		return nil,0
+		prev := func(du uint64){
+			for _k,_v := c.Prev();_k != nil;_k,_v = c.Prev(){
+				if (binary.BigEndian.Uint64(_k[:8]) - dur)>du {
+					break
+				}
+				S = &Set{}
+				S.load(_v)
+				diff = S.distance(e)
+				if diff<minDiff {
+					minDiff = diff
+					minS = S
+				}
+			}
+		}
+		k,v := c.Seek(key)
+		if k == nil {
+			k,v =c.Last()
+			if k == nil {
+				return nil
+			}
+			minS = &Set{}
+			minS.load(v)
+			minDiff = minS.distance(e)
+			prev(dur - binary.BigEndian.Uint64(k[:8]))
+			return nil
+		}
+		k_,v_ := c.Prev()
+		if k_ == nil {
+			minS = &Set{}
+			minS.load(v)
+			minDiff = minS.distance(e)
+			c.Next()
+			next(binary.BigEndian.Uint64(k[:8]) - dur)
+			return nil
+		}
+		d_1 := binary.BigEndian.Uint64(k[:8]) - dur
+		d_2 := dur - binary.BigEndian.Uint64(k_[:8])
+		if (d_1>d_2) {
+			minS = &Set{}
+			minS.load(v_)
+			minDiff = minS.distance(e)
+			prev(d_2)
+		}else{
+			minS = &Set{}
+			minS.load(v)
+			minDiff = minS.distance(e)
+			c.Next()
+			next(d_1)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
 	}
-	if diff_1 < diff_2 {
-		return S_1,diff_1
-	}else{
-		return S_2,diff_2
-	}
+	return minS,minDiff
 
 }
-
-//func (self *Pool) findBak(e *Sample) (S_1 *Set,diff_1 float64) {
-//
-//	key := make([]byte,16)
-//	binary.BigEndian.PutUint64(key,uint64(e.Duration()))
-//
-//	var diff float64
-//	err := self.PoolDB.View(func(tx *bolt.Tx)error{
-//		db := tx.Bucket([]byte{self.tag})
-//		if db == nil {
-//			return nil
-//		}
-//		c := db.Cursor()
-//		for k,v := c.Seek(key);k!= nil;k,v = c.Next() {
-//			S := &Set{}
-//			S.load(v)
-//			diff = S.distance(e)
-//			if (diff_1 == 0) || (diff_1 > diff) {
-//				S_1 = S
-//				diff_1 = diff
-//			}else if diff_1/diff < config.Conf.DisPool {
-//				break
-//			}
-//		}
-//		c.Seek(key)
-//		for k,v := c.Prev(); k != nil;k,v = c.Prev() {
-//			S := &Set{}
-//			S.load(v)
-//			diff = S.distance(e)
-//			if (diff_1 > diff) {
-//				S_1 = S
-//				diff_1 = diff
-//			}else if diff_1/diff < config.Conf.DisPool {
-//				break
-//			}
-//		}
-//		return nil
-//	})
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//	if diff_1==0 {
-//		return nil,0
-//	}
-//	return S_1,diff_1
-//
-//}
 
 func (sp *Pool) Add(e *Sample) {
 
