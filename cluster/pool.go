@@ -109,62 +109,60 @@ func (self *Pool) add(e *Sample,_diff float64,level int) bool{
 	TmpSet := &Set{}
 	TmpSet.update(append(MinSet.samp,e))
 	le := len(TmpSet.samp)
-	if le < 4 {
+	if (le < config.Conf.MinSam){
 		MinSet.deleteDB(self)
 		TmpSet.saveDB(self)
 		return true
 	}
 	_e, diff := TmpSet.findLong()
-	if (_e == e) {
-		//return false
-		//if _diff>0{
+	if (_diff == 0) && (_e == e) {
 		NewSet(_e).saveDB(self)
-		//}else{
-		//	MinSet.deleteDB(self)
-		//	TmpSet.saveDB(self)
-		//}
 		return true
 	}
 	MinSet.deleteDB(self)
 	if level == config.Conf.FindLevel{
+	//if (_diff !=0){
 		TmpSet.saveDB(self)
 		return true
 	}
 
-	self.tmpSample.Store(string(e.KeyName()),e)
+	//self.tmpSample.Store(string(e.KeyName()),e)
 	//var _e *Sample
-	tmp_e:=make(chan *Sample,le)
-	var w sync.WaitGroup
+	//tmp_e:=make(chan *Sample,le)
+	tmp_e:=make([]*Sample,0,le)
+	//var w sync.WaitGroup
 	for{
-		if _,ok := self.tmpSample.Load(string(_e.KeyName()));ok{
-			//NewSet(_e).saveDB(self)
-			tmp_e <- _e
-		}else{
+		//if _,ok := self.tmpSample.Load(string(_e.KeyName()));ok{
+		//	//NewSet(_e).saveDB(self)
+		//	tmp_e <- _e
+		//}else{
 
-			if len(TmpSet.samp) > 0 {
-				TmpSet.update(TmpSet.samp)
-				diff = TmpSet.distance(_e)
-			}
+			//if len(TmpSet.samp) > 0 {
+			//	TmpSet.update(TmpSet.samp)
+			//	diff = TmpSet.distance(_e)
+			//}
 
-			w.Add(1)
-			go func(_w *sync.WaitGroup,__e *Sample,diff_ float64){
-				if !self.add(__e,diff_,level+1){
-					tmp_e <- __e
-				}
-				_w.Done()
-			}(&w,_e,diff)
+			//w.Add(1)
+			//go func(_w *sync.WaitGroup,__e *Sample,diff_ float64){
+			//	if !self.add(__e,diff_,level+1){
+			//		tmp_e <- __e
+			//	}
+			//	_w.Done()
+			//}(&w,_e,diff)
+		//}
+		if !self.add(_e,diff,level+1){
+			tmp_e =append(tmp_e,_e)
 		}
 		_e, diff = TmpSet.findLong()
 		if _e == nil {
 			break
 		}
 	}
-	w.Wait()
-	close(tmp_e)
-	for e_ := range tmp_e{
-		TmpSet.samp = append(TmpSet.samp,e_)
+	//w.Wait()
+	if len(tmp_e)==0 {
+		return true
 	}
-	TmpSet.update(TmpSet.samp)
+	TmpSet.update(tmp_e)
 	TmpSet.saveDB(self)
 	return true
 

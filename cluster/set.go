@@ -120,7 +120,6 @@ func (self *Set) toByte() []byte {
 	}
 	return b.Bytes()
 
-
 }
 
 func (S *Set) clear(){

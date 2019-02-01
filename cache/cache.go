@@ -403,8 +403,9 @@ func (self *Cache) Read(hand func(t int64)){
 			err == nil {
 			f.WriteString(
 				fmt.Sprintf(
-					"%s %.2f %.2f,%.0f\r\n",
-					time.Unix(from,0),
+					"%s %s %.2f %.2f,%.0f\r\n",
+					time.Now().Format(config.TimeFormat),
+					time.Unix(from,0).Format(config.TimeFormat),
 					self.Cshow[4]/self.Cshow[3],
 					self.Cshow[1]/self.Cshow[0],
 					self.Cshow,

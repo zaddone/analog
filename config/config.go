@@ -90,10 +90,9 @@ type Config struct {
 	PoolDbPath string
 	ClusterPath string
 	DisPool float64
-
 	Val float64
-
 	FindLevel int
+	MinSam int
 
 }
 
@@ -175,7 +174,7 @@ func NewConfig()  *Config {
 		c.InsName = "EUR_USD"
 		c.Server = true
 		c.LogPath = "TrLog"
-		c.WeiMin = 4
+		c.WeiMin = 5
 		c.WeiMax = 7
 		c.DbPath = "dbCache"
 		c.KvDbPath = "kvdb.db"
@@ -186,6 +185,7 @@ func NewConfig()  *Config {
 		c.Val = 3
 		c.BeginTime = "2006-01-01T00:00:00"
 		c.FindLevel = 2
+		c.MinSam = 8
 		c.Debug = true
 		//c.LoadGranularity()
 		c.Save()

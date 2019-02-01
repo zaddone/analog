@@ -111,13 +111,14 @@ func (self *Sample) load(db []byte) {
 
 func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	durdiff = self.Duration() - dur
+	xMin := self.XMin + durdiff
 	if durdiff <=0 {
+		//xMin:= self.XMax - dur
 		for i,x := range self.X {
-			f(float64(x - self.XMin),self.Y[i] -self.YMin)
+			f(float64(x - xMin),self.Y[i] -self.YMin)
 		}
 		return -durdiff
 	}
-	xMin := self.XMin + durdiff
 	var yMin float64
 	Le := len(self.X)
 	var X []int64 = make([]int64,0,Le)
