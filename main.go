@@ -14,19 +14,33 @@ import (
 type cacheList struct {
 	//sync.Mutex
 	//sync.Mutex
-	cas []*_cache
+	cas map[string]*_cache
 	//minC chan *_cache
 }
 
 func NewCacheList() *cacheList {
 	return &cacheList{
+		cas :make(map[string]*_cache)
 		//minC:make(chan *_cache,1),
 	}
+}
+func (self *cacheList) FindAllDur(ins string,dur int64,h func(string, float64,bool)) {
+
+	for k,c := range self.cas {
+		if k == ins {
+			continue
+		}
+		d,o := c.ca.FindDur(dur)
+		if d != 0 {
+			h(k,d,o)
+		}
+	}
+
 }
 
 func (self *cacheList) findMin() {
 
-	var I int
+	var I string
 	var minVal int64
 	for i,c := range self.cas {
 		if (c.val != 0)  && ((minVal==0) || (c.val<minVal)) {
@@ -56,8 +70,9 @@ func (self *cacheList) findMin() {
 //}
 type _cache struct {
 	cas *cacheList
+
 	ca *cache.Cache
-	index int
+	//index int
 	//wait chan int64
 	wait chan bool
 	val int64
@@ -69,9 +84,10 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 		cas:cali,
 		//wait:make(chan int64),
 	}
-	c.ca.SetPool()
-	c.index = len(cali.cas)
-	cali.cas = append(cali.cas,c)
+	//c.ca.SetPool()
+	//c.index = len(cali.cas)
+	//cali.cas[ins.Name] = append(cali.cas,c)
+	cali.cas[ins.Name] = c
 	go c.ca.Read(func(t int64){
 		c.val = t
 		<-c.wait
@@ -120,7 +136,7 @@ func loadCache(){
 				if err != nil {
 					panic(err)
 				}
-				InsList.cas = append(InsList.cas,NewCache(_ins,InsList))
+				NewCache(_ins,InsList)
 				return nil
 			})
 		})

@@ -67,8 +67,12 @@ func (self *Candles) Diff() float64 {
 	//fmt.Println("diff",self.diff)
 	return self.diff
 }
-func (self *Candles) Read(h func(config.Element)) {
-	h(self)
+
+func (self *Candles) Readf(h func(config.Element) bool ) bool {
+	return h(self)
+}
+func (self *Candles) Read(h func(config.Element) bool ) bool {
+	return h(self)
 }
 func NewCandlesWithDB(db []byte) (c *Candles) {
 

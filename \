@@ -1,0 +1,158 @@
+package main
+import (
+	"github.com/zaddone/analog/config"
+	"github.com/zaddone/analog/request"
+	"github.com/zaddone/analog/cache"
+	"github.com/zaddone/operate/oanda"
+	"github.com/boltdb/bolt"
+	"encoding/json"
+	"fmt"
+	"time"
+	//"sync"
+)
+
+type cacheList struct {
+	//sync.Mutex
+	//sync.Mutex
+	cas map[string]*_cache
+	//minC chan *_cache
+}
+
+func NewCacheList() *cacheList {
+	return &cacheList{
+		cas :make(map[string]*_cache)
+		//minC:make(chan *_cache,1),
+	}
+}
+func (self *cacheList) FindAllDur(ins string,h func(string, float64,bool)) {
+
+	ca :=self.cas[ins].ca
+	dur := ca.Duration()
+	ca.
+	for k,c := range self.cas {
+		if k == ins {
+			continue
+		}
+		d,o := c.ca.FindDur(dur)
+		if d != 0 {
+			h(k,d,o)
+		}
+	}
+
+}
+
+func (self *cacheList) findMin() {
+
+	var I string
+	var minVal int64
+	for i,c := range self.cas {
+		if (c.val != 0)  && ((minVal==0) || (c.val<minVal)) {
+			minVal = c.val
+			I = i
+		}
+	}
+	if minVal != 0 {
+		self.cas[I].run()
+		return
+		//self.minC <- self.cas[I]
+	}
+	time.Sleep(time.Second)
+	self.findMin()
+	//panic(0)
+
+}
+
+
+//func (self *cacheList) run(){
+//	for{
+//
+//		c := <-self.minC
+//		fmt.Printf("%s %s\r",c.ca.Ins.Name,time.Unix(c.val,0))
+//		c.run()
+//	}
+//}
+type _cache struct {
+	cas *cacheList
+
+	ca *cache.Cache
+	//index int
+	//wait chan int64
+	wait chan bool
+	val int64
+}
+func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
+	c = &_cache{
+		ca:cache.NewCache(ins),
+		wait:make(chan bool),
+		cas:cali,
+		//wait:make(chan int64),
+	}
+	//c.ca.SetPool()
+	//c.index = len(cali.cas)
+	//cali.cas[ins.Name] = append(cali.cas,c)
+	cali.cas[ins.Name] = c
+	go c.ca.Read(func(t int64){
+		c.val = t
+		<-c.wait
+
+		go c.cas.findMin()
+	})
+	return c
+}
+
+func (self *_cache) run() {
+	//self.val = 0
+	//fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
+	self.wait<-true
+}
+
+var (
+	InsList *cacheList = NewCacheList()
+)
+func main() {
+
+	loadCache()
+	//go InsList.run()
+
+	InsList.findMin()
+
+
+	fmt.Println("wait",time.Now())
+	t := time.Tick(time.Second * 3600)
+	for e := range t {
+		fmt.Println(e)
+	}
+	//for{
+	//	time.Tick(
+	//}
+}
+func loadCache(){
+	err := config.HandDB(func(db *bolt.DB)error{
+		return db.View(func(tx *bolt.Tx) error {
+			b := tx.Bucket(request.Ins_key)
+			if b == nil {
+				return nil
+			}
+			return b.ForEach(func(k,v []byte)error{
+				_ins := &oanda.Instrument{}
+				err := json.Unmarshal(v,_ins)
+				if err != nil {
+					panic(err)
+				}
+				NewCache(_ins,InsList)
+				return nil
+			})
+		})
+	})
+	if err != nil {
+		panic(err)
+	}
+	if len(InsList.cas) == 0 {
+		err = request.DownAccountProperties()
+		if err != nil {
+			panic(err)
+		}
+		loadCache()
+	}
+}
+

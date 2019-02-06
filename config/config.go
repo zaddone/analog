@@ -47,7 +47,8 @@ type Element interface{
 	Middle() float64
 	Diff() float64
 	Duration() int64
-	Read(func(Element))
+	Read(func(Element) bool ) bool
+	Readf(func(Element) bool ) bool
 }
 func GetTime() time.Time {
 	loc,err := time.LoadLocation("Etc/GMT-3")
@@ -93,6 +94,7 @@ type Config struct {
 	Val float64
 	FindLevel int
 	MinSam int
+	Year int
 
 }
 
@@ -174,7 +176,7 @@ func NewConfig()  *Config {
 		c.InsName = "EUR_USD"
 		c.Server = true
 		c.LogPath = "TrLog"
-		c.WeiMin = 5
+		c.WeiMin = 3
 		c.WeiMax = 7
 		c.DbPath = "dbCache"
 		c.KvDbPath = "kvdb.db"
@@ -183,10 +185,11 @@ func NewConfig()  *Config {
 		c.ClusterPath = "Clusterdb"
 		c.DisPool = 0.5
 		c.Val = 3
-		c.BeginTime = "2006-01-01T00:00:00"
+		c.BeginTime = "2015-01-01T00:00:00"
 		c.FindLevel = 2
-		c.MinSam = 8
+		c.MinSam = 4
 		c.Debug = true
+		c.Year = 1
 		//c.LoadGranularity()
 		c.Save()
 	}else{

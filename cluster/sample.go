@@ -17,21 +17,23 @@ type Sample struct {
 	X []int64
 	Y []float64
 
-	Dis float64
-	DurDis int64
+	//Dis float64
+	//DurDis int64
+
 	Tag byte
 	diff float64
 
 	Key []byte
 	//Same []byte
 	endEle config.Element
+	//CaMap map[int]float64
 
 }
 func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	if e != nil {
 		sa = &Sample{
-			Dis:e.Diff(),
-			DurDis:e.Duration(),
+			//Dis:e.Diff(),
+			//DurDis:e.Duration(),
 			diff : eles[len(eles)-1].Diff(),
 		}
 	}else{
@@ -41,7 +43,7 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	}
 	var y float64
 	for _,ele := range eles {
-		ele.Read(func(e config.Element){
+		ele.Read(func(e config.Element) bool {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
 				sa.YMin = y
@@ -51,6 +53,7 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 			}
 			sa.Y = append(sa.Y,y)
 			sa.X = append(sa.X,e.DateTime())
+			return true
 		})
 	}
 	sa.XMin = sa.X[0]

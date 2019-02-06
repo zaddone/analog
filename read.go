@@ -49,8 +49,9 @@ func main(){
 		}
 		if (t - begin) >= 604800 {
 			begin = t
-			fmt.Printf("%s %s %.2f %.2f,%.0f\r\n",time.Now().Format(config.TimeFormat),time.Unix(t,0).Format(config.TimeFormat),FirstCache.Cshow[4]/FirstCache.Cshow[3],FirstCache.Cshow[1]/FirstCache.Cshow[2],FirstCache.Cshow)
-			FirstCache.Cshow = [5]float64{0,0,0,0,0}
+			fmt.Printf("%s %s %.2f %.2f,%.0f,%d\r\n",time.Now().Format(config.TimeFormat),time.Unix(t,0).Format(config.TimeFormat),FirstCache.Cshow[5]/FirstCache.Cshow[4],FirstCache.Cshow[2]/FirstCache.Cshow[1],FirstCache.Cshow,FirstCache.ShowPoolNum())
+			//FirstCache.Cshow = [6]float64{0,0,0,FirstCache.Cshow[0]+FirstCache.Cshow[3],FirstCache.Cshow[1]+FirstCache.Cshow[4],FirstCache.Cshow[2]+FirstCache.Cshow[5]}
+			FirstCache.Cshow = [6]float64{0,0,0,0,0,0}
 		}
 	})
 	fmt.Println("read cache over")

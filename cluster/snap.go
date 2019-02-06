@@ -21,7 +21,7 @@ func NewSnap(es []config.Element) (sn *Snap) {
 	var X,Y []float64
 	var x,y,yMin,yMax float64
 	for _,e := range es {
-		e.Read(func(e_ config.Element){
+		e.Read(func(e_ config.Element) bool{
 			x =float64(e_.DateTime())
 			y = e_.Middle()
 			if (yMin == 0) || (y < yMin){
@@ -31,6 +31,7 @@ func NewSnap(es []config.Element) (sn *Snap) {
 			}
 			Y = append(Y,y)
 			X = append(X,x)
+			return true
 		})
 	}
 

@@ -74,6 +74,7 @@ func (S *Set) SetCount(e *Sample) {
 	S.Count[int(e.Tag)]++
 }
 func (self *Set)saveDB(sp *Pool){
+
 	err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
 		db, err := tx.CreateBucketIfNotExists([]byte{sp.tag})
 		if err != nil {
@@ -84,7 +85,8 @@ func (self *Set)saveDB(sp *Pool){
 	if err != nil {
 		panic(err)
 	}
-	return
+	sp.SetCount++
+
 }
 
 func (self *Set) deleteDB(sp *Pool) {
@@ -99,6 +101,7 @@ func (self *Set) deleteDB(sp *Pool) {
 	if err != nil {
 		panic(err)
 	}
+	sp.SetCount--
 
 }
 func (S *Set) Key() ([]byte){
@@ -174,22 +177,32 @@ func (self *Set) loadSamp(sp *Pool) bool {
 
 }
 
+func (S *Set) dar() float64 {
+	var sum,psum float64
+	for _,s := range S.samp {
+		s.diff  = S.distance(s)
+		psum += s.diff*s.diff
+		sum  += s.diff
+	}
+	n := float64(len(S.samp))
+	return psum/(n*n)-(sum*sum)/n
+
+}
 func (S *Set) findLong() (sa *Sample,Max float64) {
 
 	if len(S.samp) == 0 {
 		return
 	}
-	var d float64
-	var id int
-	for i,s := range S.samp {
-		d  = S.distance(s)
-		if d > Max {
-			Max = d
+	//var id int
+	for _,s := range S.samp {
+		s.diff  = S.distance(s)
+		if s.diff > Max {
+			Max = s.diff
 			sa = s
-			id = i
+			//id = i
 		}
 	}
-	S.samp = append(S.samp[:id],S.samp[id+1:]...)
+	//S.samp = append(S.samp[:id],S.samp[id+1:]...)
 	return
 
 }

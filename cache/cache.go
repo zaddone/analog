@@ -31,24 +31,30 @@ var (
 	Bucket  = []byte{1}
 )
 
+type CacheList interface{
+	FindAllDur( int64,func(int,float64,bool))
+}
+
 type Cache struct {
 
 	Ins *oanda.Instrument
 	part *level
 
-	//priceChan chan config.Element
 	CandlesChan chan *Candles
 	stop chan bool
-
-	//LastE config.Element
+	//wait chan bool
 	lastKey [8]byte
-	CacheAll []*Cache
-	//InsCaches sync.Map
-	Cshow [5]float64
+	//CacheAll []*Cache
+	Cshow [6]float64
+
+	Cl CacheList
 
 	pool *cluster.Pool
 	tmpSample map[string]*cluster.Sample
 
+}
+func (self *Cache) ShowPoolNum() int64 {
+	return self.pool.SetCount
 }
 
 func NewCache(ins *oanda.Instrument) (c *Cache) {
@@ -62,6 +68,29 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c.part = NewLevel(0,c,nil)
 	return c
 }
+
+func (self *Cache) FindDur(dur int64) (float64,bool) {
+	//begin := self.FindLastTime()
+	end := self.GetLastElement()
+	if end == nil {
+		return 0,false
+	}
+	var begin config.Element
+	var sum float64
+	var count float64
+	self.part.readf(func(e config.Element) bool{
+		sum += math.Abs(e.Diff())
+		if (end.DateTime() - e.DateTime()) >= dur {
+			begin = e
+			return false
+		}
+		return true
+	})
+	diff := begin.Middle() - end.Middle()
+	return math.Abs(diff) - sum/count,diff > 0
+
+}
+
 
 func (self *Cache) syncSaveCandles(){
 
@@ -252,8 +281,14 @@ func (self *Cache) readAndDownCandles(h func(*Candles) bool){
 }
 
 func (self *Cache) readCandles(h func(*Candles) bool){
+
 	var from int64
-	if err := filepath.Walk(filepath.Join(config.Conf.LogPath,self.Ins.Name),func(p string,info os.FileInfo,er error)error{
+	beginT,err := time.Parse(config.TimeFormat,config.Conf.BeginTime)
+	beginU := beginT.Unix()
+	if err != nil {
+		panic(err)
+	}
+	if err = filepath.Walk(filepath.Join(config.Conf.LogPath,self.Ins.Name),func(p string,info os.FileInfo,er error)error{
 		if er != nil {
 			return io.EOF
 		}
@@ -273,10 +308,10 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 						fmt.Println(p)
 						panic(err)
 					}
+					if beginU > c.DateTime() {
+						continue
+					}
 					if from >= c.DateTime() {
-						//fmt.Println(p,from,c.DateTime(),time.Unix(from,0).In(Loc),time.Unix(c.DateTime(),0).In(Loc))
-						//panic(0)
-						//self.Cshow[1]++
 						continue
 					}
 					//self.Cshow[0]++
@@ -333,57 +368,11 @@ func (self *Cache) Close(){
 	}
 }
 
-func (self *Cache) findDurationSame (dur int64) (l *level,min int64) {
-
-	var v int64
-	self.part.readUp(func(_l *level){
-		v = func(_v int64 ) int64{
-			if _v<0 {
-				return -_v
-			}
-			return _v
-		}(dur - _l.duration())
-		if  (min == 0) ||
-			(v < min) {
-			min = v
-			l = _l
-		}
-	})
-	return
-
-}
-
-//func (self *Cache) Follow(t int64,w *sync.WaitGroup){
-//
-//	xin := self.Ins.Integer()
-//	var dt int64
-//	self.loadCandlesFile(0,t,func(c *Candles) bool{
-//		if c == nil {
-//			return true
-//		}
-//		dt = c.DateTime()
-//		if dt<= t {
-//			self.AddPrice(&eNode{
-//				middle:c.Middle()*xin,
-//				diff:c.Diff()*xin,
-//				dateTime:dt,
-//				duration:c.Duration(),
-//			})
-//
-//		}else{
-//			binary.BigEndian.PutUint64(self.lastKey[:],uint64(dt))
-//			return false
-//		}
-//		return true
-//	})
-//	w.Done()
-//
-//}
-
 func (self *Cache) Read(hand func(t int64)){
 
 	xin := self.Ins.Integer()
-	var from,begin int64
+	//var from,begin int64
+	var from int64
 	self.readAndDownCandles(func(c *Candles) bool {
 		from = c.DateTime()
 		if hand != nil {
@@ -395,29 +384,28 @@ func (self *Cache) Read(hand func(t int64)){
 			dateTime:from,
 			duration:c.Duration(),
 		})
-		if (self.pool != nil) && ((from - begin) >= 604800) {
-			if f,err := os.OpenFile(
-			filepath.Join(config.Conf.ClusterPath,self.Ins.Name,"log"),
-			os.O_APPEND|os.O_CREATE|os.O_RDWR,
-			0700,);
-			err == nil {
-			f.WriteString(
-				fmt.Sprintf(
-					"%s %s %.2f %.2f,%.0f\r\n",
-					time.Now().Format(config.TimeFormat),
-					time.Unix(from,0).Format(config.TimeFormat),
-					self.Cshow[4]/self.Cshow[3],
-					self.Cshow[1]/self.Cshow[0],
-					self.Cshow,
-				))
-			f.Close()
-			}else{
-				panic(err)
-			}
-			self.Cshow = [5]float64{0,0,0,0,0}
-		}
-		begin = from
-		
+		//if (self.pool != nil) && ((from - begin) >= 604800) {
+			//if f,err := os.OpenFile(
+			//filepath.Join(config.Conf.ClusterPath,self.Ins.Name,"log"),
+			//os.O_APPEND|os.O_CREATE|os.O_RDWR,
+			//0700,);
+			//err == nil {
+			//f.WriteString(
+			//	fmt.Sprintf(
+			//		"%s %s %.2f %.2f,%.0f\r\n",
+			//		time.Now().Format(config.TimeFormat),
+			//		time.Unix(from,0).Format(config.TimeFormat),
+			//		self.Cshow[4]/self.Cshow[3],
+			//		self.Cshow[1]/self.Cshow[0],
+			//		self.Cshow,
+			//	))
+			//f.Close()
+			//}else{
+			//	panic(err)
+			//}
+			//self.Cshow = [6]float64{0,0,0,0,0,0}
+			//begin = from
+		//}
 		return true
 	})
 }
@@ -450,4 +438,5 @@ func (self *Cache) AddPrice(p config.Element) {
 		self.part = NewLevel(0,self,nil)
 	}
 	self.part.add(p,self.Ins)
+
 }

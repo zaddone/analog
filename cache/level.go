@@ -43,6 +43,7 @@ func NewLevel(tag int,c *Cache,ch *level) *level {
 	}
 }
 
+
 func (self *level) LastTime() int64 {
 	le := len(self.list)
 	if le == 0 {
@@ -60,18 +61,16 @@ func (self *level) duration () int64 {
 	}
 	return last - self.list[0].DateTime()
 }
-func (self *level) readDown(hand func(*level)){
-	hand(self)
-	if self.child != nil {
-		self.child.readDown(hand)
+func (self *level) readf( h func(e config.Element) bool){
+	for i := len(self.list) - 1;i>= 0;i-- {
+		if !self.list[i].Readf(h){
+			return
+		}
 	}
-}
-
-func (self *level) readUp(hand func(*level)){
-	hand(self)
 	if self.par != nil {
-		self.par.readUp(hand)
+		self.par.readf(h)
 	}
+	//self.par
 }
 
 func (self *level) add(e config.Element,ins *oanda.Instrument) {
@@ -118,48 +117,53 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		tag := self.tag+1
 		//fmt.Println(tag)
 		//if tag < MaxTag {
-			self.par = NewLevel(tag,self.ca,self)
-			self.par.add(NewNode(self.list[:self.maxid]...),ins)
+		self.par = NewLevel(tag,self.ca,self)
+		self.par.add(NewNode(self.list[:self.maxid]...),ins)
 		//}
 	}else{
+
 		node := NewbNode(self.list[:self.maxid]...)
-		if (self.par.par != nil && self.ca.pool != nil){
+		if (self.par.par != nil) && (self.ca.pool != nil){
 
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
 				ea := cluster.NewSample(self.par.list, node)
+			//	//b := self.list[0].
+			//	//end := self.ca.GetLastElement()
+			//	//dur := self.list[0].DateTime()-	self.ca.GetLastElement().DateTime()
+			//	//dur := ea.Duration()
 				self.ca.pool.Add(ea)
 
 				if config.Conf.Debug {
-				go func(e *cluster.Sample){
+				func(e *cluster.Sample){
 					set := self.ca.pool.FindSet(e)
-					self.ca.Cshow[3]++
+					self.ca.Cshow[4]++
 					if set != nil {
 						if set.FindSameKey(e.Key){
-							self.ca.Cshow[4]++
+							self.ca.Cshow[5]++
 						}
 					}
 				}(ea)
 				}
 
-				// Clustering self.par.list, node
+			//	// Clustering self.par.list, node
 			}else{
-				//go func(){
-				ea := cluster.NewSample(append(self.par.list, node),nil)
-				set := self.ca.pool.FindSet(ea)
-				if set != nil && set.CheckCountMax(int(ea.Key[8])) {
-				//if set != nil {
-					//if _ea := set.FindSame(ea,self.ca.pool); _ea != nil && _ea.Key[8] == ea.Key[8] {
-						ea.SetEndElement(self.ca.GetLastElement())
-						self.ca.tmpSample[string(ea.Key)] = ea
-						self.ca.Cshow[0]++
-					//}
-				}
-				//}()
-
-				//order post  append(self.par.list,node)
+			//	//go func(){
+			//	ea := cluster.NewSample(append(self.par.list, node),nil)
+			//	set := self.ca.pool.FindSet(ea)
+			//	if set != nil && set.CheckCountMax(int(ea.Key[8])) {
+			//	//if set != nil {
+			//		//if _ea := set.FindSame(ea,self.ca.pool); _ea != nil && _ea.Key[8] == ea.Key[8] {
+			//		ea.SetEndElement(self.ca.GetLastElement())
+			//		self.ca.tmpSample[string(ea.Key)] = ea
+			//		self.ca.Cshow[0]++
+			//		//}
+			//	}
+			//	//}()
+			//	//order post  append(self.par.list,node)
 			}
 		}
 		self.par.add(node,ins)
+
 	}
 
 	self.tp = self.list[0]

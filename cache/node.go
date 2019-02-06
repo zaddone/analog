@@ -29,10 +29,24 @@ func NewbNode(li ...config.Element) (n *bNode) {
 func (self *bNode) Duration() int64 {
 	return self.duration
 }
-func (self *bNode) Read(hand func(config.Element)){
-	for _,e := range self.li {
-		e.Read(hand)
+func (self *bNode) Readf(hand func(config.Element) bool ) bool {
+
+	for i:= len(self.li)-1;i>=0;i--{
+	//for _,e := range self.li {
+		if !self.li[i].Readf(hand) {
+			return false
+			break
+		}
 	}
+	return true
+}
+func (self *bNode) Read(hand func(config.Element) bool ) bool{
+	for _,e := range self.li {
+		if !e.Read(hand){
+			return false
+		}
+	}
+	return true
 }
 func (self *bNode) DateTime() int64{
 	le := len(self.li)
@@ -75,8 +89,11 @@ func NewNode(li ...config.Element) (n *eNode) {
 func (self *eNode) Duration() int64 {
 	return self.duration
 }
-func (self *eNode) Read(hand func(config.Element)){
-	hand(self)
+func (self *eNode) Readf(hand func(config.Element) bool) bool {
+	return hand(self)
+}
+func (self *eNode) Read(hand func(config.Element) bool ) bool{
+	return hand(self)
 	//for _,e := range self.li {
 	//	e.Read(hand)
 	//}

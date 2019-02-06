@@ -8,10 +8,7 @@ import(
 	"encoding/binary"
 	"os"
 	//"bytes"
-	"sync"
-)
-var (
-	MaxTime int64
+	//"sync"
 )
 
 type Pool struct {
@@ -19,8 +16,12 @@ type Pool struct {
 	SampDB *bolt.DB
 	PoolDB *bolt.DB
 
+	MaxTime int64
 	//Diff float64
-	tmpSample *sync.Map
+	//tmpSample *sync.Map
+	//SumTime int64
+	//CountTime int64
+	SetCount int64
 	tag byte
 	//tmpSample map[string]*Sample
 }
@@ -37,7 +38,7 @@ func NewPool(ins string) (po *Pool) {
 		}
 	}
 	po = &Pool{
-		tmpSample:new(sync.Map),
+		//tmpSample:new(sync.Map),
 	}
 	po.SampDB,err = bolt.Open(filepath.Join(p,config.Conf.SampleDbPath),0600,nil)
 	if err != nil {
@@ -57,7 +58,7 @@ func (self *Pool) Copy() *Pool {
 		PoolDB:self.PoolDB,
 		SampDB:self.SampDB,
 		//Diff:self.Diff,
-		tmpSample:self.tmpSample,
+		//tmpSample:self.tmpSample,
 		tag:self.tag,
 	}
 
@@ -67,14 +68,17 @@ func (self *Pool) Close(){
 	self.PoolDB.Close()
 	self.SampDB.Close()
 }
-func (self *Pool) clear(){
-	self.tmpSample = new(sync.Map)
+//func (self *Pool) clear(){
+	//self.tmpSample = new(sync.Map)
 	//self.tmpSample = map[string]*Sample{}
 	//self.Diff = 0
 
-}
+//}
 
 func (self *Pool) FindSet(e *Sample) (set *Set) {
+
+
+	self.tag = e.Key[8]>>1
 	set,_ = self.find(e)
 
 	//self.tag = e.Key[8]>>1
@@ -93,79 +97,130 @@ func (self *Pool) FindSet(e *Sample) (set *Set) {
 
 }
 
-func (self *Pool) add(e *Sample,_diff float64,level int) bool{
+func (self *Pool) add_(e *Sample,_diff float64) bool{
 
 	MinSet,diff := self.find(e)
 	if MinSet == nil {
 		return false
 	}
 	if !MinSet.loadSamp(self) {
-		return self.add(e,_diff,level)
+		return self.add_(e,_diff)
 	}
 	if (_diff!=0) && (diff>_diff) {
 		return false
 	}
-
-	TmpSet := &Set{}
-	TmpSet.update(append(MinSet.samp,e))
-	le := len(TmpSet.samp)
-	if (le < config.Conf.MinSam){
-		MinSet.deleteDB(self)
-		TmpSet.saveDB(self)
-		return true
-	}
-	_e, diff := TmpSet.findLong()
-	if (_diff == 0) && (_e == e) {
-		NewSet(_e).saveDB(self)
-		return true
-	}
 	MinSet.deleteDB(self)
-	if level == config.Conf.FindLevel{
-	//if (_diff !=0){
-		TmpSet.saveDB(self)
+
+	le := len(MinSet.samp)
+	if le < config.Conf.MinSam {
+		MinSet.update(append(MinSet.samp,e))
+		MinSet.saveDB(self)
 		return true
 	}
 
-	//self.tmpSample.Store(string(e.KeyName()),e)
-	//var _e *Sample
-	//tmp_e:=make(chan *Sample,le)
+	tmpSet := &Set{}
+	tmpSet.update(append(MinSet.samp,e))
+	dar := tmpSet.dar()
+	_dar := MinSet.dar()
+	if _dar > dar {
+		tmpSet.saveDB(self)
+		return true
+	}
+	NewSet(e).saveDB(self)
+
 	tmp_e:=make([]*Sample,0,le)
-	//var w sync.WaitGroup
-	for{
-		//if _,ok := self.tmpSample.Load(string(_e.KeyName()));ok{
-		//	//NewSet(_e).saveDB(self)
-		//	tmp_e <- _e
-		//}else{
-
-			//if len(TmpSet.samp) > 0 {
-			//	TmpSet.update(TmpSet.samp)
-			//	diff = TmpSet.distance(_e)
-			//}
-
-			//w.Add(1)
-			//go func(_w *sync.WaitGroup,__e *Sample,diff_ float64){
-			//	if !self.add(__e,diff_,level+1){
-			//		tmp_e <- __e
-			//	}
-			//	_w.Done()
-			//}(&w,_e,diff)
-		//}
-		if !self.add(_e,diff,level+1){
-			tmp_e =append(tmp_e,_e)
-		}
-		_e, diff = TmpSet.findLong()
-		if _e == nil {
-			break
+	for _,e_ := range MinSet.samp {
+		if !self.add_(e_,e_.diff){
+			tmp_e = append(tmp_e,e_)
 		}
 	}
-	//w.Wait()
-	if len(tmp_e)==0 {
+	le_ := len(tmp_e)
+	if le_ == le {
+		MinSet.saveDB(self)
 		return true
 	}
-	TmpSet.update(tmp_e)
-	TmpSet.saveDB(self)
+	if le_>0 {
+		MinSet.update(tmp_e)
+		MinSet.saveDB(self)
+	}
 	return true
 
+}
+func (self *Pool) add(e *Sample,_diff float64) bool{
+
+	MinSet,diff := self.find(e)
+	if MinSet == nil {
+		return false
+	}
+	if !MinSet.loadSamp(self) {
+		return self.add(e,_diff)
+	}
+	if (_diff!=0) && (diff>_diff) {
+		return false
+	}
+	MinSet.deleteDB(self)
+
+	le := len(MinSet.samp)
+	if le < config.Conf.MinSam {
+		MinSet.update(append(MinSet.samp,e))
+		MinSet.saveDB(self)
+		return true
+	}
+	_,diffMax := MinSet.findLong()
+	if diff < diffMax {
+		MinSet.update(append(MinSet.samp,e))
+		MinSet.saveDB(self)
+		return true
+	}
+
+
+	NewSet(e).saveDB(self)
+
+	tmp_e:=make([]*Sample,0,le)
+	for _,e_ := range MinSet.samp {
+		if !self.add(e_,e_.diff){
+			tmp_e = append(tmp_e,e_)
+		}
+	}
+	le_ := len(tmp_e)
+	if le_ == le {
+		MinSet.saveDB(self)
+		return true
+	}
+	if le_>0 {
+		MinSet.update(tmp_e)
+		MinSet.saveDB(self)
+	}
+	return true
+
+	//chan_tmp := make(chan *Sample,le)
+	//var w sync.WaitGroup
+	//w.Add(le)
+	//for _,e_ := range MinSet.samp {
+	//	go func(_e_ *Sample,w_ *sync.WaitGroup){
+	//		if !self.add(_e_,_e_.diff){
+	//			chan_tmp <- _e_
+	//			//tmp_e = append(tmp_e,_e_)
+	//		}
+	//		w_.Done()
+	//	}(e_,&w)
+	//}
+	//w.Wait()
+	//close(chan_tmp)
+	//le_ := len(chan_tmp)
+	//if le_ == le {
+	//	MinSet.saveDB(self)
+	//	return true
+	//}
+	//if le_>0 {
+	//	tmp_e:=make([]*Sample,0,le_)
+	//	for e_ := range chan_tmp {
+	//		tmp_e = append(tmp_e,e_)
+	//	}
+	//	MinSet.update(tmp_e)
+	//	MinSet.saveDB(self)
+	//}
+	//return true
 }
 
 func (self *Pool) find(e *Sample) (*Set, float64) {
@@ -196,7 +251,7 @@ func (self *Pool) find(e *Sample) (*Set, float64) {
 		}
 		prev := func(du uint64){
 			for _k,_v := c.Prev();_k != nil;_k,_v = c.Prev(){
-				if (binary.BigEndian.Uint64(_k[:8]) - dur)>du {
+				if (dur - binary.BigEndian.Uint64(_k[:8]))>du {
 					break
 				}
 				S = &Set{}
@@ -255,10 +310,12 @@ func (self *Pool) find(e *Sample) (*Set, float64) {
 func (sp *Pool) Add(e *Sample) {
 
 	go func(_e *Sample){
+		//sp.SampleCount++
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.Key[:8])),0)
-		ke :=uint64(DateKey.AddDate(-4,0,0).Unix())
-		err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
-		//err := sp.SampDB.Update(func(tx *bolt.Tx)error{
+		//ke :=uint64(DateKey.AddDate(-1,0,0).Unix())
+		ke :=uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
+		//err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
+		err := sp.SampDB.Update(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{1})
 			if err != nil {
 				return err
@@ -267,6 +324,7 @@ func (sp *Pool) Add(e *Sample) {
 			for k,_ := c.First();k!=nil;k,_ = c.Next() {
 				if binary.BigEndian.Uint64(k[:8])<ke {
 					db.Delete(k)
+					//sp.SampleCount--
 				}else{
 					break
 				}
@@ -281,14 +339,14 @@ func (sp *Pool) Add(e *Sample) {
 	sp.tag = e.Key[8]>>1
 
 	timeB := time.Now().Unix()
-	sp.clear()
-	if !sp.add(e,0,0){
+	//sp.clear()
+	if !sp.add_(e,0){
 		NewSet(e).saveDB(sp)
 	}
 
 	dif := time.Now().Unix() - timeB
-	if dif > MaxTime {
-		MaxTime = dif
-		fmt.Println("times",MaxTime)
+	if dif > sp.MaxTime {
+		sp.MaxTime = dif
+		fmt.Println("times",sp.MaxTime)
 	}
 }
