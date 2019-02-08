@@ -7,18 +7,32 @@ import(
 	"bytes"
 	"github.com/boltdb/bolt"
 )
+type saEasy struct {
 
+	Key []byte
+	CaMap []byte
+	Dis float64
+	DurDis int64
+}
 type Set struct {
 	Sn *Snap
 	samp []*Sample
-	Samplist [][]byte
-	Count [4]int
+	//Samplist [][]byte
+	List  []*saEasy
+	Count [2]int
 	KeyName []byte
 }
 func NewSet(sa *Sample) (S *Set) {
 	S = &Set{
 		samp:[]*Sample{sa},
-		Samplist:[][]byte{sa.Key},
+		List:[]*saEasy{
+			&saEasy{
+				Key:sa.key,
+				CaMap:sa.caMap,
+				Dis:sa.dis,
+				DurDis:sa.durDis,
+			}},
+		//Samplist:[][]byte{sa.KeyName()},
 		Sn:&Snap{
 			LengthX:float64(sa.XMax-sa.XMin),
 			LengthY:sa.YMax - sa.YMin,
@@ -34,22 +48,14 @@ func NewSet(sa *Sample) (S *Set) {
 	return
 
 }
+
 func (self *Set)CheckCountMax(n int) bool {
-	nv := self.Count[n]
-	for _i,v := range self.Count {
-		if _i == n {
-			continue
-		}
-		if nv < v {
-			return false
-		}
-	}
-	return true
+	return self.Count[n] > self.Count[n^1]
 }
 
 func (self *Set) FindSameKey(k []byte) bool {
-	for _,_k := range self.Samplist {
-		if bytes.Equal(_k,k){
+	for _,_k := range self.List {
+		if bytes.Equal(_k.Key,k){
 			return true
 		}
 	}
@@ -71,7 +77,7 @@ func (self *Set) FindSame(e *Sample,sp *Pool) (e_ *Sample) {
 	return
 }
 func (S *Set) SetCount(e *Sample) {
-	S.Count[int(e.Tag)]++
+	S.Count[int(e.Tag &^ 2)]++
 }
 func (self *Set)saveDB(sp *Pool){
 
@@ -109,7 +115,7 @@ func (S *Set) Key() ([]byte){
 	if S.KeyName == nil {
 		k := make([]byte,8)
 		binary.BigEndian.PutUint64(k,uint64(S.Sn.LengthX))
-		S.KeyName =  append(k,S.Samplist[0][:8]...)
+		S.KeyName =  append(k,S.List[0].Key[:8]...)
 	}
 	return S.KeyName
 
@@ -127,7 +133,7 @@ func (self *Set) toByte() []byte {
 
 func (S *Set) clear(){
 	S.Sn = &Snap{}
-	S.Count = [4]int{0,0,0,0}
+	S.Count = [2]int{0,0}
 	S.KeyName = nil
 	//S.samp = nil
 }
@@ -142,8 +148,7 @@ func (self *Set) load(db []byte) {
 
 func (self *Set) loadSamp(sp *Pool) bool {
 
-	self.samp = make([]*Sample,len(self.Samplist))
-	//sampTag := make([][]byte,Le)
+	self.samp = make([]*Sample,len(self.List))
 	var sa *Sample
 	var j int
 	err := sp.SampDB.View(func(tx *bolt.Tx)error{
@@ -151,14 +156,14 @@ func (self *Set) loadSamp(sp *Pool) bool {
 		if db == nil {
 			return nil
 		}
-		for _,k := range self.Samplist {
+		for _,k := range self.List {
 			sa = &Sample{}
-			v := db.Get(k)
+			v := db.Get(k.Key)
 			if len(v) == 0 {
 				continue
 			}
 			//sampTag[j] = k
-			sa.load(v)
+			sa.load(v,k)
 			self.samp[j] = sa
 			j++
 		}
@@ -209,10 +214,10 @@ func (S *Set) findLong() (sa *Sample,Max float64) {
 
 func (self *Set) SectionDiff() uint64 {
 
-	min := binary.BigEndian.Uint64(self.Samplist[0][:8])
+	min := binary.BigEndian.Uint64(self.List[0].Key[:8])
 	max := min
-	for _,ks_ := range self.Samplist[1:] {
-		k := binary.BigEndian.Uint64(ks_[:8])
+	for _,ks_ := range self.List[1:] {
+		k := binary.BigEndian.Uint64(ks_.Key[:8])
 		if min>k {
 			min = k
 		}else if max<k {
@@ -226,8 +231,8 @@ func (self *Set) SectionCheck(e *Sample) bool {
 
 	k_ := binary.BigEndian.Uint64(e.KeyName()[:8])
 	var min,max uint64 = k_,k_
-	for _,ks_ := range self.Samplist {
-		k := binary.BigEndian.Uint64(ks_[:8])
+	for _,ks_ := range self.List {
+		k := binary.BigEndian.Uint64(ks_.Key[:8])
 		if min>k {
 			min = k
 		}else if max<k {
@@ -245,9 +250,14 @@ func (S *Set) update(sa []*Sample) {
 
 	S.clear()
 	S.samp = sa
-	S.Samplist = make([][]byte,len(S.samp))
+	S.List = make([]*saEasy,len(S.samp))
 	for _i,s := range S.samp {
-		S.Samplist[_i] = s.KeyName()
+		S.List[_i] =&saEasy{
+			Key:s.KeyName(),
+			CaMap:s.caMap,
+			Dis:s.dis,
+			DurDis:s.durDis,
+		}
 		S.Sn.LengthX += float64(s.Duration())
 		S.SetCount(s)
 	}
@@ -273,6 +283,15 @@ func (S *Set) update(sa []*Sample) {
 
 }
 
+func (self *Set) distanceF(e *Sample) float64 {
+	var longDis,l float64
+	ld := float64(e.GetDBF(int64(self.Sn.LengthX),func(x,y float64){
+		longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
+		l++
+	}))
+	ld /=5
+	return (longDis+ld)/(l+ld)
+}
 func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,l float64

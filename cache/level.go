@@ -4,9 +4,10 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/cluster"
 	"math"
+	"sync"
 	//"bytes"
-	//"fmt"
-	//"time"
+	"fmt"
+	"time"
 	//"encoding/binary"
 )
 const(
@@ -14,11 +15,46 @@ const(
 	//TimeOut = 14400
 )
 
+type postDB struct {
+	ca *Cache
+	key string
+}
+func NewPostDB(c *Cache,s *cluster.Sample ) *postDB {
+	po := &postDB {
+		ca:c,
+		key:string(s.KeyName()),
+	}
+	//fmt.Println(c.Ins.Name,s.GetDiff())
+
+	c.Cshow[0]++
+	c.tmpSample.Store(po.key,s)
+	return po
+}
+func (self *postDB) clear(){
+
+	s,ok := self.ca.tmpSample.Load(self.key)
+	if !ok{
+		return
+	}
+	sa := s.(*cluster.Sample)
+	e := self.ca.GetLastElement()
+	d := e.Middle() - sa.GetEndElement().Middle()
+	if (d>0) == (sa.GetDiff()>0) {
+		self.ca.Cshow[1]++
+	}else{
+		self.ca.Cshow[2]++
+	}
+	self.ca.tmpSample.Delete(self.key)
+	fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),self.ca.Cshow[:3])
+
+}
+
 type level struct {
 
 	list []config.Element
 	dis float64
 	par *level
+	b config.Element
 	child *level
 	tag int
 
@@ -31,15 +67,15 @@ type level struct {
 
 	//lastOrder *order
 	ca *Cache
+	post []*postDB
 
 }
 
-func NewLevel(tag int,c *Cache,ch *level) *level {
+func NewLevel(tag int,c *Cache,le *level) *level {
 	return &level{
-		child:ch,
-		//list:make([]config.Element,0,100),
 		tag:tag,
 		ca:c,
+		child:le,
 	}
 }
 
@@ -72,6 +108,65 @@ func (self *level) readf( h func(e config.Element) bool){
 	}
 	//self.par
 }
+func (self *level) GetCacheMap() (caMap []byte) {
+	if self.ca.Cl == nil {
+		return nil
+	}
+	lastCa := self.ca.GetLastElement()
+	dif := lastCa.Middle() - self.b.Middle()
+	dur := self.b.DateTime()
+	absDif := math.Abs(dif)
+	le := self.ca.Cl.Len()
+	sumlen := le/8
+	if le%8 >0 {
+		sumlen++
+	}
+	caMap = make([]byte,sumlen)
+	type tmpdb struct{
+		t byte
+		i int
+	}
+	chanTmp := make(chan *tmpdb,le)
+
+	var w,w_ sync.WaitGroup
+	w_.Add(1)
+	go func(_w_ *sync.WaitGroup){
+		for d :=range chanTmp {
+			caMap[d.i] |= d.t
+		}
+		_w_.Done()
+	}(&w_)
+	w.Add(le)
+	self.ca.Cl.Read(func(i int,_c interface{}){
+		go func(I int,c *Cache,_w *sync.WaitGroup){
+			chanTmp <- &tmpdb{
+			t:func()byte{
+				if c == self.ca {
+					return 3
+				}
+				d := c.FindDur(dur)
+				if math.Abs(d) < absDif {
+					return 3
+				}
+				if d>0{
+					return 1
+				}else{
+					return 2
+				}
+			}() << uint(I%8),
+			i:I/8,
+			}
+			_w.Done()
+		}(i*2,_c.(*Cache),&w)
+
+	})
+	w.Wait()
+	close(chanTmp)
+	w_.Wait()
+	return caMap
+
+}
+
 
 func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
@@ -112,7 +207,16 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		return
 	}
 
+
 	self.update = true
+	if len(self.post) >0 {
+		for _,p := range self.post{
+			p.clear()
+		}
+		//self.post.clear()
+		self.post = nil
+	}
+
 	if self.par == nil {
 		tag := self.tag+1
 		//fmt.Println(tag)
@@ -127,39 +231,45 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
 				ea := cluster.NewSample(self.par.list, node)
-			//	//b := self.list[0].
-			//	//end := self.ca.GetLastElement()
-			//	//dur := self.list[0].DateTime()-	self.ca.GetLastElement().DateTime()
-			//	//dur := ea.Duration()
+				ea.SetCaMap(self.GetCacheMap())
 				self.ca.pool.Add(ea)
 
-				if config.Conf.Debug {
-				func(e *cluster.Sample){
-					set := self.ca.pool.FindSet(e)
-					self.ca.Cshow[4]++
-					if set != nil {
-						if set.FindSameKey(e.Key){
-							self.ca.Cshow[5]++
-						}
-					}
-				}(ea)
-				}
+				//if config.Conf.Debug {
+				//func(e *cluster.Sample){
+				//	set := self.ca.pool.FindSet(e)
+				//	self.ca.Cshow[4]++
+				//	if set != nil {
+				//		if set.FindSameKey(e.KeyName()){
+				//			self.ca.Cshow[5]++
+				//		}
+				//	}
+				//}(ea)
+				//}
 
-			//	// Clustering self.par.list, node
 			}else{
-			//	//go func(){
-			//	ea := cluster.NewSample(append(self.par.list, node),nil)
-			//	set := self.ca.pool.FindSet(ea)
-			//	if set != nil && set.CheckCountMax(int(ea.Key[8])) {
-			//	//if set != nil {
-			//		//if _ea := set.FindSame(ea,self.ca.pool); _ea != nil && _ea.Key[8] == ea.Key[8] {
-			//		ea.SetEndElement(self.ca.GetLastElement())
-			//		self.ca.tmpSample[string(ea.Key)] = ea
-			//		self.ca.Cshow[0]++
-			//		//}
-			//	}
-			//	//}()
-			//	//order post  append(self.par.list,node)
+				if config.Conf.Debug && self.ca.Cl != nil {
+				sa := cluster.NewSample(append(self.par.list, node),nil)
+				//sa.SetDiff(self.ca.pool)
+				//sa.SetEndElement(self.ca.GetLastElement())
+				dur := sa.XMax - sa.XMin
+				self.ca.Cl.HandMap(
+					self.ca.pool.FindCheck(sa),
+					func(ca interface{}){
+						c := ca.(*Cache)
+						l := c.FindLevelWithSame(dur)
+						list := l.list
+						if l.child != nil {
+							list = append(list,NewbNode(l.child.list...))
+						}
+						_sa := cluster.NewSample(list,nil)
+						if _sa.SetDiff(c.pool){
+							_sa.SetEndElement(c.GetLastElement())
+							self.post =append(self.post,NewPostDB(c,_sa))
+						}
+
+					},
+				)
+				}
 			}
 		}
 		self.par.add(node,ins)
@@ -169,6 +279,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	self.tp = self.list[0]
 	self.sl = self.list[self.maxid]
 	self.list = self.list[self.maxid:]
+	self.b = self.ca.GetLastElement()
 	self.dis = self.max
 	self.max = 0
 	self.maxid = 0

@@ -6,7 +6,8 @@ import (
 	"github.com/zaddone/operate/oanda"
 	"github.com/boltdb/bolt"
 	"encoding/json"
-	"fmt"
+	//"fmt"
+	"log"
 	"time"
 	//"sync"
 )
@@ -14,33 +15,51 @@ import (
 type cacheList struct {
 	//sync.Mutex
 	//sync.Mutex
-	cas map[string]*_cache
+	cas []*_cache
+	Date int64
 	//minC chan *_cache
 }
 
 func NewCacheList() *cacheList {
 	return &cacheList{
-		cas :make(map[string]*_cache)
+		//cas :make(map[string]*_cache)
 		//minC:make(chan *_cache,1),
 	}
 }
-func (self *cacheList) FindAllDur(ins string,dur int64,h func(string, float64,bool)) {
 
-	for k,c := range self.cas {
-		if k == ins {
+func (self *cacheList) HandMap(m []byte,hand func(ca interface{})){
+
+	var v byte = 255
+	var t byte
+	var j uint
+	for i,n := range m {
+		if n == v {
 			continue
 		}
-		d,o := c.ca.FindDur(dur)
-		if d != 0 {
-			h(k,d,o)
+		for j=0;j<4;j++{
+			J := j*2
+			t = (n&^(^(3<<J)))>>J
+			if t == 3 {
+				continue
+			}
+			hand(self.cas[i*4+int(j)].ca)
 		}
 	}
 
+}
+
+func (self *cacheList) Len() int {
+	return len(self.cas)
+}
+func (self *cacheList) Read(h func(int,interface{})){
+	for i,c := range self.cas {
+		h(i,c.ca)
+	}
 }
 
 func (self *cacheList) findMin() {
 
-	var I string
+	var I int
 	var minVal int64
 	for i,c := range self.cas {
 		if (c.val != 0)  && ((minVal==0) || (c.val<minVal)) {
@@ -49,6 +68,10 @@ func (self *cacheList) findMin() {
 		}
 	}
 	if minVal != 0 {
+		if minVal - 3600 > self.Date {
+			log.Printf("%s\r",time.Unix(minVal,0))
+			self.Date = minVal
+		}
 		self.cas[I].run()
 		return
 		//self.minC <- self.cas[I]
@@ -58,7 +81,6 @@ func (self *cacheList) findMin() {
 	//panic(0)
 
 }
-
 
 //func (self *cacheList) run(){
 //	for{
@@ -84,10 +106,10 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 		cas:cali,
 		//wait:make(chan int64),
 	}
-	//c.ca.SetPool()
+	c.ca.SetPool()
 	//c.index = len(cali.cas)
 	//cali.cas[ins.Name] = append(cali.cas,c)
-	cali.cas[ins.Name] = c
+	cali.cas= append(cali.cas, c)
 	go c.ca.Read(func(t int64){
 		c.val = t
 		<-c.wait
@@ -114,10 +136,10 @@ func main() {
 	InsList.findMin()
 
 
-	fmt.Println("wait",time.Now())
+	log.Println("wait")
 	t := time.Tick(time.Second * 3600)
 	for e := range t {
-		fmt.Println(e)
+		log.Println(e)
 	}
 	//for{
 	//	time.Tick(
@@ -152,4 +174,3 @@ func loadCache(){
 		loadCache()
 	}
 }
-

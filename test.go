@@ -1,11 +1,14 @@
 package main
 import(
-	"github.com/zaddone/analog/server"
-	"github.com/zaddone/operate/config"
+	"time"
+	"fmt"
 
 )
 
 func main() {
-	server.Router.Run(config.Conf.Port)
+	fmt.Println(time.Now())
+	<-time.After(time.Second*5)
+	fmt.Println(time.Now())
+
 }
 

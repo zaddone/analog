@@ -6,6 +6,7 @@ import(
 	"bytes"
 	"encoding/gob"
 )
+
 type Sample struct {
 
 	XMin int64
@@ -17,30 +18,33 @@ type Sample struct {
 	X []int64
 	Y []float64
 
-	//Dis float64
-	//DurDis int64
+	dis float64
+	durDis int64
 
 	Tag byte
 	diff float64
 
-	Key []byte
+	key []byte
 	//Same []byte
 	endEle config.Element
-	//CaMap map[int]float64
+	caMap []byte
+
 
 }
 func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	if e != nil {
 		sa = &Sample{
-			//Dis:e.Diff(),
-			//DurDis:e.Duration(),
-			diff : eles[len(eles)-1].Diff(),
+			dis:e.Diff(),
+			durDis:e.Duration(),
+			//diff : eles[len(eles)-1].Diff(),
 		}
 	}else{
 		sa = &Sample{
-			diff : eles[len(eles)-1].Diff(),
+			//diff : eles[len(eles)-1].Diff(),
 		}
 	}
+
+	//sa = &Sample{)
 	var y float64
 	for _,ele := range eles {
 		ele.Read(func(e config.Element) bool {
@@ -70,14 +74,29 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 		}
 		return t
 	}()
-	sa.Key = make([]byte,8)
-	binary.BigEndian.PutUint64(sa.Key,uint64(sa.XMax))
-	sa.Key = append(sa.Key,sa.Tag)
-	//sa.Dis  = sa.xMax - sa.xMin
 	return
 
 }
 
+func (self *Sample) SetDiff(sp *Pool) bool {
+
+	sp.tag = self.KeyName()[8]>>1
+	set,_ := sp.find(self)
+	if set == nil {
+		return false
+	}
+	setf,_ := sp.findF(self)
+
+	var sum float64
+	for _, l := range set.List{
+		sum += l.Dis
+	}
+	for _, l := range setf.List{
+		sum += -l.Dis
+	}
+	self.diff = sum/float64(len(set.List)+len(setf.List))
+	return true
+}
 func (self *Sample) GetDiff() float64 {
 	return self.diff
 }
@@ -100,18 +119,65 @@ func (self *Sample) toByte() []byte {
 func (self *Sample) Duration() int64 {
 	return self.XMax - self.XMin
 }
+func (self *Sample) SetCaMap( m []byte){
+	self.caMap = m
+}
 func (self *Sample) KeyName() []byte {
-	return self.Key
+	if self.key == nil {
+		key := make([]byte,8)
+		binary.BigEndian.PutUint64(key,uint64(self.XMax))
+		self.key = append(key,self.Tag)
+		//if self.caMap != nil{
+		//	self.key = append(self.key,self.caMap...)
+		//}
+	}
+	return self.key
 }
 
-func (self *Sample) load(db []byte) {
+func (self *Sample) load(db []byte,k *saEasy) {
+
 	err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(self)
 	if err != nil {
 		panic(err)
 	}
+	self.key = k.Key
+	self.caMap = k.CaMap
+	self.dis = k.Dis
+	self.durDis = k.DurDis
 
 }
 
+func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
+
+	durdiff = self.Duration() - dur
+	xMin := self.XMin + durdiff
+	if durdiff <=0 {
+		//xMin:= self.XMax - dur
+		for i,x := range self.X {
+			f(float64(x - xMin),self.YMax - self.Y[i])
+		}
+		return -durdiff
+	}
+	var yMax float64
+	Le := len(self.X)
+	var X []int64 = make([]int64,0,Le)
+	var Y []float64 = make([]float64,0,Le)
+	var x int64
+	for i,y := range self.Y{
+		x = self.X[i]
+		if x >= xMin {
+			if (y > yMax) {
+				yMax = y
+			}
+			X = append(X,x)
+			Y = append(Y,y)
+		}
+	}
+	for i,y := range Y {
+		f(float64(X[i]-xMin),yMax - y)
+	}
+	return
+}
 func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	durdiff = self.Duration() - dur
 	xMin := self.XMin + durdiff
