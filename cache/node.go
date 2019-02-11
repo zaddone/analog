@@ -35,7 +35,6 @@ func (self *bNode) Readf(hand func(config.Element) bool ) bool {
 	//for _,e := range self.li {
 		if !self.li[i].Readf(hand) {
 			return false
-			break
 		}
 	}
 	return true

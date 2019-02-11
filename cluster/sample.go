@@ -1,6 +1,7 @@
 package cluster
 import(
-	//"fmt"
+	"fmt"
+	//"math"
 	"github.com/zaddone/analog/config"
 	"encoding/binary"
 	"bytes"
@@ -19,9 +20,9 @@ type Sample struct {
 	Y []float64
 
 	dis float64
-	durDis int64
+	//durDis float64
 
-	Tag byte
+	tag byte
 	diff float64
 
 	key []byte
@@ -35,7 +36,7 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	if e != nil {
 		sa = &Sample{
 			dis:e.Diff(),
-			durDis:e.Duration(),
+			//durDis:e.Duration(),
 			//diff : eles[len(eles)-1].Diff(),
 		}
 	}else{
@@ -63,12 +64,11 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	sa.XMin = sa.X[0]
 	le := len(sa.X)-1
 	sa.XMax = sa.X[le]
-	sa.Tag = func() (t byte) {
+	sa.tag = func() (t byte) {
 		f := sa.Y[0] < sa.Y[le]
 		if f {
-			t = 1
+			t = 2
 		}
-		t = t<<1
 		if (eles[len(eles)-1].Diff() >0) == f {
 			t++
 		}
@@ -77,26 +77,10 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	return
 
 }
-
-func (self *Sample) SetDiff(sp *Pool) bool {
-
-	sp.tag = self.KeyName()[8]>>1
-	set,_ := sp.find(self)
-	if set == nil {
-		return false
-	}
-	setf,_ := sp.findF(self)
-
-	var sum float64
-	for _, l := range set.List{
-		sum += l.Dis
-	}
-	for _, l := range setf.List{
-		sum += -l.Dis
-	}
-	self.diff = sum/float64(len(set.List)+len(setf.List))
-	return true
+func (self *Sample) SetDiff(diff float64) {
+	self.diff = diff
 }
+
 func (self *Sample) GetDiff() float64 {
 	return self.diff
 }
@@ -124,12 +108,16 @@ func (self *Sample) SetCaMap( m []byte){
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
-		key := make([]byte,8)
-		binary.BigEndian.PutUint64(key,uint64(self.XMax))
-		self.key = append(key,self.Tag)
+		self.key = make([]byte,8)
+		binary.BigEndian.PutUint64(self.key,uint64(self.XMin))
+		self.key = append(self.key,self.tag)
 		//if self.caMap != nil{
 		//	self.key = append(self.key,self.caMap...)
 		//}
+	}
+	if self.key == nil {
+		fmt.Println(self.XMin,self.tag)
+		panic(0)
 	}
 	return self.key
 }
@@ -143,7 +131,7 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	self.key = k.Key
 	self.caMap = k.CaMap
 	self.dis = k.Dis
-	self.durDis = k.DurDis
+	//self.durDis = k.DurDis
 
 }
 

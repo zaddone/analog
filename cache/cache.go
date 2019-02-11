@@ -74,7 +74,7 @@ func (self *Cache) syncAddPrice(){
 }
 
 func (self *Cache) ShowPoolNum() int64 {
-	return self.pool.SetCount
+	return self.pool.PoolCount
 }
 
 func (self *Cache) FindLevelWithSame(dur int64) *level {
@@ -330,7 +330,6 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 	var from,beginU int64
 	if self.pool != nil{
 		beginU = self.pool.GetLastTime()
-		fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
 	}
 	if beginU == 0 {
 		beginT,err := time.Parse(config.TimeFormat,config.Conf.BeginTime)
@@ -339,6 +338,8 @@ func (self *Cache) readCandles(h func(*Candles) bool){
 			panic(err)
 		}
 	}
+
+	fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
 
 	if err := filepath.Walk(filepath.Join(config.Conf.LogPath,self.Ins.Name),func(p string,info os.FileInfo,er error)error{
 		if er != nil {
@@ -445,18 +446,20 @@ func (self *Cache) Read(hand func(t int64)){
 				err == nil {
 				f.WriteString(
 					fmt.Sprintf(
-						"%s %s %.2f %.2f,%.0f\r\n",
+						"%s %s %.2f %.2f %.2f %.0f %d\r\n",
 						time.Now().Format(config.TimeFormat),
 						time.Unix(from,0).Format(config.TimeFormat),
-						self.Cshow[4]/self.Cshow[3],
-						self.Cshow[1]/self.Cshow[2],
+						self.Cshow[0]/self.Cshow[1],
+						self.Cshow[2]/self.Cshow[3],
+						self.Cshow[4]/self.Cshow[5],
 						self.Cshow,
+						self.ShowPoolNum(),
 					))
 					f.Close()
 				}else{
 					panic(err)
 				}
-				self.Cshow = [6]float64{0,0,0,0,0,0}
+				self.Cshow = [6]float64{0,0,self.Cshow[0]+self.Cshow[2],self.Cshow[1]+self.Cshow[3],0,0}
 			}()
 
 			begin = from
@@ -482,9 +485,9 @@ func (self *Cache) AddPrice(p config.Element) {
 		d := p.Middle() - s.GetEndElement().Middle()
 		if math.Abs(d) > math.Abs(s.GetDiff()) {
 			if (d>0) == (s.GetDiff()>0) {
-				self.Cshow[1]++
+				self.Cshow[0]++
 			}else{
-				self.Cshow[2]++
+				self.Cshow[1]++
 			}
 			self.tmpSample.Delete(k)
 		}

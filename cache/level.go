@@ -26,7 +26,7 @@ func NewPostDB(c *Cache,s *cluster.Sample ) *postDB {
 	}
 	//fmt.Println(c.Ins.Name,s.GetDiff())
 
-	c.Cshow[0]++
+	//c.Cshow[0]++
 	c.tmpSample.Store(po.key,s)
 	return po
 }
@@ -58,12 +58,12 @@ type level struct {
 	child *level
 	tag int
 
-	max float64
-	maxid int
-	update bool
+	//max float64
+	//maxid int
+	//update bool
 	//next *part
-	tp config.Element
-	sl config.Element
+	//tp config.Element
+	//sl config.Element
 
 	//lastOrder *order
 	ca *Cache
@@ -173,7 +173,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	if e.Diff() == 0 {
 		return
 	}
-	self.update = false
+	//self.update = false
 	le := len(self.list)
 	if le == 0 {
 		self.list = []config.Element{e}
@@ -181,34 +181,31 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	}
 
 	self.list = append(self.list,e)
-	var sumdif,absMax,diff,absDiff float64
-
-	mid := e.Middle()
-	self.maxid =0
-	self.max = 0
+	var sumdif,absMax,max,diff,absDiff float64
+	var maxid int
 	var _e config.Element
 	for i:=0 ; i<le ; i++ {
 		_e = self.list[i]
 		sumdif += math.Abs(_e.Diff())
-		diff = mid - _e.Middle()
+		diff = e.Middle() - _e.Middle()
 		if (diff>0) == (self.dis>0) {
 			continue
 		}
 		absDiff = math.Abs(diff)
 		if absDiff > absMax {
-			self.maxid = i
-			self.max = diff
+			maxid = i
+			max = diff
 			absMax = absDiff
 		}
 	}
-	if (self.maxid == 0) ||
+	if (maxid == 0) ||
 	(absMax == 0) ||
 	(absMax < sumdif/float64(le)) {
 		return
 	}
 
 
-	self.update = true
+	//self.update = true
 	if len(self.post) >0 {
 		for _,p := range self.post{
 			p.clear()
@@ -217,71 +214,73 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		self.post = nil
 	}
 
+	node := NewbNode(self.list[:maxid]...)
+
 	if self.par == nil {
 		tag := self.tag+1
-		//fmt.Println(tag)
-		//if tag < MaxTag {
 		self.par = NewLevel(tag,self.ca,self)
-		self.par.add(NewNode(self.list[:self.maxid]...),ins)
-		//}
 	}else{
-
-		node := NewbNode(self.list[:self.maxid]...)
 		if (self.par.par != nil) && (self.ca.pool != nil){
 
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
-				ea := cluster.NewSample(self.par.list, node)
-				ea.SetCaMap(self.GetCacheMap())
-				self.ca.pool.Add(ea)
-
+				//ea := cluster.NewSample(self.par.list, node)
+				//ea.SetCaMap(self.GetCacheMap())
+				//self.ca.pool.Add(ea)
+				//self.ca.Cshow[5]++
 				//if config.Conf.Debug {
 				//func(e *cluster.Sample){
-				//	set := self.ca.pool.FindSet(e)
-				//	self.ca.Cshow[4]++
-				//	if set != nil {
+
+				//	if set := self.ca.pool.FindSet(e);
+				//	set != nil {
 				//		if set.FindSameKey(e.KeyName()){
-				//			self.ca.Cshow[5]++
+				//			self.ca.Cshow[4]++
 				//		}
 				//	}
 				//}(ea)
 				//}
 
 			}else{
-				if config.Conf.Debug && self.ca.Cl != nil {
-				sa := cluster.NewSample(append(self.par.list, node),nil)
-				//sa.SetDiff(self.ca.pool)
-				//sa.SetEndElement(self.ca.GetLastElement())
-				dur := sa.XMax - sa.XMin
-				self.ca.Cl.HandMap(
-					self.ca.pool.FindCheck(sa),
-					func(ca interface{}){
-						c := ca.(*Cache)
-						l := c.FindLevelWithSame(dur)
-						list := l.list
-						if l.child != nil {
-							list = append(list,NewbNode(l.child.list...))
-						}
-						_sa := cluster.NewSample(list,nil)
-						if _sa.SetDiff(c.pool){
-							_sa.SetEndElement(c.GetLastElement())
-							self.post =append(self.post,NewPostDB(c,_sa))
-						}
+				if config.Conf.Debug {
+					sa := cluster.NewSample(append(self.par.list, node),nil)
+					//if self.ca.pool.SetDiff(sa){
+					sa.SetDiff(-node.Diff())
+					sa.SetEndElement(self.ca.GetLastElement())
+					NewPostDB(self.ca,sa)
+					//}
 
-					},
-				)
+					//if self.ca.Cl != nil {
+					//dur := sa.XMax - sa.XMin
+					//self.ca.Cl.HandMap(
+					//	self.ca.pool.FindCheck(sa),
+					//	func(ca interface{}){
+					//		c := ca.(*Cache)
+					//		l := c.FindLevelWithSame(dur)
+					//		list := l.list
+					//		if l.child != nil {
+					//			list = append(list,NewbNode(l.child.list...))
+					//		}
+					//		_sa := cluster.NewSample(list,nil)
+					//		if _sa.SetDiff(c.pool){
+					//			_sa.SetEndElement(c.GetLastElement())
+					//			self.post =append(self.post,NewPostDB(c,_sa))
+					//		}
+
+					//	},
+					//)
+					//}
 				}
 			}
 		}
-		self.par.add(node,ins)
+		//self.par.add(node,ins)
 
 	}
+	self.par.add(node,ins)
 
-	self.tp = self.list[0]
-	self.sl = self.list[self.maxid]
-	self.list = self.list[self.maxid:]
+	//self.tp = self.list[0]
+	//self.sl = self.list[self.maxid]
+
+	self.list = self.list[maxid:]
 	self.b = self.ca.GetLastElement()
-	self.dis = self.max
-	self.max = 0
-	self.maxid = 0
+	self.dis = max
 
 }
