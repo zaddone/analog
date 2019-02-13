@@ -73,8 +73,8 @@ func (self *Cache) syncAddPrice(){
 	}
 }
 
-func (self *Cache) ShowPoolNum() int64 {
-	return self.pool.PoolCount
+func (self *Cache) ShowPoolNum() int {
+	return self.pool.ShowPoolNum()
 }
 
 func (self *Cache) FindLevelWithSame(dur int64) *level {
@@ -459,7 +459,7 @@ func (self *Cache) Read(hand func(t int64)){
 				}else{
 					panic(err)
 				}
-				self.Cshow = [6]float64{0,0,self.Cshow[0]+self.Cshow[2],self.Cshow[1]+self.Cshow[3],0,0}
+				//self.Cshow = [6]float64{0,0,0,0,0,0}
 			}()
 
 			begin = from
@@ -483,11 +483,12 @@ func (self *Cache) AddPrice(p config.Element) {
 	self.tmpSample.Range(func(k interface{},s_ interface{})bool{
 		s := s_.(*cluster.Sample)
 		d := p.Middle() - s.GetEndElement().Middle()
+		n := int((s.KeyName()[8] &^ 2) <<1)
 		if math.Abs(d) > math.Abs(s.GetDiff()) {
 			if (d>0) == (s.GetDiff()>0) {
-				self.Cshow[0]++
+				self.Cshow[n]++
 			}else{
-				self.Cshow[1]++
+				self.Cshow[n+1]++
 			}
 			self.tmpSample.Delete(k)
 		}

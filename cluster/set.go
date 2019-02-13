@@ -15,16 +15,18 @@ type saEasy struct {
 }
 type Set struct {
 	Sn *Snap
-	samp []*Sample
-	//Samplist [][]byte
 	List  []*saEasy
-	Count [2]int
-	KeyName []byte
-	Tag byte
+
+	tag byte
+
+	count [2]int
+	key []byte
+
+	samp []*Sample
 }
 func NewSet(sa *Sample) (S *Set) {
 	S = &Set{
-		Tag:sa.KeyName()[8]>>1,
+		tag:sa.tag>>1,
 		samp:[]*Sample{sa},
 		List:[]*saEasy{
 			&saEasy{
@@ -35,7 +37,7 @@ func NewSet(sa *Sample) (S *Set) {
 			}},
 		//Samplist:[][]byte{sa.KeyName()},
 		Sn:&Snap{
-			LengthX:float64(sa.XMax-sa.XMin),
+			LengthX:float64(sa.xMax-sa.xMin),
 			LengthY:sa.YMax - sa.YMin,
 		},
 	}
@@ -44,14 +46,15 @@ func NewSet(sa *Sample) (S *Set) {
 		X = append(X,x/S.Sn.LengthX)
 		Y = append(Y,y/S.Sn.LengthY)
 	})
-	S.Sn.Wei = CurveFitting(X,Y,nil)
+	S.Sn.Wei = CurveFitting(X,Y)
 	//S.List[0].DurDis = S.distance(sa)
-	S.SetCount(sa)
+	S.count[int(sa.tag) &^ 2]++
 	return
 
 }
+
 func (self *Set)CheckCountMax(n int) bool {
-	return self.Count[n] > self.Count[n^1]
+	return self.count[n] > self.count[n^1]
 }
 
 func (self *Set) FindSameKey(k []byte) bool {
@@ -62,69 +65,32 @@ func (self *Set) FindSameKey(k []byte) bool {
 	}
 	return false
 }
-func (self *Set) FindSame(e *Sample,sp *Pool) (e_ *Sample) {
-	if self.samp == nil && !self.loadSamp(sp) {
-		return nil
-	}
-	S := NewSet(e)
-	var min,d float64
-	for _,_e := range self.samp {
-		d = S.distance(_e)
-		if min == 0  || min >d {
-			min = d
-			e_ = _e
-		}
-	}
-	return
-}
-func (S *Set) SetCount(e *Sample) {
-	S.Count[int(e.KeyName()[8] &^ 2)]++
-}
-
 
 func (self *Set)saveDB(sp *Pool){
 
-	func(){
-		err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
-			db, err := tx.CreateBucketIfNotExists([]byte{self.Tag})
-			if err != nil {
-				return err
-			}
-			return db.Put(self.Key(),self.toByte())
-		})
-		if err != nil {
-			panic(err)
-		}
-	}()
-	sp.PoolCount++
+	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
+		return db.Put(self.Key(),self.toByte())
+	})
+	//sp.PoolCount++
 
 }
 
 func (self *Set) deleteDB(sp *Pool) {
 
-	func(){
-		err := sp.PoolDB.Update(func(tx *bolt.Tx) error{
-			db,err := tx.CreateBucketIfNotExists([]byte{self.Tag})
-			if err != nil {
-				return err
-			}
-			return db.Delete(self.Key())
-		})
-		if err != nil {
-			panic(err)
-		}
-	}()
-	sp.PoolCount--
+	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
+		return db.Delete(self.Key())
+	})
+	//sp.PoolCount--
 
 }
 func (S *Set) Key() ([]byte){
 
-	if S.KeyName == nil {
-		k := make([]byte,8)
-		binary.BigEndian.PutUint64(k,uint64(S.Sn.LengthX))
-		S.KeyName =  append(k,S.List[0].Key[:8]...)
+	if S.key == nil {
+		S.key = make([]byte,8)
+		binary.BigEndian.PutUint64(S.key,uint64(S.Sn.LengthX))
+		S.key =  append(S.key,S.List[0].Key...)
 	}
-	return S.KeyName
+	return S.key
 
 }
 func (self *Set) toByte() []byte {
@@ -140,30 +106,30 @@ func (self *Set) toByte() []byte {
 
 func (S *Set) clear(){
 	S.Sn = &Snap{}
-	S.Count = [2]int{0,0}
-	S.KeyName = nil
+	S.count = [2]int{0,0}
+	S.key = nil
 	S.List = nil
 	S.samp = nil
 }
 
-func (self *Set) load(db []byte) {
+func (self *Set) load(k,v []byte) {
 	//self.samp = nil
-	err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(self)
+	err := gob.NewDecoder(bytes.NewBuffer(v)).Decode(self)
 	if err != nil {
 		panic(err)
+	}
+	self.key = k
+	self.tag = k[16]>>1
+	for _,l := range self.List{
+		self.count[int(l.Key[8]) &^ 2]++
 	}
 }
 
 func (self *Set) loadSamp(sp *Pool) bool {
 
-	self.samp = make([]*Sample,len(self.List))
+	self.samp = make([]*Sample,0,len(self.List))
 	var sa *Sample
-	var j int
-	err := sp.PoolDB.View(func(tx *bolt.Tx)error{
-		db := tx.Bucket([]byte{9})
-		if db == nil {
-			return nil
-		}
+	sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
 		for _,k := range self.List {
 			sa = &Sample{}
 			v := db.Get(k.Key)
@@ -172,20 +138,15 @@ func (self *Set) loadSamp(sp *Pool) bool {
 			}
 			//sampTag[j] = k
 			sa.load(v,k)
-			self.samp[j] = sa
-			j++
+			self.samp=append(self.samp,sa)
 		}
 		return nil
 	})
-	if err != nil {
-		panic(err)
-	}
-	if j == 0 {
-		self.deleteDB(sp)
+	if len(self.samp) == 0 {
+		go self.deleteDB(sp)
 		return false
 	}
 	//self.Samplist = sampTag[:j]
-	self.samp = self.samp[:j]
 	return true
 
 }
@@ -220,17 +181,6 @@ func (self *Set) checkDar(d float64) bool {
 
 }
 
-func (S *Set) dar() (val,sum,psum float64) {
-	for _,s := range S.samp {
-		s.diff  = S.distance(s)
-		psum += s.diff*s.diff
-		sum  += s.diff
-	}
-	n := float64(len(S.samp))
-	val = psum/(n*n)-(sum*sum)/n
-	return
-
-}
 func (S *Set) findLong() (sa *Sample,Max float64) {
 
 	if len(S.samp) == 0 {
@@ -250,40 +200,6 @@ func (S *Set) findLong() (sa *Sample,Max float64) {
 
 }
 
-func (self *Set) SectionDiff() uint64 {
-
-	min := binary.BigEndian.Uint64(self.List[0].Key[:8])
-	max := min
-	for _,ks_ := range self.List[1:] {
-		k := binary.BigEndian.Uint64(ks_.Key[:8])
-		if min>k {
-			min = k
-		}else if max<k {
-			max = k
-		}
-	}
-	return max-min
-}
-
-func (self *Set) SectionCheck(e *Sample) bool {
-
-	k_ := binary.BigEndian.Uint64(e.KeyName()[:8])
-	var min,max uint64 = k_,k_
-	for _,ks_ := range self.List {
-		k := binary.BigEndian.Uint64(ks_.Key[:8])
-		if min>k {
-			min = k
-		}else if max<k {
-			max = k
-		}
-	}
-	if (min == k_) || (max == k_) {
-		return false
-	}
-	return true
-
-}
-
 func (S *Set) update(sa []*Sample) {
 
 	S.clear()
@@ -297,7 +213,7 @@ func (S *Set) update(sa []*Sample) {
 			//DurDis:s.durDis,
 		}
 		S.Sn.LengthX += float64(s.Duration())
-		S.SetCount(s)
+		S.count[int(s.tag) &^ 2]++
 	}
 	le := float64(len(sa))
 	S.Sn.LengthX /= le
@@ -317,7 +233,7 @@ func (S *Set) update(sa []*Sample) {
 		X[i] = x / S.Sn.LengthX
 		Y[i] = Y[i] / S.Sn.LengthY
 	}
-	S.Sn.Wei = CurveFitting(X,Y,nil)
+	S.Sn.Wei = CurveFitting(X,Y)
 
 }
 

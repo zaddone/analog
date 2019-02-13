@@ -10,8 +10,9 @@ import(
 
 type Sample struct {
 
-	XMin int64
-	XMax int64
+	xMin int64
+	xMax int64
+
 	YMin float64
 	YMax float64
 
@@ -22,14 +23,14 @@ type Sample struct {
 	dis float64
 	//durDis float64
 
-	tag byte
 	diff float64
 
 	key []byte
 	//Same []byte
 	endEle config.Element
 	caMap []byte
-
+	tag byte
+	//i int
 
 }
 func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
@@ -61,9 +62,9 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 			return true
 		})
 	}
-	sa.XMin = sa.X[0]
+	sa.xMin = sa.X[0]
 	le := len(sa.X)-1
-	sa.XMax = sa.X[le]
+	sa.xMax = sa.X[le]
 	sa.tag = func() (t byte) {
 		f := sa.Y[0] < sa.Y[le]
 		if f {
@@ -101,7 +102,7 @@ func (self *Sample) toByte() []byte {
 	return b.Bytes()
 }
 func (self *Sample) Duration() int64 {
-	return self.XMax - self.XMin
+	return self.xMax - self.xMin
 }
 func (self *Sample) SetCaMap( m []byte){
 	self.caMap = m
@@ -109,14 +110,14 @@ func (self *Sample) SetCaMap( m []byte){
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
 		self.key = make([]byte,8)
-		binary.BigEndian.PutUint64(self.key,uint64(self.XMin))
+		binary.BigEndian.PutUint64(self.key,uint64(self.xMin))
 		self.key = append(self.key,self.tag)
 		//if self.caMap != nil{
 		//	self.key = append(self.key,self.caMap...)
 		//}
 	}
 	if self.key == nil {
-		fmt.Println(self.XMin,self.tag)
+		fmt.Println(self.xMin,self.tag)
 		panic(0)
 	}
 	return self.key
@@ -131,6 +132,9 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	self.key = k.Key
 	self.caMap = k.CaMap
 	self.dis = k.Dis
+	self.xMax = self.X[len(self.X)-1]
+	self.xMin = self.X[0]
+	self.tag = self.key[8]
 	//self.durDis = k.DurDis
 
 }
@@ -138,7 +142,7 @@ func (self *Sample) load(db []byte,k *saEasy) {
 func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
 
 	durdiff = self.Duration() - dur
-	xMin := self.XMin + durdiff
+	xMin := self.xMin + durdiff
 	if durdiff <=0 {
 		//xMin:= self.XMax - dur
 		for i,x := range self.X {
@@ -168,7 +172,7 @@ func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
 }
 func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	durdiff = self.Duration() - dur
-	xMin := self.XMin + durdiff
+	xMin := self.xMin + durdiff
 	if durdiff <=0 {
 		//xMin:= self.XMax - dur
 		for i,x := range self.X {
@@ -176,7 +180,7 @@ func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 		}
 		return -durdiff
 	}
-	var yMin float64
+	var yMin float64 = self.Y[0]
 	Le := len(self.X)
 	var X []int64 = make([]int64,0,Le)
 	var Y []float64 = make([]float64,0,Le)
@@ -184,7 +188,7 @@ func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	for i,y := range self.Y{
 		x = self.X[i]
 		if x >= xMin {
-			if (y < yMin) || (yMin == 0) {
+			if (y < yMin){
 				yMin = y
 			}
 			X = append(X,x)

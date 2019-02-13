@@ -62,6 +62,9 @@ func (self *Candles) Middle() float64 {
 func (self *Candles) Diff() float64 {
 	if self.diff == 0 {
 		self.diff = self.Ask[2] - self.Bid[3]
+		if self.Ask[1] > self.Ask[0] {
+			self.diff = -self.diff
+		}
 		//self.diff = ((self.Ask[0] - self.Bid[0]) + (self.Ask[1] - self.Bid[1]))/2
 	}
 	//fmt.Println("diff",self.diff)

@@ -40,9 +40,9 @@ func (self *postDB) clear(){
 	e := self.ca.GetLastElement()
 	d := e.Middle() - sa.GetEndElement().Middle()
 	if (d>0) == (sa.GetDiff()>0) {
-		self.ca.Cshow[1]++
+		self.ca.Cshow[0]++
 	}else{
-		self.ca.Cshow[2]++
+		self.ca.Cshow[1]++
 	}
 	self.ca.tmpSample.Delete(self.key)
 	fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),self.ca.Cshow[:3])
@@ -223,10 +223,10 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		if (self.par.par != nil) && (self.ca.pool != nil){
 
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
-				//ea := cluster.NewSample(self.par.list, node)
-				//ea.SetCaMap(self.GetCacheMap())
-				//self.ca.pool.Add(ea)
-				//self.ca.Cshow[5]++
+				ea := cluster.NewSample(self.par.list, node)
+				ea.SetCaMap(self.GetCacheMap())
+				self.ca.pool.Add(ea)
+				self.ca.Cshow[5]++
 				//if config.Conf.Debug {
 				//func(e *cluster.Sample){
 
@@ -240,13 +240,14 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				//}
 
 			}else{
+
 				if config.Conf.Debug {
-					sa := cluster.NewSample(append(self.par.list, node),nil)
-					//if self.ca.pool.SetDiff(sa){
-					sa.SetDiff(-node.Diff())
-					sa.SetEndElement(self.ca.GetLastElement())
-					NewPostDB(self.ca,sa)
-					//}
+
+					//sa := cluster.NewSample(append(self.par.list, node),nil)
+					//sa.SetDiff(-node.Diff())
+					//sa.SetEndElement(self.ca.GetLastElement())
+					//NewPostDB(self.ca,sa)
+
 
 					//if self.ca.Cl != nil {
 					//dur := sa.XMax - sa.XMin

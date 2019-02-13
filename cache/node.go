@@ -12,9 +12,9 @@ type bNode struct {
 	duration int64
 }
 func NewbNode(li ...config.Element) (n *bNode) {
-	le:=len(li)
-	endLi:= li[le-1]
-	beginLi:=li[0]
+	le := len(li)
+	endLi := li[le-1]
+	beginLi := li[0]
 	n = &bNode{
 		li:li,
 		diff:endLi.Middle() - beginLi.Middle(),

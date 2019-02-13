@@ -1,60 +1,60 @@
 package cluster
 import(
-	"fmt"
-	"time"
+	//"fmt"
+	//"time"
 	"github.com/zaddone/analog/fitting"
 	"github.com/zaddone/analog/config"
 
 )
 type Snap struct {
 
-	BeginX float64
+	//BeginX float64
 	LengthX float64
 	LengthY float64
 	Wei []float64
 
 }
 
-func NewSnap(es []config.Element) (sn *Snap) {
-
-	sn = &Snap{}
-	var X,Y []float64
-	var x,y,yMin,yMax float64
-	for _,e := range es {
-		e.Read(func(e_ config.Element) bool{
-			x =float64(e_.DateTime())
-			y = e_.Middle()
-			if (yMin == 0) || (y < yMin){
-				yMin = y
-			}else if (yMax < y) {
-				yMax = y
-			}
-			Y = append(Y,y)
-			X = append(X,x)
-			return true
-		})
-	}
-
-	sn.LengthY = yMax - yMin
-	le := len(X) -1
-	begin:=X[0]
-	sn.BeginX = X[le]
-	sn.LengthX = sn.BeginX - begin
-	for i,x := range X{
-		Y[i]  =  (Y[i]  - yMin)/sn.LengthY
-		X[i]  =  (x - begin)/sn.LengthX
-	}
-	sn.Wei = CurveFitting(X,Y,nil)
-	//fmt.Println("Wei",len(sn.Wei))
-	if  len(sn.Wei) == 0 {
-		return nil
-	}
-
-	//sn.CreateMatrix(Wei)
-
-	return sn
-
-}
+//func NewSnap(es []config.Element) (sn *Snap) {
+//
+//	sn = &Snap{}
+//	var X,Y []float64
+//	var x,y,yMin,yMax float64
+//	for _,e := range es {
+//		e.Read(func(e_ config.Element) bool{
+//			x =float64(e_.DateTime())
+//			y = e_.Middle()
+//			if (yMin == 0) || (y < yMin){
+//				yMin = y
+//			}else if (yMax < y) {
+//				yMax = y
+//			}
+//			Y = append(Y,y)
+//			X = append(X,x)
+//			return true
+//		})
+//	}
+//
+//	sn.LengthY = yMax - yMin
+//	le := len(X) -1
+//	begin:=X[0]
+//	sn.BeginX = X[le]
+//	sn.LengthX = sn.BeginX - begin
+//	for i,x := range X{
+//		Y[i]  =  (Y[i]  - yMin)/sn.LengthY
+//		X[i]  =  (x - begin)/sn.LengthX
+//	}
+//	sn.Wei = CurveFitting(X,Y,nil)
+//	//fmt.Println("Wei",len(sn.Wei))
+//	if  len(sn.Wei) == 0 {
+//		return nil
+//	}
+//
+//	//sn.CreateMatrix(Wei)
+//
+//	return sn
+//
+//}
 
 func (self *Snap) GetWeiY(x float64) (y float64) {
 	var _x float64 = x
@@ -68,17 +68,13 @@ func (self *Snap) GetWeiY(x float64) (y float64) {
 	return
 }
 
-func CurveFitting(X,Y,w []float64) []float64 {
+func CurveFitting(X,Y []float64) (w []float64) {
 
-	wlen := len(w)
-	if wlen < config.Conf.WeiMin {
-		w = make([]float64,config.Conf.WeiMin)
-	}
-
+	w = make([]float64,config.Conf.WeiMin)
 	if !fitting.GetCurveFittingWeight(X,Y,w) {
 		return nil
 	}
-	return w
+	return
 
 }
 
@@ -103,40 +99,40 @@ func CurveFittingMax(X,Y,W []float64,vs float64) []float64 {
 	return W
 }
 
-func (self *Snap) SaveTemplate(InsName string) {
-	fmt.Println(time.Unix(int64(self.BeginX),0),InsName,self.LengthX,self.LengthY)
-	return
-	//path := filepath.Join(
-	//	config.Conf.LogPath,
-	//	InsName,
-	//	time.Unix(int64(self.BeginX),0).Format("200601"),
-	//)
-	//_,err := os.Stat(path)
-	//if err != nil {
-	//	err = os.MkdirAll(path,0700)
-	//	if err != nil {
-	//		panic(err)
-	//	}
-	//}
-	//f,err := os.OpenFile(
-	//	filepath.Join(
-	//		path,
-	//		fmt.Sprintf("%d_%d",
-	//			int(self.LengthX),
-	//			int(self.BeginX),
-	//		),
-	//	),
-	//	os.O_APPEND|os.O_CREATE|os.O_RDWR,
-	//	0700,
-	//)
-	//if err != nil {
-	//	panic(err)
-	//}
-	//self.readMatrix(func(x,y int){
-	//	f.WriteString(fmt.Sprintf("%d 0 %d\n",x,y))
-	//})
-
-	//fmt.Println(f.Name())
-	//f.Close()
-
-}
+//func (self *Snap) SaveTemplate(InsName string) {
+//	fmt.Println(time.Unix(int64(self.BeginX),0),InsName,self.LengthX,self.LengthY)
+//	return
+//	//path := filepath.Join(
+//	//	config.Conf.LogPath,
+//	//	InsName,
+//	//	time.Unix(int64(self.BeginX),0).Format("200601"),
+//	//)
+//	//_,err := os.Stat(path)
+//	//if err != nil {
+//	//	err = os.MkdirAll(path,0700)
+//	//	if err != nil {
+//	//		panic(err)
+//	//	}
+//	//}
+//	//f,err := os.OpenFile(
+//	//	filepath.Join(
+//	//		path,
+//	//		fmt.Sprintf("%d_%d",
+//	//			int(self.LengthX),
+//	//			int(self.BeginX),
+//	//		),
+//	//	),
+//	//	os.O_APPEND|os.O_CREATE|os.O_RDWR,
+//	//	0700,
+//	//)
+//	//if err != nil {
+//	//	panic(err)
+//	//}
+//	//self.readMatrix(func(x,y int){
+//	//	f.WriteString(fmt.Sprintf("%d 0 %d\n",x,y))
+//	//})
+//
+//	//fmt.Println(f.Name())
+//	//f.Close()
+//
+//}
