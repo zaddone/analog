@@ -242,11 +242,13 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 			}else{
 
 				if config.Conf.Debug {
-
 					//sa := cluster.NewSample(append(self.par.list, node),nil)
-					//sa.SetDiff(-node.Diff())
-					//sa.SetEndElement(self.ca.GetLastElement())
-					//NewPostDB(self.ca,sa)
+					//if self.ca.pool.Check(sa){
+					//	sa.SetDiff(-node.Diff())
+					//	sa.SetEndElement(self.ca.GetLastElement())
+					//	NewPostDB(self.ca,sa)
+
+					//}
 
 
 					//if self.ca.Cl != nil {

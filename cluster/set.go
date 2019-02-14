@@ -123,8 +123,10 @@ func (self *Set) load(k,v []byte) {
 	if err != nil {
 		panic(err)
 	}
-	self.key = k
-	self.tag = k[16]>>1
+	self.key = make([]byte,len(k))
+	copy(self.key,k)
+	//self.key = k
+	self.tag = self.key[16]>>1
 	for _,l := range self.List{
 		self.count[int(l.Key[8]) &^ 2]++
 	}
@@ -136,11 +138,11 @@ func (self *Set) loadSamp(sp *Pool) bool {
 	var sa *Sample
 	sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
 		for _,k := range self.List {
-			sa = &Sample{}
 			v := db.Get(k.Key)
 			if len(v) == 0 {
 				continue
 			}
+			sa = &Sample{}
 			//sampTag[j] = k
 			sa.load(v,k)
 			self.samp=append(self.samp,sa)
@@ -148,7 +150,7 @@ func (self *Set) loadSamp(sp *Pool) bool {
 		return nil
 	})
 	if len(self.samp) == 0 {
-		go self.deleteDB(sp)
+		//go self.deleteDB(sp)
 		return false
 	}
 	//self.Samplist = sampTag[:j]

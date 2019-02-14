@@ -129,6 +129,9 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	if err != nil {
 		panic(err)
 	}
+
+	//self.key = make([]byte,len(k))
+	//copy(self.key,k)
 	self.key = k.Key
 	self.caMap = k.CaMap
 	self.dis = k.Dis

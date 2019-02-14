@@ -459,7 +459,7 @@ func (self *Cache) Read(hand func(t int64)){
 				}else{
 					panic(err)
 				}
-				//self.Cshow = [6]float64{0,0,0,0,0,0}
+				self.Cshow = [6]float64{0,0,0,0,0,0}
 			}()
 
 			begin = from
