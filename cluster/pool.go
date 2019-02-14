@@ -8,8 +8,13 @@ import(
 	"encoding/binary"
 	"os"
 	"bytes"
-	//"sync"
+	"sync"
 )
+
+type tmpdb struct {
+	k []byte
+	v []byte
+}
 
 type Pool struct {
 	PoolDB *bolt.DB
@@ -137,46 +142,55 @@ func (self *Pool) findSetDouble(e *Sample,h func(*Set)){
 	dur := uint64(e.Duration())
 	key := make([]byte,8+len(e.KeyName()))
 	binary.BigEndian.PutUint64(key,dur)
-	var S *Set
-	var ke,k,v,_k,_v []byte
+	//var ke []byte
 	self.viewPoolDB([]byte{e.tag>>1},
 	func(db *bolt.Bucket)error{
 		c := db.Cursor()
-		k,v = c.Seek(key)
+		k,v := c.Seek(key)
 		if k == nil {
 			return nil
 		}
-		ke = k[:8]
-		S = &Set{}
-		S.load(k,v)
-		h(S)
-		for _k,_v = c.Next();_k != nil;_k,_v = c.Next(){
-			if !bytes.Equal(ke,_k[:8]){
-				break
+		h(NewSetLoad(k,v))
+		ke := k[:8]
+		c_ := db.Cursor()
+		c_.Seek(k)
+		k_,v_ := c_.Prev()
+		if k_ == nil {
+			for k,v := c.Next();k != nil;k,v = c.Next() {
+				if !bytes.Equal(ke,k[:8]) {
+					break
+				}
+				h(NewSetLoad(k,v))
 			}
-			S = &Set{}
-			S.load(_k,_v)
-			h(S)
-		}
-		c.Seek(k)
-		k,v = c.Prev()
-		if k == nil {
 			return nil
 		}
-		ke = k[:8]
-		S = &Set{}
-		S.load(k,v)
-		h(S)
-		for _k,_v = c.Prev();_k != nil;_k,_v = c.Prev(){
-
-			if !bytes.Equal(ke,_k[:8]){
-				break
-			}
-			S = &Set{}
-			S.load(_k,_v)
-			h(S)
-
+		h(NewSetLoad(k_,v_))
+		d  := binary.BigEndian.Uint64(ke) - dur
+		d_ := dur - binary.BigEndian.Uint64(k_[:8])
+		if d < d_ {
+			d = d_
 		}
+		var w sync.WaitGroup
+		w.Add(2)
+		go func(n uint64,_w *sync.WaitGroup){
+			for k,v := c.Next();k != nil;k,v = c.Next() {
+				if (binary.BigEndian.Uint64(k[:8]) - dur)>n {
+					break
+				}
+				h(NewSetLoad(k,v))
+			}
+			_w.Done()
+		}(d,&w)
+		go func(n uint64,_w *sync.WaitGroup){
+			for k,v := c_.Prev();k != nil;k,v = c_.Prev() {
+				if (dur - binary.BigEndian.Uint64(k[:8]))>n {
+					break
+				}
+				h(NewSetLoad(k,v))
+			}
+			_w.Done()
+		}(d,&w)
+		w.Wait()
 		return nil
 	})
 
@@ -252,48 +266,54 @@ func (self *Pool) findSets(e *Sample,h func(*Set)){
 }
 
 func (self *Pool) add(e *Sample) bool {
-	var minDiff,diff float64
-	var minSet *Set
 	var Sets []*Set
 	var keys [][]byte
-	self.findSetDouble(e,func(s *Set){
-		diff = s.distance(e)
-		if (minDiff == 0) || diff < minDiff {
-			minDiff = diff
-			minSet = s
-		}
-		if s.loadSamp(self){
+	SetChan:=make(chan *Set,100)
+	var w,w_ sync.WaitGroup
+	w_.Add(1)
+	go func(_w *sync.WaitGroup){
+		for s := range SetChan {
+			//diff = s.distance(e)
+			//if (minDiff == 0) || diff < minDiff {
+			//	minDiff = diff
+			//	minSet = s
+			//}
 			Sets = append(Sets,s)
 			keys = append(keys,s.Key())
 		}
+		_w.Done()
+	}(&w_)
+	self.findSetDouble(e,func(s *Set){
+		w.Add(1)
+		go func (_s *Set,_w *sync.WaitGroup) {
+			if _s.loadSamp(self){
+				SetChan <- _s
+			}
+			_w.Done()
+		}(s,&w)
 	})
-	if minSet == nil {
+	w.Wait()
+	close(SetChan)
+	w_.Wait()
+
+	le := len(Sets)
+	if le == 0 {
 		return false
 	}
-	var ns *Set = nil
-	if len(minSet.samp) > 0  {
-		if (len(minSet.samp) < config.Conf.MinSam) ||
-		minSet.checkDar(diff) {
-			minSet.samp = append(minSet.samp,e)
-			e.SetDiff(diff)
-			ns = minSet
-		}
-	}
-	if ns == nil {
-		ns = NewSet(e)
-		e.diff = ns.distance(e)
-	}
-	Sets_ := append(Sets,ns)
-	tmps := make([][]*Sample,len(Sets_))
+
+	tmps := make([][]*Sample,le)
 	for i,_ := range tmps {
 		tmps[i] = make([]*Sample,0,100)
 	}
+	ns := NewSet(e)
+	Sets = append(Sets,ns)
+	tmps = append(tmps,ns.samp)
 	var I int
-	for i,s := range Sets {
+	for i,s := range Sets[:le] {
 		for _,_e := range s.samp {
 			I = i
 			_e.diff = s.distance(_e)
-			for _i,_s := range Sets_{
+			for _i,_s := range Sets{
 				if i == _i {
 					continue
 				}
@@ -306,40 +326,27 @@ func (self *Pool) add(e *Sample) bool {
 			tmps[I] =append(tmps[I],_e)
 		}
 	}
-	le := len(Sets)
-	for _,_e := range ns.samp {
-		I = le
-		if _e ==e {
-			tmps[I] = append(tmps[I],e)
+	savedb := make(chan *tmpdb,le+1)
+	for i,t := range tmps {
+		if len(t) == 0 {
 			continue
 		}
-		for _i,_s := range Sets {
-			d := _s.distance(_e)
-			if _e.diff > d {
-				_e.diff = d
-				I = _i
-			}
-		}
-		tmps[I] =append(tmps[I],_e)
+		w_.Add(1)
+		go func(i_ int,t_ []*Sample,_w *sync.WaitGroup){
+			s := Sets[i_]
+			s.update(t_)
+			savedb <- &tmpdb{s.Key(),s.toByte()}
+			_w.Done()
+		}(i,t,&w_)
 	}
-	type tmpdb struct {
-		k []byte
-		v []byte
-	}
-	savedb := make([]*tmpdb,0,len(tmps))
-	for i,t := range tmps {
-		if len(t) > 0 {
-			s := Sets_[i]
-			s.update(t)
-			savedb = append(savedb,&tmpdb{s.Key(),s.toByte()})
-		}
-	}
+	w_.Wait()
+	close(savedb)
 	self.updatePoolDB([]byte{ns.tag},
 	func(db *bolt.Bucket)error{
 		for _,k:= range keys {
 			db.Delete(k)
 		}
-		for _,s := range savedb {
+		for s := range savedb {
 			db.Put(s.k,s.v)
 		}
 		return nil
@@ -347,34 +354,6 @@ func (self *Pool) add(e *Sample) bool {
 	return true
 
 }
-func (self *Pool) add_1(e *Sample,_diff float64) bool{
-
-	minSet,minDiff := self.findMin(e)
-	if minSet == nil {
-		return false
-	}
-	if (minDiff > _diff) {
-		return false
-	}
-
-	if !minSet.loadSamp(self) {
-		return false
-		//NewSet(e).saveDB(self)
-		//return true
-	}
-	if (len(minSet.samp) > config.Conf.MinSam) &&
-	!minSet.checkDar(minDiff){
-		//return false
-		NewSet(e).saveDB(self)
-	}else{
-		key := minSet.Key()
-		minSet.update(append(minSet.samp,e))
-		self.UpdateSet(key,minSet)
-	}
-	return true
-
-}
-
 func (sp *Pool) Add(e *Sample) {
 
 	func(_e *Sample){

@@ -24,6 +24,11 @@ type Set struct {
 
 	samp []*Sample
 }
+func NewSetLoad(k,v []byte) (S *Set) {
+	S = &Set{}
+	S.load(k,v)
+	return
+}
 func NewSet(sa *Sample) (S *Set) {
 	S = &Set{
 		tag:sa.tag>>1,
@@ -166,7 +171,9 @@ func (self *Set) checkDar(d float64) bool {
 
 	var val,sum,psum,n float64
 	for _,s := range self.samp {
-		s.diff  = self.distance(s)
+		if s.diff == 0 {
+			s.diff  = self.distance(s)
+		}
 		psum += s.diff*s.diff
 		sum  += s.diff
 	}
