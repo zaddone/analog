@@ -357,7 +357,6 @@ func (self *Pool) adds(e *Sample) bool {
 
 }
 func (sp *Pool) Add(e *Sample) {
-
 	func(_e *Sample){
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
 		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
@@ -384,5 +383,4 @@ func (sp *Pool) Add(e *Sample) {
 	if !sp.add(e){
 		NewSet(e).saveDB(sp)
 	}
-
 }

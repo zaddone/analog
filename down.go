@@ -29,9 +29,8 @@ func main(){
 	//	ca.Close()
 	//}
 
-
-
 }
+
 func loadCacheDown(){
 	var b *bolt.Bucket
 	err := config.HandDB(func(db *bolt.DB)error{

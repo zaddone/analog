@@ -13,13 +13,12 @@ import(
 	"os"
 	"math"
 	"io"
-	"io/ioutil"
 	"encoding/binary"
 	"encoding/json"
 	//"encoding/gob"
 	//"bytes"
 	"path/filepath"
-	//"bufio"
+	"bufio"
 	//"strings"
 )
 const(
@@ -116,16 +115,15 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		Ins:ins,
 		//tmpSample:make(map[string]*cluster.tmpSample),
 		tmpSample:new(sync.Map),
-		//CandlesChan:make(chan *Candles,Count),
+		CandlesChan:make(chan *Candles,Count*5),
 		EleChan:make(chan config.Element,5),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
 	}
 	c.part = NewLevel(0,c,nil)
-
 	var err error
-	if _,err = os.Stat(config.Conf.LogPath);err != nil {
-		if err = os.MkdirAll(config.Conf.LogPath,0700);err != nil {
+	if _,err := os.Stat(config.Conf.LogPath);err != nil {
+		if err = os.MkdirAll(config.Conf.LogPath);err != nil {
 			panic(err)
 		}
 	}
@@ -160,63 +158,37 @@ func (self *Cache) FindDur(dur int64) float64 {
 	return end.Middle() - begin.Middle()
 
 }
-
-func (self *Cache) syncSaveToDB(){
-
-	self.CandlesChan = make(chan *Candles,Count)
-	err := self.db.Update(func(t *bolt.Tx)error{
+func (self *Cache) saveToDB(can *Candles){
+	err = self.db.Batch(func(t *bolt.Tx)error{
 		b,er := t.CreateBucketIfNotExists([]byte{1})
 		if er != nil {
 			return er
 		}
 		for{
-			c := <-self.CandlesChan
-			er = b.Put(c.Key(),c.toByte())
-			if er != nil {
-				return er
-			}
+			select{
+			case c := <-self.CandlesChan:
+				er = b.Put(c.Key(),c.toByte())
+				if er != nil {
+					return er
+				}
 
+			default:
+				if can != nil {
+					er = b.Put(can.Key(),can.toByte())
+					if er != nil {
+						return er
+					}
+				}
+				return nil
+			}
 		}
 	})
 	if err != nil {
 		panic(err)
 	}
 
+
 }
-//func (self *Cache) saveToDB(can *Candles){
-//	if len(self.CandlesChan)== 0 {
-//		return
-//	}
-//	err := self.db.Batch(func(t *bolt.Tx)error{
-//		b,er := t.CreateBucketIfNotExists([]byte{1})
-//		if er != nil {
-//			return er
-//		}
-//		for{
-//			select{
-//			case c := <-self.CandlesChan:
-//				er = b.Put(c.Key(),c.toByte())
-//				if er != nil {
-//					return er
-//				}
-//
-//			default:
-//				if can != nil {
-//					er = b.Put(can.Key(),can.toByte())
-//					if er != nil {
-//						return er
-//					}
-//				}
-//				return nil
-//			}
-//		}
-//	})
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//
-//}
 
 //func (self *Cache) syncSaveCandles(){
 //
@@ -275,7 +247,6 @@ func (self *Cache) FindLastTime() (lt int64) {
 		}
 		k,_ := b.Cursor().Last()
 		lt = int64(binary.BigEndian.Uint64(k))+Scale
-		return nil
 	})
 	if err != nil {
 		panic(err)
@@ -291,8 +262,6 @@ func (self *Cache) downCan (h func(*Candles)bool){
 	}
 	var err error
 	var begin int64
-
-	go self.syncSaveToDB()
 	//fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
 	for{
 		u :=url.Values{
@@ -313,45 +282,33 @@ func (self *Cache) downCan (h func(*Candles)bool){
 		),
 		nil,
 		func(statusCode int,body io.Reader)(er error){
-			if statusCode != 200 {
-				if statusCode == 429 {
-					time.Sleep(time.Second)
-					return nil
-				}
-				db,err := ioutil.ReadAll(body)
-				if err != nil {
-					panic(err)
-				}
-				//fmt.Println(u)
-				return fmt.Errorf("%d %s",statusCode,string(db))
-			}
 			var da interface{}
 			er = json.NewDecoder(body).Decode(&da)
 			if er != nil {
 				return er
 			}
+			if statusCode != 200 {
+				//fmt.Println(u)
+				return fmt.Errorf("%d %v",statusCode,da)
+			}
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
 				can := NewCandles(c.(map[string]interface{}))
+				select{
+				case self.CandlesChan <- can:
+					return true
+				default:
+					go saveToDB(can)
 
-				if self.CandlesChan  != nil {
-					self.CandlesChan <- can
 				}
-				//	select{
-				//	case self.CandlesChan <- can:
-				//		continue
-				//	default:
-				//		go self.saveToDB(can)
-
-				//	}
 				if (h!=nil) && !h(can) {
 					return io.EOF
 				}
-				begin = can.DateTime() + Scale
+				begin = can.Time + Scale
 			}
 			return nil
 		})
 
-		//go self.saveToDB(nil)
+		go saveToDB(nil)
 		if (err != nil) {
 			if (err == io.EOF) {
 				return
@@ -389,40 +346,40 @@ func (self *Cache) tmpRead(begin uint64 ,tmp chan *Candles){
 	return
 }
 
-//func (self *Cache) readCandles(h func(*Candles) bool){
-//
-//	var from,beginU int64
-//	if self.pool != nil{
-//		beginU = self.pool.GetLastTime()
-//	}
-//	fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-//	tmpChan := make(chan *Candles,Count)
-//	var c *Candles
-//	for{
-//		self.tmpRead(uint64(beginU),tmpChan)
-//		G:
-//		for {
-//			select{
-//			case c = <-tmpChan:
-//				if !h(c) {
-//					return
-//				}
-//			default:
-//				break G
-//			}
-//		}
-//		if c != nil {
-//			beginU = c.DateTime()+Scale
-//			d := beginU - time.Now().Unix()
-//			if d>0 {
-//				<-time.After(time.Second*time.Duration(d))
-//			}
-//		}else{
-//			<-time.After(time.Second*1)
-//		}
-//	}
-//
-//}
+func (self *Cache) readCandles(h func(*Candles) bool){
+
+	var from,beginU int64
+	if self.pool != nil{
+		beginU = self.pool.GetLastTime()
+	}
+	fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
+	tmpChan := make(chan *Candles,Count)
+	var c *Candles
+	for{
+		self.tmpRead(uint64(beginU),tmpChan)
+		G:
+		for {
+			select{
+			case c = <-tmpChan:
+				if !h(c) {
+					return
+				}
+			default:
+				break G
+			}
+		}
+		if c != nil {
+			beginU = c.DateTime()+Scale
+			d := beginU - time.Now().Unix()
+			if d>0 {
+				<-time.After(time.Second*time.Duration(d))
+			}
+		}else{
+			<-time.After(time.Second*1)
+		}
+	}
+
+}
 func (self *Cache) SetPool(){
 	self.pool = cluster.NewPool(self.Ins.Name)
 	//self.setPool = snap.NewSetPool(self.Ins.Name)
@@ -443,7 +400,7 @@ func (self *Cache) Close(){
 		}
 	}
 }
-func (self *Cache) SaveTestLog(from int64){
+func (self *Cache) SaveTestLog(){
 
 	if (self.pool == nil) {
 		return
@@ -476,7 +433,6 @@ func (self *Cache) Read(hand func(t int64)){
 
 	var c *Candles
 	var from int64
-	xin := self.Ins.Integer()
 	err := self.db.View(func(t *bolt.Tx)error{
 		b := t.Bucket([]byte{1})
 		if b == nil {
@@ -484,7 +440,7 @@ func (self *Cache) Read(hand func(t int64)){
 		}
 		return b.ForEach(func(k,v []byte)error{
 			c = NewCandlesWithDB(v)
-			from = int64(binary.BigEndian.Uint64(k))
+			from = int64(binary.BigEndian.PutUint64(k))
 			c.SetTime(from)
 			if hand != nil {
 				hand(from)

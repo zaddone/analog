@@ -176,20 +176,20 @@ func NewConfig()  *Config {
 		c.InsName = "EUR_USD"
 		c.Server = true
 		c.LogPath = "TrLog"
-		c.WeiMin = 3
+		c.WeiMin = 5
 		c.WeiMax = 7
 		c.DbPath = "dbCache"
 		c.KvDbPath = "kvdb.db"
 		c.SampleDbPath = "Sample.db"
 		c.PoolDbPath = "pool.db"
-		c.ClusterPath = "Clusterdb"
+		c.ClusterPath = "/data/Clusterdb"
 		c.DisPool = 0.5
 		c.Val = 3
-		c.BeginTime = "2015-01-01T00:00:00"
+		c.BeginTime = "2005-01-01T00:00:00"
 		c.FindLevel = 2
 		c.MinSam = 4
 		c.Debug = true
-		c.Year = 1
+		c.Year = 2
 		//c.LoadGranularity()
 		c.Save()
 	}else{
