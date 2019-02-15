@@ -18,6 +18,7 @@ type cacheList struct {
 	cas []*_cache
 	Date int64
 	//minC chan *_cache
+	// minVal int64
 }
 
 func NewCacheList() *cacheList {
@@ -68,10 +69,10 @@ func (self *cacheList) findMin() {
 		}
 	}
 	if minVal != 0 {
-		if minVal - 3600 > self.Date {
-			log.Printf("%s\r",time.Unix(minVal,0))
-			self.Date = minVal
-		}
+		//if minVal - 3600 > self.Date {
+		//	log.Printf("%s\r",time.Unix(minVal,0))
+		//	self.Date = minVal
+		//}
 		self.cas[I].run()
 		return
 		//self.minC <- self.cas[I]
@@ -81,15 +82,6 @@ func (self *cacheList) findMin() {
 	//panic(0)
 
 }
-
-//func (self *cacheList) run(){
-//	for{
-//
-//		c := <-self.minC
-//		fmt.Printf("%s %s\r",c.ca.Ins.Name,time.Unix(c.val,0))
-//		c.run()
-//	}
-//}
 type _cache struct {
 	cas *cacheList
 
@@ -113,8 +105,7 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	go c.ca.Read(func(t int64){
 		c.val = t
 		<-c.wait
-
-		go c.cas.findMin()
+		c.cas.findMin()
 	})
 	return c
 }
