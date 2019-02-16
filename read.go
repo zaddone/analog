@@ -8,7 +8,7 @@ import(
 	"github.com/boltdb/bolt"
 	"encoding/json"
 	"fmt"
-	//"time"
+	"time"
 
 )
 func main(){
@@ -42,11 +42,12 @@ func main(){
 		panic("cache == nil")
 	}
 	fmt.Println("read cache")
-	var begin int64
+	//var begin int64
 	FirstCache.Read(func (t int64){
-		if begin == 0 {
-			begin = t
-		}
+		fmt.Printf("%s\r\n",time.Unix(t,0))
+		//if begin == 0 {
+		//	begin = t
+		//}
 		//if (t - begin) >= 604800 {
 		//	begin = t
 		//	fmt.Printf("%s %s %.2f %.2f,%.0f,%d\r\n",time.Now().Format(config.TimeFormat),time.Unix(t,0).Format(config.TimeFormat),FirstCache.Cshow[5]/FirstCache.Cshow[4],FirstCache.Cshow[2]/FirstCache.Cshow[1],FirstCache.Cshow,FirstCache.ShowPoolNum())

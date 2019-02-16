@@ -116,7 +116,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		Ins:ins,
 		//tmpSample:make(map[string]*cluster.tmpSample),
 		tmpSample:new(sync.Map),
-		//CandlesChan:make(chan *Candles,Count),
+		CandlesChan:make(chan *Candles,Count),
 		EleChan:make(chan config.Element,5),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
@@ -161,62 +161,62 @@ func (self *Cache) FindDur(dur int64) float64 {
 
 }
 
-func (self *Cache) syncSaveToDB(){
-
-	self.CandlesChan = make(chan *Candles,Count)
-	err := self.db.Update(func(t *bolt.Tx)error{
-		b,er := t.CreateBucketIfNotExists([]byte{1})
-		if er != nil {
-			return er
-		}
-		for{
-			c := <-self.CandlesChan
-			er = b.Put(c.Key(),c.toByte())
-			if er != nil {
-				return er
-			}
-
-		}
-	})
-	if err != nil {
-		panic(err)
-	}
-
-}
-//func (self *Cache) saveToDB(can *Candles){
-//	if len(self.CandlesChan)== 0 {
-//		return
-//	}
-//	err := self.db.Batch(func(t *bolt.Tx)error{
+//func (self *Cache) syncSaveToDB(){
+//
+//	self.CandlesChan = make(chan *Candles,Count)
+//	err := self.db.Update(func(t *bolt.Tx)error{
 //		b,er := t.CreateBucketIfNotExists([]byte{1})
 //		if er != nil {
 //			return er
 //		}
 //		for{
-//			select{
-//			case c := <-self.CandlesChan:
-//				er = b.Put(c.Key(),c.toByte())
-//				if er != nil {
-//					return er
-//				}
-//
-//			default:
-//				if can != nil {
-//					er = b.Put(can.Key(),can.toByte())
-//					if er != nil {
-//						return er
-//					}
-//				}
-//				return nil
+//			c := <-self.CandlesChan
+//			er = b.Put(c.Key(),c.toByte())
+//			if er != nil {
+//				return er
 //			}
+//
 //		}
 //	})
 //	if err != nil {
 //		panic(err)
 //	}
 //
-//
 //}
+func (self *Cache) saveToDB(can *Candles){
+	if len(self.CandlesChan)== 0 {
+		return
+	}
+	err := self.db.Batch(func(t *bolt.Tx)error{
+		b,er := t.CreateBucketIfNotExists([]byte{1})
+		if er != nil {
+			return er
+		}
+		if can != nil {
+			er = b.Put(can.Key(),can.toByte())
+			if er != nil {
+				return er
+			}
+		}
+		for{
+			select{
+			case c := <-self.CandlesChan:
+				er = b.Put(c.Key(),c.toByte())
+				if er != nil {
+					return er
+				}
+
+			default:
+				return nil
+			}
+		}
+	})
+	if err != nil {
+		panic(err)
+	}
+
+
+}
 
 //func (self *Cache) syncSaveCandles(){
 //
@@ -274,12 +274,17 @@ func (self *Cache) FindLastTime() (lt int64) {
 			return nil
 		}
 		k,_ := b.Cursor().Last()
-		lt = int64(binary.BigEndian.Uint64(k))+Scale
+		if k != nil {
+			lt = int64(binary.BigEndian.Uint64(k))+Scale
+		}
+		k_,_ := b.Cursor().First()
+		fmt.Println("b",time.Unix(int64(binary.BigEndian.Uint64(k_)),0),self.Ins.Name)
 		return nil
 	})
 	if err != nil {
 		panic(err)
 	}
+	fmt.Println(time.Unix(lt,0),self.Ins.Name)
 	return
 
 }
@@ -292,7 +297,7 @@ func (self *Cache) downCan (h func(*Candles)bool){
 	var err error
 	var begin int64
 
-	go self.syncSaveToDB()
+	//go self.syncSaveToDB()
 	//fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
 	for{
 		u :=url.Values{
@@ -333,16 +338,15 @@ func (self *Cache) downCan (h func(*Candles)bool){
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
 				can := NewCandles(c.(map[string]interface{}))
 
-				if self.CandlesChan  != nil {
-					self.CandlesChan <- can
+				//if self.CandlesChan  != nil {
+				//	self.CandlesChan <- can
+				//}
+				select{
+				case self.CandlesChan <- can:
+					continue
+				default:
+					go self.saveToDB(can)
 				}
-				//	select{
-				//	case self.CandlesChan <- can:
-				//		continue
-				//	default:
-				//		go self.saveToDB(can)
-
-				//	}
 				if (h!=nil) && !h(can) {
 					return io.EOF
 				}
@@ -351,7 +355,7 @@ func (self *Cache) downCan (h func(*Candles)bool){
 			return nil
 		})
 
-		//go self.saveToDB(nil)
+		go self.saveToDB(nil)
 		if (err != nil) {
 			if (err == io.EOF) {
 				return
@@ -501,6 +505,7 @@ func (self *Cache) Read(hand func(t int64)){
 	if err != nil {
 		panic(err)
 	}
+	log.Println("down",time.Now())
 	self.downCan(func(c_ *Candles) bool {
 		if c_.DateTime() < c.DateTime() {
 			return true

@@ -6,7 +6,7 @@ import (
 	"github.com/zaddone/operate/oanda"
 	"github.com/boltdb/bolt"
 	"encoding/json"
-	//"fmt"
+	"fmt"
 	"log"
 	"time"
 	//"sync"
@@ -69,10 +69,12 @@ func (self *cacheList) findMin() {
 		}
 	}
 	if minVal != 0 {
-		if minVal - 3600 > self.Date {
-			log.Printf("%s %s\r",time.Now().Format(config.TimeFormat),time.Unix(minVal,0))
-			self.Date = minVal
-		}
+		//if minVal - 3600 > self.Date {
+		//	log.Printf("%s\r",time.Unix(minVal,0))
+		//	self.Date = minVal
+		//}
+
+		fmt.Println(time.Unix(minVal,0))
 		self.cas[I].run()
 		return
 		//self.minC <- self.cas[I]
@@ -100,6 +102,7 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 		//wait:make(chan int64),
 	}
 	//c.ca.SetPool()
+
 	//c.index = len(cali.cas)
 	//cali.cas[ins.Name] = append(cali.cas,c)
 	cali.cas= append(cali.cas, c)
