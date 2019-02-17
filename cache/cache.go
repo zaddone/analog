@@ -23,7 +23,6 @@ import(
 	//"strings"
 )
 const(
-	Scale int64 = 5
 	Count = 500
 	OutTime int64 = 604800
 )
@@ -44,7 +43,7 @@ type Cache struct {
 	Ins *oanda.Instrument
 	part *level
 
-	CandlesChan chan *Candles
+	CandlesChan chan *CandlesMin
 	EleChan chan config.Element
 	stop chan bool
 	//wait chan bool
@@ -116,7 +115,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		Ins:ins,
 		//tmpSample:make(map[string]*cluster.tmpSample),
 		tmpSample:new(sync.Map),
-		CandlesChan:make(chan *Candles,Count),
+		CandlesChan:make(chan *CandlesMin,Count),
 		EleChan:make(chan config.Element,5),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
@@ -183,10 +182,12 @@ func (self *Cache) FindDur(dur int64) float64 {
 //	}
 //
 //}
-func (self *Cache) saveToDB(can *Candles){
+func (self *Cache) saveToDB(can *CandlesMin){
 	if len(self.CandlesChan)== 0 {
 		return
 	}
+	//t := time.Now().Unix()
+	var c *CandlesMin
 	err := self.db.Batch(func(t *bolt.Tx)error{
 		b,er := t.CreateBucketIfNotExists([]byte{1})
 		if er != nil {
@@ -200,7 +201,7 @@ func (self *Cache) saveToDB(can *Candles){
 		}
 		for{
 			select{
-			case c := <-self.CandlesChan:
+			case c = <-self.CandlesChan:
 				er = b.Put(c.Key(),c.toByte())
 				if er != nil {
 					return er
@@ -214,6 +215,7 @@ func (self *Cache) saveToDB(can *Candles){
 	if err != nil {
 		panic(err)
 	}
+	//log.Println(time.Now().Unix() - t,time.Unix(c.DateTime(),0))
 
 
 }
@@ -277,28 +279,32 @@ func (self *Cache) FindLastTime() (lt int64) {
 		if k != nil {
 			lt = int64(binary.BigEndian.Uint64(k))+Scale
 		}
-		k_,_ := b.Cursor().First()
-		fmt.Println("b",time.Unix(int64(binary.BigEndian.Uint64(k_)),0),self.Ins.Name)
+		//k_,_ := b.Cursor().First()
+		//fmt.Println("b",time.Unix(int64(binary.BigEndian.Uint64(k_)),0),self.Ins.Name)
 		return nil
 	})
 	if err != nil {
 		panic(err)
 	}
-	fmt.Println(time.Unix(lt,0),self.Ins.Name)
+	fmt.Println("e",time.Unix(lt,0),self.Ins.Name)
 	return
 
 }
 
-func (self *Cache) downCan (h func(*Candles)bool){
+func (self *Cache) downCan (h func(config.Element)bool){
 	from := self.FindLastTime()
 	if from == 0 {
 		from = config.GetFromTime()
 	}
 	var err error
-	var begin int64
+	//var begin int64
+	begin := from
+
+	xin := self.Ins.Integer()
 
 	//go self.syncSaveToDB()
 	//fmt.Println(self.Ins.Name,time.Unix(from,0),"down")
+	n := 1
 	for{
 		u :=url.Values{
 			"granularity": []string{"S5"},
@@ -320,7 +326,9 @@ func (self *Cache) downCan (h func(*Candles)bool){
 		func(statusCode int,body io.Reader)(er error){
 			if statusCode != 200 {
 				if statusCode == 429 {
-					time.Sleep(time.Second)
+					fmt.Println(self.Ins.Name,statusCode)
+					time.Sleep(time.Second*time.Duration(n))
+					n++
 					return nil
 				}
 				db,err := ioutil.ReadAll(body)
@@ -330,17 +338,15 @@ func (self *Cache) downCan (h func(*Candles)bool){
 				//fmt.Println(u)
 				return fmt.Errorf("%d %s",statusCode,string(db))
 			}
+			n = 1
 			var da interface{}
 			er = json.NewDecoder(body).Decode(&da)
 			if er != nil {
 				return er
 			}
 			for _,c := range da.(map[string]interface{})["candles"].([]interface{}) {
-				can := NewCandles(c.(map[string]interface{}))
-
-				//if self.CandlesChan  != nil {
-				//	self.CandlesChan <- can
-				//}
+				can := NewCandles(c.(map[string]interface{})).toMin(xin)
+				begin = can.DateTime() + Scale
 				select{
 				case self.CandlesChan <- can:
 					continue
@@ -350,7 +356,6 @@ func (self *Cache) downCan (h func(*Candles)bool){
 				if (h!=nil) && !h(can) {
 					return io.EOF
 				}
-				begin = can.DateTime() + Scale
 			}
 			return nil
 		})
@@ -363,15 +368,21 @@ func (self *Cache) downCan (h func(*Candles)bool){
 				log.Println(err)
 			}
 		}
+		f := time.Unix(from,0)
+		b := time.Unix(begin,0)
+		if f.Month() != b.Month() {
+			fmt.Println(self.Ins.Name,b)
+		}
 		from = begin
 		d := from - time.Now().Unix()
 		if d >0 {
+			return
 			<-time.After(time.Second*time.Duration(d))
 		}
 	}
 }
 
-func (self *Cache) tmpRead(begin uint64 ,tmp chan *Candles){
+func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element){
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,begin)
 	self.db.View(func(t *bolt.Tx)error{
@@ -382,7 +393,7 @@ func (self *Cache) tmpRead(begin uint64 ,tmp chan *Candles){
 		c:= b.Cursor()
 		for k,v := c.Seek(be);k != nil;k,v = c.Next(){
 			select{
-			case tmp <- NewCandlesWithDB(v):
+			case tmp <- NewCandlesMin(k,v):
 			default:
 				return nil
 			}
@@ -399,7 +410,7 @@ func (self *Cache) tmpRead(begin uint64 ,tmp chan *Candles){
 //	if self.pool != nil{
 //		beginU = self.pool.GetLastTime()
 //	}
-//	fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
+//	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
 //	tmpChan := make(chan *Candles,Count)
 //	var c *Candles
 //	for{
@@ -478,27 +489,25 @@ func (self *Cache) SaveTestLog(from int64){
 
 func (self *Cache) Read(hand func(t int64)){
 
-	var c *Candles
-	var from int64
-	xin := self.Ins.Integer()
+	var c config.Element
+	//var from int64
+	//xin := self.Ins.Integer()
 	err := self.db.View(func(t *bolt.Tx)error{
 		b := t.Bucket([]byte{1})
 		if b == nil {
 			return nil
 		}
 		return b.ForEach(func(k,v []byte)error{
-			c = NewCandlesWithDB(v)
-			from = int64(binary.BigEndian.Uint64(k))
-			c.SetTime(from)
+			c_ := NewCandlesMin(k,v)
 			if hand != nil {
-				hand(from)
+				hand(c.DateTime())
 			}
-			self.AddPrice(&eNode{
-				middle:c.Middle()*xin,
-				diff:c.Diff()*xin,
-				dateTime:from,
-				duration:c.Duration(),
-			})
+
+			if c_.DateTime() < c.DateTime() {
+				panic(9)
+			}
+			c = c_
+			self.AddPrice(c)
 			return nil
 		})
 	})
@@ -506,7 +515,7 @@ func (self *Cache) Read(hand func(t int64)){
 		panic(err)
 	}
 	log.Println("down",time.Now())
-	self.downCan(func(c_ *Candles) bool {
+	self.downCan(func(c_ config.Element) bool {
 		if c_.DateTime() < c.DateTime() {
 			return true
 		}
@@ -514,12 +523,7 @@ func (self *Cache) Read(hand func(t int64)){
 		if hand != nil {
 			hand(c.DateTime())
 		}
-		self.AddPrice(&eNode{
-			middle:c.Middle()*xin,
-			diff:c.Diff()*xin,
-			dateTime:from,
-			duration:c.Duration(),
-		})
+		self.AddPrice(c)
 		return true
 	})
 }

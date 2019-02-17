@@ -21,15 +21,75 @@ import(
 )
 const (
 	//Count = 5000
+	Scale int64 = 5
 )
 var Loc *time.Location
 func init(){
-
 	var err error
 	Loc,err = time.LoadLocation("Etc/GMT-3")
 	if err != nil {
 		panic(err)
 	}
+}
+type CandlesMin struct{
+	Val float64
+	Dif float64
+	time int64
+}
+
+func NewCandlesMin(k,db []byte) (c *CandlesMin) {
+	c = &CandlesMin{}
+	err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(c)
+	if err != nil {
+		fmt.Println(string(db))
+		//return nil
+		panic(err)
+	}
+	c.time = int64(binary.BigEndian.Uint64(k))
+	//fmt.Println(c)
+	return c
+}
+func ObjToByte(db interface{}) []byte {
+	var b bytes.Buffer
+	err := gob.NewEncoder(&b).Encode(db)
+	if err != nil {
+		panic(err)
+	}
+	return b.Bytes()
+}
+func (self *CandlesMin) toByte() ([]byte){
+	var b bytes.Buffer
+	err := gob.NewEncoder(&b).Encode(self)
+	if err != nil {
+		panic(err)
+	}
+	return b.Bytes()
+
+}
+func (self *CandlesMin) Key() (k []byte) {
+	k = make([]byte,8)
+	binary.BigEndian.PutUint64(k,uint64(self.time))
+	return
+}
+func (self *CandlesMin) Readf(h func(config.Element)bool) bool {
+	return h(self)
+}
+func (self *CandlesMin) Read(h func(config.Element)bool) bool {
+	return h(self)
+}
+func (self *CandlesMin) Diff() float64 {
+	return self.Dif
+}
+func (self *CandlesMin) Middle() float64 {
+	return self.Val
+}
+
+func (self *CandlesMin) Duration() int64 {
+	return Scale
+}
+
+func (self *CandlesMin) DateTime() int64 {
+	return self.time
 }
 
 type Candles struct {
@@ -98,6 +158,13 @@ func NewCandlesWithDB(db []byte) (c *Candles) {
 	}
 	//fmt.Println(c)
 	return c
+}
+func (self *Candles) toMin(xin float64) *CandlesMin {
+	return &CandlesMin{
+		time:self.DateTime(),
+		Dif:self.Diff()*xin,
+		Val:self.Middle()*xin,
+	}
 }
 
 func (self *Candles) toByte() (db []byte) {

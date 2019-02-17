@@ -4,7 +4,7 @@ import(
 	//"os"
 	//"os/signal"
 	//"syscall"
-
+	"log"
 	"time"
 	"github.com/zaddone/analog/cache"
 	"github.com/zaddone/analog/request"
@@ -12,22 +12,18 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/operate/oanda"
 	"encoding/json"
+	"net"
 
 )
-//var (
-//	cachelist []*cache.Cache
-//)
+var (
+	CacheMap map[string]*cache.Cache =  map[string]*cache.Cache{}
+	Buffer [1024]byte
+)
 func main(){
 	loadCacheDown()
 	for{
 		time.Sleep(time.Second*3600)
 	}
-	//c := make(chan os.Signal)
-	//signal.Notify(c,syscall.SIGBUS, syscall.SIGINT, syscall.SIGTERM)
-	//fmt.Println("receive signal:", <-c)
-	//for _,ca := range cachelist {
-	//	ca.Close()
-	//}
 
 }
 
@@ -46,6 +42,7 @@ func loadCacheDown(){
 					panic(err)
 				}
 				ca :=cache.NewCache(_ins)
+				CacheMap[_ins.Name] = ca
 				//fmt.Println("run",_ins.Name)
 				go ca.RunDown()
 				//cachelist = append(cachelist,ca)
@@ -63,4 +60,32 @@ func loadCacheDown(){
 		}
 		loadCacheDown()
 	}
+}
+func server(){
+	ln, err := net.Listen("tcp", config.Conf.Port)
+	if err != nil {
+		panic(err)
+	}
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			log.Println(err)
+			continue
+		}
+		go handleConnection(conn)
+	}
+	ln.Close()
+}
+func handleConnection(conn net.Conn) {
+	//n,err := conn.Read(Buffer[:])
+	//if err != nil {
+	//	log.Println(err)
+		conn.Close()
+	//	return
+	//}
+	//if n == 0 {
+	//	conn.Close()
+	//	return
+	//}
+	//Buffer[:n]
 }
