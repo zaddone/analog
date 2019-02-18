@@ -142,11 +142,11 @@ func (self *level) GetCacheMap() (caMap []byte) {
 			chanTmp <- &tmpdb{
 			t:func()byte{
 				if c == self.ca {
-					return 3
+					return 0
 				}
 				d := c.FindDur(dur)
 				if math.Abs(d) < absDif {
-					return 3
+					return 0
 				}
 				if d>0{
 					return 1

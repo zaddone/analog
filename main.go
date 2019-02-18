@@ -6,10 +6,10 @@ import (
 	"github.com/zaddone/operate/oanda"
 	"github.com/boltdb/bolt"
 	"encoding/json"
-	"fmt"
+	//"fmt"
 	"log"
 	"time"
-	//"sync"
+	"sync"
 )
 
 type cacheList struct {
@@ -17,6 +17,10 @@ type cacheList struct {
 	//sync.Mutex
 	cas []*_cache
 	Date int64
+	w sync.WaitGroup
+	topTree *tree
+	//count int
+	//lastC *_cache
 	//minC chan *_cache
 	// minVal int64
 }
@@ -26,6 +30,21 @@ func NewCacheList() *cacheList {
 		//cas :make(map[string]*_cache)
 		//minC:make(chan *_cache,1),
 	}
+}
+func (self *cacheList) addTree( c *_cache){
+	if self.topTree ==nil {
+		self.topTree = NewTree(c)
+	}else{
+		self.topTree.Add(c)
+	}
+	//self.count++
+	//fmt.Println(c.ca.Ins.Name,time.Unix(c.GetVal(),0),self.count)
+	self.w.Done()
+}
+func (self *cacheList) PopTree() *_cache {
+	//self.count--
+	self.w.Add(1)
+	return self.topTree.PopSmall().(*_cache)
 }
 
 func (self *cacheList) HandMap(m []byte,hand func(ca interface{})){
@@ -59,29 +78,26 @@ func (self *cacheList) Read(h func(int,interface{})){
 }
 
 func (self *cacheList) findMin() {
+	// Getfirst
+	self.w.Wait()
+	c := self.PopTree()
 
-	var I int
-	var minVal int64
-	for i,c := range self.cas {
-		if (c.val != 0)  && ((minVal==0) || (c.val<minVal)) {
-			minVal = c.val
-			I = i
-		}
-	}
-	if minVal != 0 {
-		//if minVal - 3600 > self.Date {
-		//	log.Printf("%s\r",time.Unix(minVal,0))
-		//	self.Date = minVal
-		//}
+	//if self.lastC != nil {
+	//	if self.lastC.GetVal() > c.GetVal() {
+	//		fmt.Println(self.lastC.ca.Ins.Name,time.Unix(self.lastC.GetVal(),0),c.ca.Ins.Name,time.Unix(c.GetVal(),0))
+	//		panic(0)
+	//	}
+	//}
+	//self.lastC = c
+	//fmt.Println(time.Unix(c.GetVal(),0),c.ca.Ins.Name)
 
-		fmt.Println(time.Unix(minVal,0))
-		self.cas[I].run()
-		return
-		//self.minC <- self.cas[I]
-	}
-	time.Sleep(time.Second)
-	self.findMin()
-	//panic(0)
+	//self.w.Add(1)
+	c.run()
+	//time.Sleep(time.Millisecond*1000)
+	//self.findMin()
+	return
+
+
 
 }
 type _cache struct {
@@ -93,35 +109,44 @@ type _cache struct {
 	wait chan bool
 	val int64
 	begin int64
+	w *sync.WaitGroup
+}
+func (self *_cache) GetVal() int64 {
+	return self.val
 }
 func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	c = &_cache{
 		ca:cache.NewCache(ins),
 		wait:make(chan bool),
 		cas:cali,
+		//w:&(cali.w),
 		//wait:make(chan int64),
 	}
-	//c.ca.SetPool()
-
-	//c.index = len(cali.cas)
-	//cali.cas[ins.Name] = append(cali.cas,c)
+	c.ca.SetPool()
 	cali.cas= append(cali.cas, c)
-	go c.ca.Read(func(t int64){
-		if t - c.begin > 604800 {
-			c.ca.SaveTestLog(t)
-			c.begin = t
-		}
-		c.val = t
-		<-c.wait
-		c.cas.findMin()
-	})
+	cali.w.Add(1)
+	go c.Read()
+	go c.ca.RunDown()
 	return c
+}
+func (self *_cache) Read() {
+	self.ca.Read(func(t int64){
+		if t - self.begin > 604800 {
+			self.ca.SaveTestLog(t)
+			self.begin = t
+		}
+		self.val = t
+		self.cas.addTree(self)
+		<-self.wait
+		go self.cas.findMin()
+	})
 }
 
 func (self *_cache) run() {
 	//self.val = 0
 	//fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
 	self.wait<-true
+	//self.w.Add(1)
 }
 
 var (
@@ -132,10 +157,10 @@ func main() {
 	loadCache()
 	//go InsList.run()
 
-	InsList.findMin()
 
 
 	log.Println("wait")
+	InsList.findMin()
 	t := time.Tick(time.Second * 3600)
 	for e := range t {
 		log.Println(e)
@@ -172,4 +197,65 @@ func loadCache(){
 		}
 		loadCache()
 	}
+}
+type no interface{
+	GetVal() int64
+}
+
+type tree struct {
+	node no
+	big *tree
+	small *tree
+	top *tree
+}
+func NewTree(n no) *tree {
+	return &tree{
+		node:n,
+	}
+}
+func (self *tree) Copy(t *tree) {
+	self.node = t.node
+	self.big = t.big
+	self.small = t.small
+	if self.big != nil{
+		self.big.top = self
+	}
+	if self.small != nil {
+		self.small.top = self
+	}
+}
+func (self *tree) Add (n no) {
+	if self.node.GetVal() >= n.GetVal() {
+		if self.small == nil {
+			self.small = NewTree(n)
+			self.small.top = self
+		}else{
+			self.small.Add(n)
+		}
+	}else{
+		if self.big == nil {
+			self.big = NewTree(n)
+			self.big.top = self
+		}else{
+			self.big.Add(n)
+		}
+	}
+}
+func (self *tree) PopSmall() (n no) {
+
+	if self.small != nil {
+		return self.small.PopSmall()
+	}
+	n = self.node
+	if self.top != nil {
+		if self.big != nil {
+			self.big.top = self.top
+		}
+		self.top.small = self.big
+	}else{
+
+		self.Copy(self.big)
+	}
+	return
+
 }

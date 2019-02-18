@@ -116,7 +116,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		//tmpSample:make(map[string]*cluster.tmpSample),
 		tmpSample:new(sync.Map),
 		CandlesChan:make(chan *CandlesMin,Count),
-		EleChan:make(chan config.Element,5),
+		EleChan:make(chan config.Element,1),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
 	}
@@ -137,7 +137,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 			nil);err != nil {
 		panic(err)
 	}
-	//go c.syncAddPrice()
+	go c.syncAddPrice()
 	return c
 }
 
@@ -145,6 +145,9 @@ func (self *Cache) FindDur(dur int64) float64 {
 	//begin := self.FindLastTime()
 	end := self.GetLastElement()
 	if end == nil {
+		return 0
+	}
+	if end.DateTime() >= dur {
 		return 0
 	}
 	var begin config.Element
@@ -156,6 +159,9 @@ func (self *Cache) FindDur(dur int64) float64 {
 		begin = e
 		return true
 	})
+	if begin ==nil {
+		return 0
+	}
 	return end.Middle() - begin.Middle()
 
 }
@@ -404,40 +410,6 @@ func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element){
 	return
 }
 
-//func (self *Cache) readCandles(h func(*Candles) bool){
-//
-//	var from,beginU int64
-//	if self.pool != nil{
-//		beginU = self.pool.GetLastTime()
-//	}
-//	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-//	tmpChan := make(chan *Candles,Count)
-//	var c *Candles
-//	for{
-//		self.tmpRead(uint64(beginU),tmpChan)
-//		G:
-//		for {
-//			select{
-//			case c = <-tmpChan:
-//				if !h(c) {
-//					return
-//				}
-//			default:
-//				break G
-//			}
-//		}
-//		if c != nil {
-//			beginU = c.DateTime()+Scale
-//			d := beginU - time.Now().Unix()
-//			if d>0 {
-//				<-time.After(time.Second*time.Duration(d))
-//			}
-//		}else{
-//			<-time.After(time.Second*1)
-//		}
-//	}
-//
-//}
 func (self *Cache) SetPool(){
 	self.pool = cluster.NewPool(self.Ins.Name)
 	//self.setPool = snap.NewSetPool(self.Ins.Name)
@@ -488,44 +460,38 @@ func (self *Cache) SaveTestLog(from int64){
 }
 
 func (self *Cache) Read(hand func(t int64)){
-
-	var c config.Element
-	//var from int64
-	//xin := self.Ins.Integer()
-	err := self.db.View(func(t *bolt.Tx)error{
-		b := t.Bucket([]byte{1})
-		if b == nil {
-			return nil
-		}
-		return b.ForEach(func(k,v []byte)error{
-			c_ := NewCandlesMin(k,v)
-			if hand != nil {
-				hand(c.DateTime())
-			}
-
-			if c_.DateTime() < c.DateTime() {
-				panic(9)
-			}
-			c = c_
-			self.AddPrice(c)
-			return nil
-		})
-	})
-	if err != nil {
-		panic(err)
+	var beginU int64
+	if self.pool != nil{
+		beginU = self.pool.GetLastTime()
 	}
-	log.Println("down",time.Now())
-	self.downCan(func(c_ config.Element) bool {
-		if c_.DateTime() < c.DateTime() {
-			return true
+	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
+	tmpChan := make(chan config.Element,Count)
+	var c config.Element
+	for{
+		self.tmpRead(uint64(beginU),tmpChan)
+		G:
+		for {
+			select{
+			case c_ := <-tmpChan:
+				hand(c_.DateTime())
+				if (c != nil) && c_.DateTime() < c.DateTime() {
+					panic(9)
+				}
+				c = c_
+				//fmt.Println("add",self.Ins.Name,time.Unix(c.DateTime(),0))
+				self.AddPrice(c)
+			default:
+				break G
+			}
 		}
-		c = c_
-		if hand != nil {
-			hand(c.DateTime())
+		if c != nil {
+			beginU = c.DateTime()+Scale
+		}else{
+			time.Sleep(time.Minute*5)
 		}
-		self.AddPrice(c)
-		return true
-	})
+	}
+
+
 }
 
 func (self *Cache) GetLastElement() config.Element {
@@ -554,12 +520,13 @@ func (self *Cache) AddPrice(p config.Element) {
 		}
 		return true
 	})
-	//self.EleChan <- p
 
-	if e := self.GetLastElement();
-	(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
-		self.part = NewLevel(0,self,nil)
-	}
-	self.part.add(p,self.Ins)
+	self.EleChan <- p
+
+	//if e := self.GetLastElement();
+	//(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
+	//	self.part = NewLevel(0,self,nil)
+	//}
+	//self.part.add(p,self.Ins)
 
 }

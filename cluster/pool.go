@@ -207,14 +207,31 @@ func (self *Pool) find(e *Sample) *Set {
 }
 
 func (self *Pool) add(e *Sample) bool {
-	var Sets []*Set
+	Sets:=make([]*Set,0,100)
+	SetsChan := make( chan *Set,100)
 	var keys [][]byte
-	self.findSetDouble(e,func(s *Set){
-		keys = append(keys,s.Key())
-		if s.loadSamp(self){
+	var w,w_ sync.WaitGroup
+	w_.Add(1)
+	go func (w__ *sync.WaitGroup) {
+		for s := range SetsChan {
 			Sets = append(Sets,s)
 		}
+		w__.Done()
+	}(&w_)
+	self.findSetDouble(e,func(s *Set){
+		keys = append(keys,s.Key())
+		w.Add(1)
+		go func(s_ *Set,_w *sync.WaitGroup){
+			if s_.loadSamp(self){
+				SetsChan<-s_
+			}
+			w.Done()
+		}(s,&w)
 	})
+	w.Wait()
+	close(SetsChan)
+	w_.Wait()
+
 	le := len(Sets)
 	if le == 0 {
 		return false
@@ -224,35 +241,46 @@ func (self *Pool) add(e *Sample) bool {
 		tmps[i] = make([]*Sample,0,100)
 	}
 	ns := NewSet(e)
-	Sets = append(Sets,ns)
+	Sets_ := append(Sets,ns)
 	tmps = append(tmps,ns.samp)
-	var I int
-	for i,s := range Sets[:le] {
+	le++
+	for i,s := range Sets {
+		w.Add(len(s.samp))
 		for _,_e := range s.samp {
-			I = i
-			_e.diff = s.distance(_e)
-			for _i,_s := range Sets{
-				if i == _i {
-					continue
+			go func(i_ int,__e *Sample,_w *sync.WaitGroup){
+				I := i_
+				__e.diff = s.distance(__e)
+				for _i,_s := range Sets_{
+					if i_ == _i {
+						continue
+					}
+					d := _s.distance(__e)
+					if __e.diff > d {
+						__e.diff = d
+						I = _i
+					}
 				}
-				d := _s.distance(_e)
-				if _e.diff > d {
-					_e.diff = d
-					I = _i
-				}
-			}
-			tmps[I] =append(tmps[I],_e)
+				tmps[I] =append(tmps[I],__e)
+				_w.Done()
+			}(i,_e,&w)
 		}
 	}
-	savedb := make([]*tmpdb,0,le+1)
+	w.Wait()
+	savedb := make(chan *tmpdb,le)
+	w.Add(le)
 	for i,t := range tmps {
-		if len(t) == 0 {
-			continue
-		}
-		s := Sets[i]
-		s.update(t)
-		savedb =append(savedb,&tmpdb{s.Key(),s.toByte()})
+		go func (i_ int,t_ []*Sample,_w *sync.WaitGroup){
+			if len(t_) > 0 {
+				s := Sets_[i_]
+				s.update(t_)
+				savedb <- &tmpdb{s.Key(),s.toByte()}
+			}
+			_w.Done()
+			//savedb =append(savedb,&tmpdb{s.Key(),s.toByte()})
+		}(i,t,&w)
 	}
+	w.Wait()
+	close(savedb)
 	self.updatePoolDB([]byte{ns.tag},
 	func(db *bolt.Bucket)(err error){
 		for _,k:= range keys {
@@ -261,8 +289,8 @@ func (self *Pool) add(e *Sample) bool {
 				return err
 			}
 		}
-		for _,s := range savedb {
-			err = db.Put(s.k,s.v)
+		for _s := range savedb {
+			err = db.Put(_s.k,_s.v)
 			if err != nil {
 				return err
 			}
@@ -272,90 +300,7 @@ func (self *Pool) add(e *Sample) bool {
 	return true
 
 }
-func (self *Pool) adds(e *Sample) bool {
-	var Sets []*Set
-	var keys [][]byte
-	SetChan:=make(chan *Set,100)
-	var w,w_ sync.WaitGroup
-	w_.Add(1)
-	go func(_w *sync.WaitGroup){
-		for s := range SetChan {
-			Sets = append(Sets,s)
-			keys = append(keys,s.Key())
-		}
-		_w.Done()
-	}(&w_)
-	self.findSetDouble(e,func(s *Set){
-		w.Add(1)
-		go func (_s *Set,_w *sync.WaitGroup) {
-			if _s.loadSamp(self){
-				SetChan <- _s
-			}
-			_w.Done()
-		}(s,&w)
-	})
-	w.Wait()
-	close(SetChan)
-	w_.Wait()
 
-	le := len(Sets)
-	if le == 0 {
-		return false
-	}
-
-	tmps := make([][]*Sample,le)
-	for i,_ := range tmps {
-		tmps[i] = make([]*Sample,0,100)
-	}
-	ns := NewSet(e)
-	Sets = append(Sets,ns)
-	tmps = append(tmps,ns.samp)
-	var I int
-	for i,s := range Sets[:le] {
-		for _,_e := range s.samp {
-			I = i
-			_e.diff = s.distance(_e)
-			for _i,_s := range Sets{
-				if i == _i {
-					continue
-				}
-				d := _s.distance(_e)
-				if _e.diff > d {
-					_e.diff = d
-					I = _i
-				}
-			}
-			tmps[I] =append(tmps[I],_e)
-		}
-	}
-	savedb := make(chan *tmpdb,le+1)
-	for i,t := range tmps {
-		if len(t) == 0 {
-			continue
-		}
-		w_.Add(1)
-		go func(i_ int,t_ []*Sample,_w *sync.WaitGroup){
-			s := Sets[i_]
-			s.update(t_)
-			savedb <- &tmpdb{s.Key(),s.toByte()}
-			_w.Done()
-		}(i,t,&w_)
-	}
-	w_.Wait()
-	close(savedb)
-	self.updatePoolDB([]byte{ns.tag},
-	func(db *bolt.Bucket)error{
-		for _,k:= range keys {
-			db.Delete(k)
-		}
-		for s := range savedb {
-			db.Put(s.k,s.v)
-		}
-		return nil
-	})
-	return true
-
-}
 func (sp *Pool) Add(e *Sample) {
 	func(_e *Sample){
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)

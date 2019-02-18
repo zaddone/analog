@@ -162,8 +162,8 @@ func NewCandlesWithDB(db []byte) (c *Candles) {
 func (self *Candles) toMin(xin float64) *CandlesMin {
 	return &CandlesMin{
 		time:self.DateTime(),
-		Dif:self.Diff()*xin,
-		Val:self.Middle()*xin,
+		Dif:float64(int(self.Diff()*xin)),
+		Val:float64(int(self.Middle()*xin)),
 	}
 }
 

@@ -1,9 +1,5 @@
 package main
 import(
-	//"fmt"
-	//"os"
-	//"os/signal"
-	//"syscall"
 	"log"
 	"time"
 	"github.com/zaddone/analog/cache"
@@ -13,20 +9,18 @@ import(
 	"github.com/zaddone/operate/oanda"
 	"encoding/json"
 	"net"
-
 )
 var (
 	CacheMap map[string]*cache.Cache =  map[string]*cache.Cache{}
-	Buffer [1024]byte
+	Buffer [8192]
 )
+
 func main(){
 	loadCacheDown()
 	for{
 		time.Sleep(time.Second*3600)
 	}
-
 }
-
 func loadCacheDown(){
 	var b *bolt.Bucket
 	err := config.HandDB(func(db *bolt.DB)error{

@@ -1,86 +1,89 @@
 package main
 import(
-	"encoding/gob"
-	"encoding/binary"
 	"fmt"
-	"bytes"
-	"reflect"
-	"io"
-
+	"math/rand"
+	"time"
 )
-var (
-	buffer [8192]byte
-	FuncList map[string]interface{}
-)
-type Protocal struct{
-	Func string
-	Args []interface{}
+type no interface{
+	GetVal() int64
 }
 
-func (self *Protocal) Apply(f interface{}, args []interface{})([]reflect.Value){
-	fun := reflect.ValueOf(f)
-	in := make([]reflect.Value, len(args))
-	for k,param := range args{
-		in[k] = reflect.ValueOf(param)
-	}
-	r := fun.Call(in)
-	
-	return r
+type tree struct {
+	node no
+	big *tree
+	small *tree
+	top *tree
 }
-func (self *Protocal) Encoder(buf io.Writer) error {
-	var b bytes.Buffer
-	err = gob.NewEncoder(&b).Encode(self)
-	if err != nil {
-		return err
+func NewTree(n no) *tree {
+	return &tree{
+		node:n,
 	}
-
-	tmpBuf := make([]byte,8)
-	db := b.Bytes()
-	l  := len(db)
-	binary.BigEndian.PutUint64(tmpBuf,uint64(l))
-	tmpBuf = append(tmpBuf,db)
-	_,err = buf.Write(append(tmpBuf,db))
-	return err
 }
-func (self *Protocal) Decoder(buf io.Reader) error {
-
-	var tmpBuf []byte
-	n,err := buf.Read(buffer[:])
-	if err != nil {
-		return err
+func (self *tree) Copy(t *tree) {
+	self.node = t.node
+	self.big = t.big
+	self.small = t.small
+	if self.big != nil{
+		self.big.top = self
 	}
-	if (n <9){
-		return io.EOF
+	if self.small != nil {
+		self.small.top = self
 	}
-	le :=int(binary.BigEndian.Uint64(buffer[:8]))
-	tmpBuf = buffer[8:n]
-	for{
-		if len(tmpBuf) >= le {
-			break
+}
+func (self *tree) Add (n no) {
+	if self.node.GetVal() >= n.GetVal() {
+		if self.small == nil {
+			self.small = NewTree(n)
+			self.small.top = self
+		}else{
+			self.small.Add(n)
 		}
-		n,err = buf.Read(buffer[:])
-		if err != nil {
-			return err
+	}else{
+		if self.big == nil {
+			self.big = NewTree(n)
+			self.big.top = self
+		}else{
+			self.big.Add(n)
 		}
-		tmpBuf = append(tmpBuf,buffer[:n])
 	}
-	return gob.NewDecoder(bytes.NewBuffer(tmpBuf[:le])).Decode(self)
+}
+func (self *tree) PopSmall() (n no) {
+
+	if self.small != nil {
+		return self.small.PopSmall()
+	}
+	n = self.node
+	if self.top != nil {
+		if self.big != nil {
+			self.big.top = self.top
+		}
+		self.top.small = self.big
+	}else{
+
+		self.Copy(self.big)
+	}
+	return
 
 }
-func main() {
-
-	var b bytes.Buffer
-	err := gob.NewEncoder(&b).Encode(
-		&Protocal{
-			Func:"read",
-			Args:[]interface{}{1,"t"},
-		})
-	if err != nil {
-		panic(err)
-	}
-	pr := &Protocal{}
-	gob.NewDecoder(&b).Decode(pr)
-	fmt.Println(pr)
-
+type test struct{
+	val int64
 }
-
+func (self *test) GetVal()int64 {
+	return self.val
+}
+func main(){
+	rand.Seed(time.Now().UnixNano())
+	n:=rand.Int63n(100)
+	t := NewTree(&test{0})
+	fmt.Println(n)
+	for i:=0;i<10;i++{
+		n:=rand.Int63n(100)
+		t.Add(&test{n})
+		fmt.Println(n)
+	}
+	fmt.Println("out")
+	for i:=0;i<10;i++{
+		n := t.PopSmall()
+		fmt.Println(n.GetVal())
+	}
+}
