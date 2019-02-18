@@ -135,20 +135,36 @@ func (self *Set) load(k,v []byte) {
 func (self *Set) loadSamp(sp *Pool) bool {
 
 	self.samp = make([]*Sample,0,len(self.List))
-	var sa *Sample
-	sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
+	err := sp.SampDB.View(func(t *bolt.Tx)error{
+		b := t.Bucket([]byte{9})
+		if b == nil {
+			return nil
+		}
 		for _,k := range self.List {
-			v := db.Get(k.Key)
+			v := b.Get(k.Key)
 			if len(v) == 0 {
 				continue
 			}
-			sa = &Sample{}
-			//sampTag[j] = k
-			sa.load(v,k)
-			self.samp=append(self.samp,sa)
+			self.samp=append(self.samp,NewSampleDB(v,k))
 		}
 		return nil
 	})
+	if err != nil {
+		panic(err)
+	}
+	//sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
+	//	for _,k := range self.List {
+	//		v := db.Get(k.Key)
+	//		if len(v) == 0 {
+	//			continue
+	//		}
+	//		sa = &Sample{}
+	//		//sampTag[j] = k
+	//		sa.load(v,k)
+	//		self.samp=append(self.samp,sa)
+	//	}
+	//	return nil
+	//})
 	if len(self.samp) == 0 {
 		//go self.deleteDB(sp)
 		return false
@@ -214,15 +230,15 @@ func (S *Set) update(sa []*Sample) {
 	S.clear()
 	S.samp = sa
 	S.List = make([]*saEasy,len(S.samp))
-	for _i,s := range S.samp {
+	for _i,_s := range S.samp {
 		S.List[_i] =&saEasy{
-			Key:s.KeyName(),
-			CaMap:s.caMap,
-			Dis:s.dis,
+			Key:_s.KeyName(),
+			CaMap:_s.caMap,
+			Dis:_s.dis,
 			//DurDis:s.durDis,
 		}
-		S.Sn.LengthX += float64(s.Duration())
-		S.count[int(s.tag) &^ 2]++
+		S.Sn.LengthX += float64(_s.Duration())
+		S.count[int(_s.tag) &^ 2]++
 	}
 	le := float64(len(sa))
 	S.Sn.LengthX /= le

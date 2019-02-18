@@ -472,12 +472,12 @@ func (self *Cache) Read(hand func(t int64)){
 		G:
 		for {
 			select{
-			case c_ := <-tmpChan:
-				hand(c_.DateTime())
-				if (c != nil) && c_.DateTime() < c.DateTime() {
-					panic(9)
-				}
-				c = c_
+			case c = <-tmpChan:
+				hand(c.DateTime())
+				//if (c != nil) && c_.DateTime() < c.DateTime() {
+				//	panic(9)
+				//}
+				//c = c_
 				//fmt.Println("add",self.Ins.Name,time.Unix(c.DateTime(),0))
 				self.AddPrice(c)
 			default:

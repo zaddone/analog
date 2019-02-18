@@ -33,6 +33,11 @@ type Sample struct {
 	//i int
 
 }
+func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
+	sa = &Sample{}
+	sa.load(db,k)
+	return
+}
 func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	if e != nil {
 		sa = &Sample{
@@ -109,9 +114,9 @@ func (self *Sample) SetCaMap( m []byte){
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
-		self.key = make([]byte,8)
+		self.key = make([]byte,9)
 		binary.BigEndian.PutUint64(self.key,uint64(self.xMin))
-		self.key = append(self.key,self.tag)
+		self.key[8] = self.tag
 		//if self.caMap != nil{
 		//	self.key = append(self.key,self.caMap...)
 		//}

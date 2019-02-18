@@ -18,6 +18,16 @@ type tmpdb struct {
 
 type Pool struct {
 	PoolDB *bolt.DB
+	SampDB *bolt.DB
+	TmpSa chan *Sample
+}
+func (self *Pool) syncAdd(){
+	for{
+		e := <-self.TmpSa
+		if !self.add(e){
+			NewSet(e).saveDB(self)
+		}
+	}
 }
 func (self *Pool) ShowPoolNum() (Count int) {
 	self.viewPoolDB([]byte{0},func(db *bolt.Bucket)error{
@@ -62,14 +72,23 @@ func (self *Pool) updatePoolDB(bucket []byte,h func(*bolt.Bucket)error){
 
 }
 func (self *Pool) GetLastTime() (t int64) {
-	self.viewPoolDB([]byte{9},func(db *bolt.Bucket)error{
+
+	err := self.SampDB.View(func(_t *bolt.Tx)error{
+		db := _t.Bucket([]byte{9})
+		if db == nil {
+			return nil
+		}
+	//self.viewPoolDB([]byte{9},func(db *bolt.Bucket)error{
 		c := db.Cursor()
 		k,_ := c.Last()
 		if k != nil {
-			t =int64( binary.BigEndian.Uint64(k[:8]))
+			t = int64(binary.BigEndian.Uint64(k[:8]))
 		}
 		return nil
 	})
+	if err != nil {
+		panic(err)
+	}
 	return
 }
 
@@ -85,17 +104,25 @@ func NewPool(ins string) (po *Pool) {
 		}
 	}
 	po = &Pool{
+		TmpSa:make(chan *Sample,5),
+	}
+
+	po.SampDB,err = bolt.Open(filepath.Join(p,config.Conf.SampleDbPath),0600,nil)
+	if err != nil {
+		panic(err)
 	}
 	po.PoolDB,err = bolt.Open(filepath.Join(p,config.Conf.PoolDbPath),0600,nil)
 	if err != nil {
 		panic(err)
 	}
+	go po.syncAdd()
 	return po
 
 }
 
 func (self *Pool) Close(){
 	self.PoolDB.Close()
+	self.SampDB.Close()
 }
 
 func (self *Pool) findSetDouble(e *Sample,h func(*Set)){
@@ -225,7 +252,7 @@ func (self *Pool) add(e *Sample) bool {
 			if s_.loadSamp(self){
 				SetsChan<-s_
 			}
-			w.Done()
+			_w.Done()
 		}(s,&w)
 	})
 	w.Wait()
@@ -243,7 +270,6 @@ func (self *Pool) add(e *Sample) bool {
 	ns := NewSet(e)
 	Sets_ := append(Sets,ns)
 	tmps = append(tmps,ns.samp)
-	le++
 	for i,s := range Sets {
 		w.Add(len(s.samp))
 		for _,_e := range s.samp {
@@ -266,14 +292,15 @@ func (self *Pool) add(e *Sample) bool {
 		}
 	}
 	w.Wait()
+	le = len(tmps)
 	savedb := make(chan *tmpdb,le)
 	w.Add(le)
 	for i,t := range tmps {
 		go func (i_ int,t_ []*Sample,_w *sync.WaitGroup){
 			if len(t_) > 0 {
-				s := Sets_[i_]
-				s.update(t_)
-				savedb <- &tmpdb{s.Key(),s.toByte()}
+				_s := Sets_[i_]
+				_s.update(t_)
+				savedb <- &tmpdb{_s.Key(),_s.toByte()}
 			}
 			_w.Done()
 			//savedb =append(savedb,&tmpdb{s.Key(),s.toByte()})
@@ -302,10 +329,10 @@ func (self *Pool) add(e *Sample) bool {
 }
 
 func (sp *Pool) Add(e *Sample) {
-	func(_e *Sample){
+	go func(_e *Sample){
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
 		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
-		err := sp.PoolDB.Update(func(tx *bolt.Tx)error{
+		err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{9})
 			if err != nil {
 				return err
@@ -324,8 +351,5 @@ func (sp *Pool) Add(e *Sample) {
 			panic(err)
 		}
 	}(e)
-
-	if !sp.add(e){
-		NewSet(e).saveDB(sp)
-	}
+	sp.TmpSa <- e
 }
