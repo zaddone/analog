@@ -263,13 +263,25 @@ func (self *Pool) add(e *Sample) bool {
 	if le == 0 {
 		return false
 	}
+	le++
+	tmpchan := make([]chan *Sample,le)
 	tmps := make([][]*Sample,le)
-	for i,_ := range tmps {
+	w_.Add(le)
+	for i:=0;i<le ;i++{
 		tmps[i] = make([]*Sample,0,100)
+		tmpchan[i] = make(chan *Sample,100)
+		go func(_w *sync.WaitGroup,i_ int){
+			for _e := range tmpchan[i_] {
+				tmps[i_] = append(tmps[i_],_e)
+			}
+			_w.Done()
+		}(&w_,i)
+
 	}
 	ns := NewSet(e)
 	Sets_ := append(Sets,ns)
-	tmps = append(tmps,ns.samp)
+	tmps[le-1] = append(tmps[le-1],e)
+	//tmps = append(tmps,ns.samp)
 	for i,s := range Sets {
 		w.Add(len(s.samp))
 		for _,_e := range s.samp {
@@ -286,12 +298,18 @@ func (self *Pool) add(e *Sample) bool {
 						I = _i
 					}
 				}
-				tmps[I] =append(tmps[I],__e)
+				tmpchan[I] <- __e
 				_w.Done()
 			}(i,_e,&w)
 		}
 	}
 	w.Wait()
+	for i:=0;i<le ;i++{
+		close(tmpchan[i])
+	}
+	w_.Wait()
+
+
 	le = len(tmps)
 	savedb := make(chan *tmpdb,le)
 	w.Add(le)
