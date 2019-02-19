@@ -35,7 +35,7 @@ type CacheList interface{
 	//FindAllDur( int64,func(int,float64,bool))
 	Read(func(int,interface{}))
 	Len() int
-	HandMap([]byte,func(interface{}))
+	HandMap([]byte,func(interface{},byte))
 }
 
 type Cache struct {
@@ -147,7 +147,7 @@ func (self *Cache) FindDur(dur int64) float64 {
 	if end == nil {
 		return 0
 	}
-	if end.DateTime() >= dur {
+	if end.DateTime() <= dur {
 		return 0
 	}
 	var begin config.Element
@@ -332,7 +332,7 @@ func (self *Cache) downCan (h func(config.Element)bool){
 		func(statusCode int,body io.Reader)(er error){
 			if statusCode != 200 {
 				if statusCode == 429 {
-					fmt.Println(self.Ins.Name,statusCode)
+					//fmt.Println(self.Ins.Name,statusCode)
 					time.Sleep(time.Second*time.Duration(n))
 					n++
 					return nil
@@ -382,8 +382,10 @@ func (self *Cache) downCan (h func(config.Element)bool){
 		from = begin
 		d := from - time.Now().Unix()
 		if d >0 {
-			return
-			<-time.After(time.Second*time.Duration(d))
+			//return
+			//<-time.After(time.Second*time.Duration(d))
+			//time.Sleep(time.M)
+			time.Sleep(time.Minute*5)
 		}
 	}
 }

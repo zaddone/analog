@@ -6,8 +6,8 @@ import(
 	"math"
 	"sync"
 	//"bytes"
-	"fmt"
-	"time"
+	//"fmt"
+	//"time"
 	//"encoding/binary"
 )
 const(
@@ -17,35 +17,29 @@ const(
 
 type postDB struct {
 	ca *Cache
-	key string
+	e config.Element
+	t  byte
 }
-func NewPostDB(c *Cache,s *cluster.Sample ) *postDB {
+func NewPostDB(c *Cache,t byte ) *postDB {
 	po := &postDB {
 		ca:c,
-		key:string(s.KeyName()),
+		t:t,
+		e:c.GetLastElement(),
 	}
 	//fmt.Println(c.Ins.Name,s.GetDiff())
 
 	//c.Cshow[0]++
-	c.tmpSample.Store(po.key,s)
+	//c.tmpSample.Store(po.key,s)
 	return po
 }
 func (self *postDB) clear(){
 
-	s,ok := self.ca.tmpSample.Load(self.key)
-	if !ok{
-		return
-	}
-	sa := s.(*cluster.Sample)
-	e := self.ca.GetLastElement()
-	d := e.Middle() - sa.GetEndElement().Middle()
-	if (d>0) == (sa.GetDiff()>0) {
-		self.ca.Cshow[0]++
+	d := self.ca.GetLastElement().Middle() - self.e.Middle()
+	if (d>0) == (self.t==1) {
+		self.ca.Cshow[4]++
 	}else{
-		self.ca.Cshow[1]++
+		self.ca.Cshow[5]++
 	}
-	self.ca.tmpSample.Delete(self.key)
-	fmt.Println(self.ca.Ins.Name,time.Unix(e.DateTime(),0),self.ca.Cshow[:3])
 
 }
 
@@ -145,8 +139,11 @@ func (self *level) GetCacheMap() (caMap []byte) {
 					return 0
 				}
 				d := c.FindDur(dur)
-				if math.Abs(d) < absDif {
+				if d == 0 {
 					return 0
+				}
+				if math.Abs(d) < absDif {
+					return 3
 				}
 				if d>0{
 					return 1
@@ -226,51 +223,23 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				ea := cluster.NewSample(self.par.list, node)
 				ea.SetCaMap(self.GetCacheMap())
 				self.ca.pool.Add(ea)
-				self.ca.Cshow[5]++
-				//if config.Conf.Debug {
-				//func(e *cluster.Sample){
-
-				//	if set := self.ca.pool.FindSet(e);
-				//	set != nil {
-				//		if set.FindSameKey(e.KeyName()){
-				//			self.ca.Cshow[4]++
-				//		}
-				//	}
-				//}(ea)
-				//}
-
+				//self.ca.Cshow[5]++
 			}else{
 
-				if config.Conf.Debug {
-					//sa := cluster.NewSample(append(self.par.list, node),nil)
-					//if self.ca.pool.Check(sa){
-					//	sa.SetDiff(-node.Diff())
-					//	sa.SetEndElement(self.ca.GetLastElement())
-					//	NewPostDB(self.ca,sa)
-
-					//}
-
-
-					//if self.ca.Cl != nil {
-					//dur := sa.XMax - sa.XMin
-					//self.ca.Cl.HandMap(
-					//	self.ca.pool.FindCheck(sa),
-					//	func(ca interface{}){
-					//		c := ca.(*Cache)
-					//		l := c.FindLevelWithSame(dur)
-					//		list := l.list
-					//		if l.child != nil {
-					//			list = append(list,NewbNode(l.child.list...))
-					//		}
-					//		_sa := cluster.NewSample(list,nil)
-					//		if _sa.SetDiff(c.pool){
-					//			_sa.SetEndElement(c.GetLastElement())
-					//			self.post =append(self.post,NewPostDB(c,_sa))
-					//		}
-
-					//	},
-					//)
-					//}
+				sa := cluster.NewSample(append(self.par.list, node),nil)
+				if self.ca.pool.Check(sa){
+					sa.SetDiff(-node.Diff())
+					sa.SetEndElement(self.ca.GetLastElement())
+					self.ca.tmpSample.Store(string(sa.KeyName()),sa)
+					//NewPostDB(self.ca,sa)
+				}
+				if self.ca.Cl != nil {
+					self.ca.Cl.HandMap(
+						self.ca.pool.CheckSet(sa),
+						func(ca interface{},t byte){
+							self.post =append(self.post,NewPostDB(ca.(*Cache),t))
+						},
+					)
 				}
 			}
 		}

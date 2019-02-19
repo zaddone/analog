@@ -47,22 +47,21 @@ func (self *cacheList) PopTree() *_cache {
 	return self.topTree.PopSmall().(*_cache)
 }
 
-func (self *cacheList) HandMap(m []byte,hand func(ca interface{})){
+func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 
-	var v byte = 255
 	var t byte
-	var j uint
+	var j,J uint
 	for i,n := range m {
-		if n == v {
+		if n == 255 {
 			continue
 		}
 		for j=0;j<4;j++{
-			J := j*2
+			J = j*2
 			t = (n&^(^(3<<J)))>>J
-			if t == 3 {
+			if t == 3 || t == 0 {
 				continue
 			}
-			hand(self.cas[i*4+int(j)].ca)
+			hand(self.cas[i*4+int(j)].ca,t)
 		}
 	}
 
@@ -79,23 +78,13 @@ func (self *cacheList) Read(h func(int,interface{})){
 
 func (self *cacheList) findMin() {
 	// Getfirst
-	self.w.Wait()
-	c := self.PopTree()
-
-	//if self.lastC != nil {
-	//	if self.lastC.GetVal() > c.GetVal() {
-	//		fmt.Println(self.lastC.ca.Ins.Name,time.Unix(self.lastC.GetVal(),0),c.ca.Ins.Name,time.Unix(c.GetVal(),0))
-	//		panic(0)
-	//	}
+	//for{
+		self.w.Wait()
+		self.PopTree().run()
 	//}
-	//self.lastC = c
-	//fmt.Println(time.Unix(c.GetVal(),0),c.ca.Ins.Name)
-
-	//self.w.Add(1)
-	c.run()
 	//time.Sleep(time.Millisecond*1000)
 	//self.findMin()
-	return
+	//return
 
 
 
@@ -257,5 +246,4 @@ func (self *tree) PopSmall() (n no) {
 		self.Copy(self.big)
 	}
 	return
-
 }

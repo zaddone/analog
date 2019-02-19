@@ -124,14 +124,65 @@ func (self *Pool) Close(){
 	self.PoolDB.Close()
 	self.SampDB.Close()
 }
+func (self *Pool) CheckSet(e *Sample) (m []byte) {
 
-func (self *Pool) findSetDouble(e *Sample,h func(*Set)){
+	var minS,minSf *Set
+	var w sync.WaitGroup
+	w.Add(2)
+	go func(){
+		var diff,minDiff float64
+		self.findSetDouble(e,e.tag>>1,func(s *Set){
+			diff = s.distance(e)
+			if diff < minDiff || minDiff == 0 {
+				minDiff = diff
+				minS = s
+			}
+		})
+		w.Done()
+	}()
+	go func(){
+		var diff,minDiff float64
+		self.findSetDouble(e,(e.tag>>1)^1,func(s *Set){
+			diff = s.distanceF(e)
+			if diff < minDiff || minDiff == 0 {
+				minDiff = diff
+				minSf = s
+			}
+		})
+		w.Done()
+	}()
+	w.Wait()
+	if (minS == nil) || (minSf == nil)  {
+		return nil
+	}
+
+
+	m = minS.List[0].CaMap
+	for _,_m := range minS.List[1:]{
+		for i,n := range m{
+			m[i] = _m.CaMap[i]|n
+		}
+	}
+	for _,_m := range minSf.List{
+		for i,n := range m{
+			m[i] = (^_m.CaMap[i])|n
+		}
+	}
+	return
+
+	//if len(minS.List) < config.MinSam {
+	//	return nil
+	//}
+
+}
+
+func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 
 	dur := uint64(e.Duration())
 	key := make([]byte,8+len(e.KeyName()))
 	binary.BigEndian.PutUint64(key,dur)
 	//var ke []byte
-	self.viewPoolDB([]byte{e.tag>>1},
+	self.viewPoolDB([]byte{tag},
 	func(db *bolt.Bucket)error{
 		c := db.Cursor()
 		k,v := c.Seek(key)
@@ -195,7 +246,7 @@ func (self *Pool) Check(e *Sample) bool {
 
 func (self *Pool) find(e *Sample) *Set {
 	var Sets []*Set
-	self.findSetDouble(e,func(s *Set){
+	self.findSetDouble(e,e.tag>>1,func(s *Set){
 		if s.loadSamp(self){
 			Sets = append(Sets,s)
 		}
@@ -234,8 +285,8 @@ func (self *Pool) find(e *Sample) *Set {
 }
 
 func (self *Pool) add(e *Sample) bool {
-	Sets:=make([]*Set,0,100)
-	SetsChan := make( chan *Set,100)
+	Sets:=make([]*Set,0,10)
+	SetsChan := make( chan *Set,10)
 	var keys [][]byte
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
@@ -245,7 +296,7 @@ func (self *Pool) add(e *Sample) bool {
 		}
 		w__.Done()
 	}(&w_)
-	self.findSetDouble(e,func(s *Set){
+	self.findSetDouble(e,e.tag>>1,func(s *Set){
 		keys = append(keys,s.Key())
 		w.Add(1)
 		go func(s_ *Set,_w *sync.WaitGroup){
@@ -268,8 +319,8 @@ func (self *Pool) add(e *Sample) bool {
 	tmps := make([][]*Sample,le)
 	w_.Add(le)
 	for i:=0;i<le ;i++{
-		tmps[i] = make([]*Sample,0,100)
-		tmpchan[i] = make(chan *Sample,100)
+		tmps[i] = make([]*Sample,0,10)
+		tmpchan[i] = make(chan *Sample,10)
 		go func(_w *sync.WaitGroup,i_ int){
 			for _e := range tmpchan[i_] {
 				tmps[i_] = append(tmps[i_],_e)
