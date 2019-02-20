@@ -66,6 +66,7 @@ func clientHttp(num int ,methob string,path string,body interface{}, hand func(s
 	if err != nil {
 		fmt.Println(err)
 		time.Sleep(time.Second*5)
+		//res.Body.Close()
 		return clientHttp(num+1,methob,path,body,hand)
 	}
 

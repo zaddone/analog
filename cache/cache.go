@@ -49,7 +49,7 @@ type Cache struct {
 	//wait chan bool
 	lastKey [8]byte
 	//CacheAll []*Cache
-	Cshow [6]float64
+	Cshow [8]float64
 
 	Cl CacheList
 
@@ -444,12 +444,13 @@ func (self *Cache) SaveTestLog(from int64){
 	if err == nil {
 	f.WriteString(
 		fmt.Sprintf(
-			"%s %s %.2f %.2f %.2f %.0f %d\r\n",
+			"%s %s %.2f %.2f %.2f %.2f %.0f %d\r\n",
 			time.Now().Format(config.TimeFormat),
 			time.Unix(from,0).Format(config.TimeFormat),
 			self.Cshow[0]/self.Cshow[1],
 			self.Cshow[2]/self.Cshow[3],
 			self.Cshow[4]/self.Cshow[5],
+			self.Cshow[6]/self.Cshow[7],
 			self.Cshow,
 			self.ShowPoolNum(),
 		))
@@ -457,7 +458,8 @@ func (self *Cache) SaveTestLog(from int64){
 	}else{
 		panic(err)
 	}
-	self.Cshow = [6]float64{0,0,0,0,0,0}
+	//self.Cshow[7] = 0
+	//self.Cshow = [8]float64{0,0,0,0,0,0,0,0}
 
 }
 

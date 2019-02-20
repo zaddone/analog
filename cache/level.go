@@ -5,7 +5,7 @@ import(
 	"github.com/zaddone/analog/cluster"
 	"math"
 	"sync"
-	//"bytes"
+	"bytes"
 	//"fmt"
 	//"time"
 	//"encoding/binary"
@@ -62,6 +62,7 @@ type level struct {
 	//lastOrder *order
 	ca *Cache
 	post []*postDB
+	sample *cluster.Sample
 
 }
 
@@ -219,28 +220,33 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	}else{
 		if (self.par.par != nil) && (self.ca.pool != nil){
 
+
 			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
 				ea := cluster.NewSample(self.par.list, node)
-				ea.SetCaMap(self.GetCacheMap())
-				self.ca.pool.Add(ea)
-				//self.ca.Cshow[5]++
+				if (self.sample!=nil) && (bytes.Equal(self.sample.KeyName(),ea.KeyName())){
+					self.ca.Cshow[6]++
+				}
+				//ea := cluster.NewSample(self.par.list, node)
+				//ea.SetCaMap(self.GetCacheMap())
+				//self.ca.pool.Add(ea)
+				//self.ca.Cshow[7]++
 			}else{
-
-				sa := cluster.NewSample(append(self.par.list, node),nil)
-				if self.ca.pool.Check(sa){
-					sa.SetDiff(-node.Diff())
-					sa.SetEndElement(self.ca.GetLastElement())
-					self.ca.tmpSample.Store(string(sa.KeyName()),sa)
+				self.ca.Cshow[7]++
+				self.sample = cluster.NewSample(append(self.par.list, node),nil)
+				//if self.ca.pool.Check(sa){
+				//	sa.SetDiff(max)
+				//	sa.SetEndElement(self.ca.GetLastElement())
+				//	self.ca.tmpSample.Store(string(sa.KeyName()),sa)
 					//NewPostDB(self.ca,sa)
-				}
-				if self.ca.Cl != nil {
-					self.ca.Cl.HandMap(
-						self.ca.pool.CheckSet(sa),
-						func(ca interface{},t byte){
-							self.post =append(self.post,NewPostDB(ca.(*Cache),t))
-						},
-					)
-				}
+				//}
+				//if self.ca.Cl != nil {
+				//	self.ca.Cl.HandMap(
+				//		self.ca.pool.CheckSet(sa),
+				//		func(ca interface{},t byte){
+				//			self.post =append(self.post,NewPostDB(ca.(*Cache),t))
+				//		},
+				//	)
+				//}
 			}
 		}
 		//self.par.add(node,ins)

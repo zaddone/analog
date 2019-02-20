@@ -235,13 +235,21 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 
 }
 func (self *Pool) Check(e *Sample) bool {
-	s := self.find(e)
-	if s == nil {
+
+	var minS *Set
+	var diff,minDiff float64
+	self.findSetDouble(e,e.tag>>1,func(s *Set){
+		diff = s.distance(e)
+		if diff < minDiff || minDiff == 0 {
+			minDiff = diff
+			minS = s
+		}
+	})
+	if minS == nil {
 		return false
 	}
 	n := int(e.tag &^ 2)
-	s.count[n]--
-	return s.CheckCountMax(n)
+	return minS.CheckCountMax(n)
 }
 
 func (self *Pool) find(e *Sample) *Set {
@@ -321,12 +329,12 @@ func (self *Pool) add(e *Sample) bool {
 	for i:=0;i<le ;i++{
 		tmps[i] = make([]*Sample,0,10)
 		tmpchan[i] = make(chan *Sample,10)
-		go func(_w *sync.WaitGroup,i_ int){
-			for _e := range tmpchan[i_] {
+		go func(_w *sync.WaitGroup,i_ int,tc chan *Sample){
+			for _e := range tc {
 				tmps[i_] = append(tmps[i_],_e)
 			}
 			_w.Done()
-		}(&w_,i)
+		}(&w_,i,tmpchan[i])
 
 	}
 	ns := NewSet(e)
@@ -338,7 +346,7 @@ func (self *Pool) add(e *Sample) bool {
 		for _,_e := range s.samp {
 			go func(i_ int,__e *Sample,_w *sync.WaitGroup){
 				I := i_
-				__e.diff = s.distance(__e)
+				__e.diff = Sets[i_].distance(__e)
 				for _i,_s := range Sets_{
 					if i_ == _i {
 						continue
