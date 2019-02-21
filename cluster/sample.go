@@ -19,6 +19,7 @@ type Sample struct {
 	//Dur int64
 	X []int64
 	Y []float64
+	CaMap []byte
 
 	dis float64
 	//durDis float64
@@ -28,7 +29,7 @@ type Sample struct {
 	key []byte
 	//Same []byte
 	endEle config.Element
-	caMap []byte
+	eleList []config.Element
 	tag byte
 	//i int
 
@@ -38,18 +39,19 @@ func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
 	sa.load(db,k)
 	return
 }
-func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
-	if e != nil {
-		sa = &Sample{
-			dis:e.Diff(),
-			//durDis:e.Duration(),
-			//diff : eles[len(eles)-1].Diff(),
-		}
-	}else{
-		sa = &Sample{
-			//diff : eles[len(eles)-1].Diff(),
-		}
+func NewSample(eles []config.Element) (sa *Sample) {
+	//if e != nil {
+	//	sa = &Sample{
+	//		dis:e.Diff(),
+	//		//durDis:e.Duration(),
+	//		//diff : eles[len(eles)-1].Diff(),
+	//	}
+	//}else{
+	sa = &Sample{
+		eleList:eles,
+		//diff : eles[len(eles)-1].Diff(),
 	}
+	//}
 
 	//sa = &Sample{)
 	var y float64
@@ -83,6 +85,9 @@ func NewSample(eles []config.Element,e config.Element) (sa *Sample) {
 	return
 
 }
+func (self *Sample) GetLastElement() config.Element{
+	return self.eleList[len(self.eleList)-1]
+}
 func (self *Sample) SetDiff(diff float64) {
 	self.diff = diff
 }
@@ -110,12 +115,12 @@ func (self *Sample) Duration() int64 {
 	return self.xMax - self.xMin
 }
 func (self *Sample) SetCaMap( m []byte){
-	self.caMap = m
+	self.CaMap = m
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
 		self.key = make([]byte,9)
-		binary.BigEndian.PutUint64(self.key,uint64(self.xMin))
+		binary.BigEndian.PutUint64(self.key,uint64(self.xMax))
 		self.key[8] = self.tag
 		//if self.caMap != nil{
 		//	self.key = append(self.key,self.caMap...)
@@ -138,8 +143,8 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	//self.key = make([]byte,len(k))
 	//copy(self.key,k)
 	self.key = k.Key
-	self.caMap = k.CaMap
-	self.dis = k.Dis
+	//self.CaMap = k.CaMap
+	//self.dis = k.Dis
 	self.xMax = self.X[len(self.X)-1]
 	self.xMin = self.X[0]
 	self.tag = self.key[8]

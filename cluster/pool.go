@@ -124,57 +124,57 @@ func (self *Pool) Close(){
 	self.PoolDB.Close()
 	self.SampDB.Close()
 }
-func (self *Pool) CheckSet(e *Sample) (m []byte) {
+//func (self *Pool) CheckSet(e *Sample) (m []byte) {
 
-	var minS,minSf *Set
-	var w sync.WaitGroup
-	w.Add(2)
-	go func(){
-		var diff,minDiff float64
-		self.findSetDouble(e,e.tag>>1,func(s *Set){
-			diff = s.distance(e)
-			if diff < minDiff || minDiff == 0 {
-				minDiff = diff
-				minS = s
-			}
-		})
-		w.Done()
-	}()
-	go func(){
-		var diff,minDiff float64
-		self.findSetDouble(e,(e.tag>>1)^1,func(s *Set){
-			diff = s.distanceF(e)
-			if diff < minDiff || minDiff == 0 {
-				minDiff = diff
-				minSf = s
-			}
-		})
-		w.Done()
-	}()
-	w.Wait()
-	if (minS == nil) || (minSf == nil)  {
-		return nil
-	}
+	//var minS,minSf *Set
+	//var w sync.WaitGroup
+	//w.Add(2)
+	//go func(){
+	//	var diff,minDiff float64
+	//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+	//		diff = s.distance(e)
+	//		if diff < minDiff || minDiff == 0 {
+	//			minDiff = diff
+	//			minS = s
+	//		}
+	//	})
+	//	w.Done()
+	//}()
+	//go func(){
+	//	var diff,minDiff float64
+	//	self.findSetDouble(e,(e.tag>>1)^1,func(s *Set){
+	//		diff = s.distanceF(e)
+	//		if diff < minDiff || minDiff == 0 {
+	//			minDiff = diff
+	//			minSf = s
+	//		}
+	//	})
+	//	w.Done()
+	//}()
+	//w.Wait()
+	//if (minS == nil) || (minSf == nil)  {
+	//	return nil
+	//}
 
 
-	m = minS.List[0].CaMap
-	for _,_m := range minS.List[1:]{
-		for i,n := range m{
-			m[i] = _m.CaMap[i]|n
-		}
-	}
-	for _,_m := range minSf.List{
-		for i,n := range m{
-			m[i] = (^_m.CaMap[i])|n
-		}
-	}
-	return
+	//m = minS.List[0].CaMap
+	//for _,_m := range minS.List[1:]{
+	//	for i,n := range m{
+	//		m[i] = _m.CaMap[i]|n
+	//	}
+	//}
+	//for _,_m := range minSf.List{
+	//	for i,n := range m{
+	//		m[i] = (^_m.CaMap[i])|n
+	//	}
+	//}
+	//return
 
 	//if len(minS.List) < config.MinSam {
 	//	return nil
 	//}
 
-}
+//}
 
 func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 

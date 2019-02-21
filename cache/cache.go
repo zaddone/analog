@@ -36,6 +36,7 @@ type CacheList interface{
 	Read(func(int,interface{}))
 	Len() int
 	HandMap([]byte,func(interface{},byte))
+	Show() int
 }
 
 type Cache struct {
@@ -45,6 +46,7 @@ type Cache struct {
 
 	CandlesChan chan *CandlesMin
 	EleChan chan config.Element
+	tmpChan chan config.Element
 	stop chan bool
 	//wait chan bool
 	lastKey [8]byte
@@ -75,7 +77,12 @@ func (self *Cache) syncAddPrice(){
 }
 
 func (self *Cache) ShowPoolNum() int {
-	return self.pool.ShowPoolNum()
+	if self.Cl != nil {
+		return self.Cl.Show()
+	}else{
+		return 0
+	}
+	//return self.pool.ShowPoolNum()
 }
 
 func (self *Cache) FindLevelWithSame(dur int64) *level {
@@ -114,9 +121,11 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
 		Ins:ins,
 		//tmpSample:make(map[string]*cluster.tmpSample),
+
+		tmpChan : make(chan config.Element,Count),
 		tmpSample:new(sync.Map),
 		CandlesChan:make(chan *CandlesMin,Count),
-		EleChan:make(chan config.Element,1),
+		EleChan:make(chan config.Element,2),
 		stop:make(chan bool),
 		//pool:cluster.NewPool(ins.Name),
 	}
@@ -463,6 +472,28 @@ func (self *Cache) SaveTestLog(from int64){
 
 }
 
+func (self *Cache) SyncReadAll(){
+
+	self.db.View(func(t *bolt.Tx)error{
+		b := t.Bucket([]byte{1})
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k,v []byte)error{
+			self.tmpChan <- NewCandlesMin(k,v)
+			return nil
+		})
+	})
+}
+
+func (self *Cache) ReadAll(hand func(t int64)){
+	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
+	c := <-self.tmpChan
+	hand(c.DateTime())
+	self.AddPrice(c)
+
+}
+
 func (self *Cache) Read(hand func(t int64)){
 	var beginU int64
 	if self.pool != nil{
@@ -510,6 +541,7 @@ func (self *Cache) GetLastElement() config.Element {
 
 func (self *Cache) AddPrice(p config.Element) {
 
+	return
 	self.tmpSample.Range(func(k interface{},s_ interface{})bool{
 		s := s_.(*cluster.Sample)
 		d := p.Middle() - s.GetEndElement().Middle()

@@ -12,7 +12,7 @@ type tree struct {
 	node no
 	big *tree
 	small *tree
-	top *tree
+	//top *tree
 }
 func NewTree(n no) *tree {
 	return &tree{
@@ -23,41 +23,41 @@ func (self *tree) Copy(t *tree) {
 	self.node = t.node
 	self.big = t.big
 	self.small = t.small
-	if self.big != nil{
-		self.big.top = self
-	}
-	if self.small != nil {
-		self.small.top = self
-	}
+	//if self.big != nil{
+	//	self.big.top = self
+	//}
+	//if self.small != nil {
+	//	self.small.top = self
+	//}
 }
 func (self *tree) Add (n no) {
 	if self.node.GetVal() >= n.GetVal() {
 		if self.small == nil {
 			self.small = NewTree(n)
-			self.small.top = self
+			//self.small.top = self
 		}else{
 			self.small.Add(n)
 		}
 	}else{
 		if self.big == nil {
 			self.big = NewTree(n)
-			self.big.top = self
+			//self.big.top = self
 		}else{
 			self.big.Add(n)
 		}
 	}
 }
-func (self *tree) PopSmall() (n no) {
+func (self *tree) PopSmall(top *tree) (n no) {
 
 	if self.small != nil {
-		return self.small.PopSmall()
+		return self.small.PopSmall(self)
 	}
 	n = self.node
-	if self.top != nil {
-		if self.big != nil {
-			self.big.top = self.top
-		}
-		self.top.small = self.big
+	if top != nil {
+		//if self.big != nil {
+		//	self.big.top = self.top
+		//}
+		top.small = self.big
 	}else{
 
 		self.Copy(self.big)
@@ -83,7 +83,7 @@ func main(){
 	}
 	fmt.Println("out")
 	for i:=0;i<10;i++{
-		n := t.PopSmall()
+		n := t.PopSmall(nil)
 		fmt.Println(n.GetVal())
 	}
 }

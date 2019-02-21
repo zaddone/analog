@@ -9,8 +9,8 @@ import(
 )
 type saEasy struct {
 	Key []byte
-	CaMap []byte
-	Dis float64
+	//CaMap []byte
+	//Dis float64
 	//DurDis float64
 }
 type Set struct {
@@ -36,8 +36,8 @@ func NewSet(sa *Sample) (S *Set) {
 		List:[]*saEasy{
 			&saEasy{
 				Key:sa.KeyName(),
-				CaMap:sa.caMap,
-				Dis:sa.dis,
+				//CaMap:sa.caMap,
+				//Dis:sa.dis,
 				//DurDis:sa.durDis,
 			}},
 		//Samplist:[][]byte{sa.KeyName()},
@@ -233,8 +233,8 @@ func (S *Set) update(sa []*Sample) {
 	for _i,_s := range S.samp {
 		S.List[_i] =&saEasy{
 			Key:_s.KeyName(),
-			CaMap:_s.caMap,
-			Dis:_s.dis,
+			//CaMap:_s.caMap,
+			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}
 		S.Sn.LengthX += float64(_s.Duration())

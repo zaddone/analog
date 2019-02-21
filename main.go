@@ -9,7 +9,7 @@ import (
 	//"fmt"
 	"log"
 	"time"
-	"sync"
+	//"sync"
 )
 
 type cacheList struct {
@@ -17,9 +17,10 @@ type cacheList struct {
 	//sync.Mutex
 	cas []*_cache
 	Date int64
-	w sync.WaitGroup
+	//w sync.WaitGroup
 	topTree *tree
-	//count int
+	count int
+	//countl int
 	//lastC *_cache
 	//minC chan *_cache
 	// minVal int64
@@ -31,20 +32,31 @@ func NewCacheList() *cacheList {
 		//minC:make(chan *_cache,1),
 	}
 }
-func (self *cacheList) addTree( c *_cache){
-	if self.topTree ==nil {
-		self.topTree = NewTree(c)
+func (self *cacheList) Show() (n int) {
+	return self.count
+	//n =  self.count -self.countl
+	//self.countl = self.count
+	//return
+	//self.count = 0
+	//return
+}
+func (self *cacheList) addTree(c *tree){
+	if self.topTree == nil {
+		self.topTree = c
 	}else{
 		self.topTree.Add(c)
 	}
-	//self.count++
+	self.count++
 	//fmt.Println(c.ca.Ins.Name,time.Unix(c.GetVal(),0),self.count)
-	self.w.Done()
+	//self.w.Done()
+}
+func (self *cacheList) UpdateTree(t *tree){
+	self.topTree = t
 }
 func (self *cacheList) PopTree() *_cache {
 	//self.count--
-	self.w.Add(1)
-	return self.topTree.PopSmall().(*_cache)
+	//self.w.Add(1)
+	return self.topTree.PopSmall(self).(*_cache)
 }
 
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
@@ -78,10 +90,10 @@ func (self *cacheList) Read(h func(int,interface{})){
 
 func (self *cacheList) findMin() {
 	// Getfirst
-	//for{
-		self.w.Wait()
-		self.PopTree().run()
-	//}
+	//fmt.Println("run find")
+	for{
+		self.PopTree().Read()
+	}
 	//time.Sleep(time.Millisecond*1000)
 	//self.findMin()
 	//return
@@ -95,10 +107,12 @@ type _cache struct {
 	ca *cache.Cache
 	//index int
 	//wait chan int64
-	wait chan bool
+	//wait chan bool
 	val int64
 	begin int64
-	w *sync.WaitGroup
+	//w *sync.WaitGroup
+
+	noinfo *tree
 }
 func (self *_cache) GetVal() int64 {
 	return self.val
@@ -106,37 +120,41 @@ func (self *_cache) GetVal() int64 {
 func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	c = &_cache{
 		ca:cache.NewCache(ins),
-		wait:make(chan bool),
+		//wait:make(chan bool,1),
 		cas:cali,
 		//w:&(cali.w),
 		//wait:make(chan int64),
 	}
+	c.noinfo = NewTree(c)
 	c.ca.SetPool()
+	c.ca.Cl = cali
 	cali.cas= append(cali.cas, c)
-	cali.w.Add(1)
-	go c.Read()
-	go c.ca.RunDown()
+	go c.ca.SyncReadAll()
+	c.Read()
+
+	//cali.w.Done()
+	//go c.ca.RunDown()
 	return c
 }
 func (self *_cache) Read() {
-	self.ca.Read(func(t int64){
+	self.ca.ReadAll(func(t int64){
 		if t - self.begin > 604800 {
 			self.ca.SaveTestLog(t)
 			self.begin = t
 		}
+		//fmt.Println("%s",self.cas.count)
 		self.val = t
-		self.cas.addTree(self)
-		<-self.wait
-		go self.cas.findMin()
+		self.cas.addTree(self.noinfo)
+		//go self.cas.findMin()
 	})
 }
 
-func (self *_cache) run() {
-	//self.val = 0
-	//fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
-	self.wait<-true
-	//self.w.Add(1)
-}
+//func (self *_cache) run() {
+//	//self.val = 0
+//	//fmt.Printf("%s %s\r",self.ca.Ins.Name,time.Unix(self.val,0))
+//	self.wait<-true
+//	//self.w.Add(1)
+//}
 
 var (
 	InsList *cacheList = NewCacheList()
@@ -187,63 +205,56 @@ func loadCache(){
 		loadCache()
 	}
 }
-type no interface{
+type No interface{
 	GetVal() int64
 }
-
+type NodeTree interface{
+	UpdateTree(*tree)
+}
 type tree struct {
-	node no
+	node No
 	big *tree
 	small *tree
-	top *tree
+	//top *tree
 }
-func NewTree(n no) *tree {
+func NewTree(n No) *tree {
 	return &tree{
 		node:n,
 	}
 }
-func (self *tree) Copy(t *tree) {
-	self.node = t.node
-	self.big = t.big
-	self.small = t.small
-	if self.big != nil{
-		self.big.top = self
-	}
-	if self.small != nil {
-		self.small.top = self
-	}
-}
-func (self *tree) Add (n no) {
-	if self.node.GetVal() >= n.GetVal() {
+//func (self *tree) GetVal() int64 {
+//	return self.node.GetVal()
+//}
+
+func (self *tree) Add (n *tree) {
+	if self.node.GetVal() > n.node.GetVal() {
 		if self.small == nil {
-			self.small = NewTree(n)
-			self.small.top = self
+			self.small = n
+			//self.small.top = self
 		}else{
 			self.small.Add(n)
 		}
 	}else{
 		if self.big == nil {
-			self.big = NewTree(n)
-			self.big.top = self
+			self.big = n
+			//self.big.top = self
 		}else{
 			self.big.Add(n)
 		}
 	}
 }
-func (self *tree) PopSmall() (n no) {
+func (self *tree) PopSmall(top NodeTree) (No) {
 
 	if self.small != nil {
-		return self.small.PopSmall()
+		return self.small.PopSmall(self)
 	}
-	n = self.node
-	if self.top != nil {
-		if self.big != nil {
-			self.big.top = self.top
-		}
-		self.top.small = self.big
-	}else{
+	top.UpdateTree(self.big)
+	self.big = nil
+	return self.node
 
-		self.Copy(self.big)
-	}
-	return
 }
+
+func (self *tree) UpdateTree(t *tree){
+	self.small = t
+}
+

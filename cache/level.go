@@ -5,7 +5,7 @@ import(
 	"github.com/zaddone/analog/cluster"
 	"math"
 	"sync"
-	"bytes"
+	//"bytes"
 	//"fmt"
 	//"time"
 	//"encoding/binary"
@@ -219,20 +219,29 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		self.par = NewLevel(tag,self.ca,self)
 	}else{
 		if (self.par.par != nil) && (self.ca.pool != nil){
-
-
-			if math.Abs(node.Diff()) > math.Abs(self.par.list[len(self.par.list)-1].Diff()){
-				ea := cluster.NewSample(self.par.list, node)
-				if (self.sample!=nil) && (bytes.Equal(self.sample.KeyName(),ea.KeyName())){
-					self.ca.Cshow[6]++
+			ea := cluster.NewSample(append(self.par.list, node))
+			self.ca.Cshow[7]++
+			pli := self.par.list[len(self.par.list)-1]
+			//if math.Abs(node.Diff()) > math.Abs(pli.Diff()){
+				//ea := cluster.NewSample(self.par.list, node)
+			if (self.sample!=nil) && (self.sample.GetLastElement() == pli ){
+				if math.Abs(node.Diff()) > math.Abs(pli.Diff()){
+					self.ca.Cshow[4]++
+				}else{
+					self.ca.Cshow[5]++
 				}
+			}else{
+				self.ca.Cshow[6]++
+			}
 				//ea := cluster.NewSample(self.par.list, node)
 				//ea.SetCaMap(self.GetCacheMap())
 				//self.ca.pool.Add(ea)
 				//self.ca.Cshow[7]++
-			}else{
-				self.ca.Cshow[7]++
-				self.sample = cluster.NewSample(append(self.par.list, node),nil)
+			//}else{
+
+
+				//self.ca.Cshow[7]++
+				//self.sample = cluster.NewSample(append(self.par.list, node),nil)
 				//if self.ca.pool.Check(sa){
 				//	sa.SetDiff(max)
 				//	sa.SetEndElement(self.ca.GetLastElement())
@@ -247,7 +256,8 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				//		},
 				//	)
 				//}
-			}
+			//}
+			self.sample = ea
 		}
 		//self.par.add(node,ins)
 
