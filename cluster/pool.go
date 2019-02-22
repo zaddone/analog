@@ -24,8 +24,12 @@ type Pool struct {
 func (self *Pool) syncAdd(){
 	for{
 		e := <-self.TmpSa
+		e.s = NewSet(e)
+		if e.s == nil {
+			continue
+		}
 		if !self.add(e){
-			NewSet(e).saveDB(self)
+			e.s.saveDB(self)
 		}
 	}
 }
@@ -234,63 +238,51 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 	})
 
 }
-func (self *Pool) Check(e *Sample) bool {
+//func (self *Pool) Check(e *Sample) bool {
+//
+//	return false
+//	//return minS.CheckCountMax(n)
+//}
 
-	var minS *Set
-	var diff,minDiff float64
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-		diff = s.distance(e)
-		if diff < minDiff || minDiff == 0 {
-			minDiff = diff
-			minS = s
-		}
-	})
-	if minS == nil {
-		return false
-	}
-	n := int(e.tag &^ 2)
-	return minS.CheckCountMax(n)
-}
-
-func (self *Pool) find(e *Sample) *Set {
-	var Sets []*Set
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-		if s.loadSamp(self){
-			Sets = append(Sets,s)
-		}
-	})
-	le := len(Sets)
-	if le == 0 {
-		return nil
-	}
-
-	ns := NewSet(e)
-	Sets = append(Sets,ns)
-	var I int
-	for i,s := range Sets[:le] {
-		for _,_e := range s.samp {
-			I = i
-			_e.diff = s.distance(_e)
-			for _i,_s := range Sets{
-				if i == _i {
-					continue
-				}
-				d := _s.distance(_e)
-				if _e.diff > d {
-					_e.diff = d
-					I = _i
-				}
-			}
-			if I == le{
-				ns.samp = append(ns.samp,_e)
-				ns.count[int(_e.tag &^ 2)] ++
-			}
-		}
-	}
-	return ns
-	//return nil
-
-}
+//func (self *Pool) find(e *Sample) *Set {
+//	var Sets []*Set
+//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+//		if s.loadSamp(self){
+//			Sets = append(Sets,s)
+//		}
+//	})
+//	le := len(Sets)
+//	if le == 0 {
+//		return nil
+//	}
+//
+//	ns := NewSet(e)
+//	Sets = append(Sets,ns)
+//	var I int
+//	for i,s := range Sets[:le] {
+//		for _,_e := range s.samp {
+//			I = i
+//			_e.diff = s.distance(_e)
+//			for _i,_s := range Sets{
+//				if i == _i {
+//					continue
+//				}
+//				d := _s.distance(_e)
+//				if _e.diff > d {
+//					_e.diff = d
+//					I = _i
+//				}
+//			}
+//			if I == le{
+//				ns.samp = append(ns.samp,_e)
+//				ns.count[int(_e.tag &^ 2)] ++
+//			}
+//		}
+//	}
+//	return ns
+//	//return nil
+//
+//}
 
 func (self *Pool) add(e *Sample) bool {
 	Sets:=make([]*Set,0,10)
@@ -337,8 +329,8 @@ func (self *Pool) add(e *Sample) bool {
 		}(&w_,i,tmpchan[i])
 
 	}
-	ns := NewSet(e)
-	Sets_ := append(Sets,ns)
+	//e.s = NewSet(e)
+	Sets_ := append(Sets,e.s)
 	tmps[le-1] = append(tmps[le-1],e)
 	//tmps = append(tmps,ns.samp)
 	for i,s := range Sets {
@@ -348,7 +340,7 @@ func (self *Pool) add(e *Sample) bool {
 				I := i_
 				__e.diff = Sets[i_].distance(__e)
 				for _i,_s := range Sets_{
-					if i_ == _i {
+				if i_ == _i {
 						continue
 					}
 					d := _s.distance(__e)
@@ -385,7 +377,7 @@ func (self *Pool) add(e *Sample) bool {
 	}
 	w.Wait()
 	close(savedb)
-	self.updatePoolDB([]byte{ns.tag},
+	self.updatePoolDB([]byte{e.s.tag},
 	func(db *bolt.Bucket)(err error){
 		for _,k:= range keys {
 			err = db.Delete(k)
@@ -405,7 +397,24 @@ func (self *Pool) add(e *Sample) bool {
 
 }
 
+func (self *Pool) UpdateSample(e *Sample) {
+	err := self.SampDB.Batch(func(tx *bolt.Tx)error{
+		db, err := tx.CreateBucketIfNotExists([]byte{9})
+		if err != nil {
+			return err
+		}
+		return db.Put(e.KeyName(),e.toByte())
+	})
+	if err != nil {
+		panic(err)
+	}
+}
 func (sp *Pool) Add(e *Sample) {
+
+	//e.s = NewSet(e)
+	//if e.s == nil {
+	//	return
+	//}
 	go func(_e *Sample){
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
 		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())

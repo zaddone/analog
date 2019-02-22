@@ -20,6 +20,7 @@ type Sample struct {
 	X []int64
 	Y []float64
 	CaMap []byte
+	Long bool
 
 	dis float64
 	//durDis float64
@@ -32,6 +33,7 @@ type Sample struct {
 	eleList []config.Element
 	tag byte
 	//i int
+	s *Set
 
 }
 func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
@@ -84,6 +86,40 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	}()
 	return
 
+}
+func (self *Sample) GetSet() *Set {
+	return self.s
+}
+func (self *Sample) CheckMap() (m []byte) {
+	if self.s == nil || len(self.s.samp) < 2 {
+		return nil
+	}
+	var l,s int
+	for _,sa := range self.s.samp {
+		if sa.CaMap == nil {
+			continue
+		}
+		if sa.tag != self.tag {
+			continue
+		}
+
+		if sa.Long {
+			l++
+		}else{
+			s++
+		}
+		if m == nil {
+			m = sa.CaMap
+		}else{
+			for i,n := range sa.CaMap{
+				m[i] |= n
+			}
+		}
+	}
+	if s>l {
+		return nil
+	}
+	return m
 }
 func (self *Sample) GetLastElement() config.Element{
 	return self.eleList[len(self.eleList)-1]

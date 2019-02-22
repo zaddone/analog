@@ -28,7 +28,7 @@ func NewPostDB(c *Cache,t byte ) *postDB {
 	}
 	//fmt.Println(c.Ins.Name,s.GetDiff())
 
-	//c.Cshow[0]++
+	c.Cshow[2]++
 	//c.tmpSample.Store(po.key,s)
 	return po
 }
@@ -36,9 +36,9 @@ func (self *postDB) clear(){
 
 	d := self.ca.GetLastElement().Middle() - self.e.Middle()
 	if (d>0) == (self.t==1) {
-		self.ca.Cshow[4]++
+		self.ca.Cshow[0]++
 	}else{
-		self.ca.Cshow[5]++
+		self.ca.Cshow[1]++
 	}
 
 }
@@ -93,7 +93,7 @@ func (self *level) duration () int64 {
 	return last - self.list[0].DateTime()
 }
 func (self *level) readf( h func(e config.Element) bool){
-	for i := len(self.list) - 1;i>= 0;i-- {
+	for i :=len(self.list)-1;i>= 0;i-- {
 		if !self.list[i].Readf(h){
 			return
 		}
@@ -103,17 +103,17 @@ func (self *level) readf( h func(e config.Element) bool){
 	}
 	//self.par
 }
-func (self *level) GetCacheMap() (caMap []byte) {
+func (self *level) GetCacheMap(b,e config.Element) (caMap []byte) {
 	if self.ca.Cl == nil {
 		return nil
 	}
-	lastCa := self.ca.GetLastElement()
-	dif := lastCa.Middle() - self.b.Middle()
-	dur := self.b.DateTime()
+	//lastCa := self.ca.GetLastElement()
+	dif := e.Middle() - b.Middle()
+	dur := b.DateTime()
 	absDif := math.Abs(dif)
 	le := self.ca.Cl.Len()
-	sumlen := le/8
-	if le%8 >0 {
+	sumlen := le/4+1
+	if le%4 >0 {
 		sumlen++
 	}
 	caMap = make([]byte,sumlen)
@@ -127,6 +127,7 @@ func (self *level) GetCacheMap() (caMap []byte) {
 	w_.Add(1)
 	go func(_w_ *sync.WaitGroup){
 		for d :=range chanTmp {
+			//fmt.Println(len(caMap),d.i)
 			caMap[d.i] |= d.t
 		}
 		_w_.Done()
@@ -163,6 +164,24 @@ func (self *level) GetCacheMap() (caMap []byte) {
 	w_.Wait()
 	return caMap
 
+}
+
+func (self *level) ClearPostAll(){
+	self.ClearPost()
+	if self.par == nil {
+		return
+	}
+	self.par.ClearPostAll()
+}
+func (self *level) ClearPost(){
+	if len(self.post) == 0 {
+		return
+	}
+	for _,p := range self.post{
+		p.clear()
+	}
+	//self.post.clear()
+	self.post = nil
 }
 
 
@@ -204,13 +223,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
 
 	//self.update = true
-	if len(self.post) >0 {
-		for _,p := range self.post{
-			p.clear()
-		}
-		//self.post.clear()
-		self.post = nil
-	}
+	self.ClearPost()
 
 	node := NewbNode(self.list[:maxid]...)
 
@@ -221,17 +234,25 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		if (self.par.par != nil) && (self.ca.pool != nil){
 			ea := cluster.NewSample(append(self.par.list, node))
 			self.ca.Cshow[7]++
+			//ea.SetCaMap(self.GetCacheMap())
 			pli := self.par.list[len(self.par.list)-1]
-			//if math.Abs(node.Diff()) > math.Abs(pli.Diff()){
-				//ea := cluster.NewSample(self.par.list, node)
 			if (self.sample!=nil) && (self.sample.GetLastElement() == pli ){
-				if math.Abs(node.Diff()) > math.Abs(pli.Diff()){
-					self.ca.Cshow[4]++
-				}else{
-					self.ca.Cshow[5]++
-				}
-			}else{
-				self.ca.Cshow[6]++
+
+				self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+				go func(_e *cluster.Sample,b,end config.Element){
+					_e.SetCaMap(self.GetCacheMap(b,end))
+					self.ca.pool.UpdateSample(_e)
+				}(self.sample,self.b,self.ca.GetLastElement())
+			}
+			self.sample = ea
+			self.ca.pool.Add(ea)
+			if self.ca.Cl != nil {
+				self.ca.Cl.HandMap(
+					ea.CheckMap(),
+					func(ca interface{},t byte){
+						self.post =append(self.post,NewPostDB(ca.(*Cache),t))
+					},
+				)
 			}
 				//ea := cluster.NewSample(self.par.list, node)
 				//ea.SetCaMap(self.GetCacheMap())
@@ -257,7 +278,6 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				//	)
 				//}
 			//}
-			self.sample = ea
 		}
 		//self.par.add(node,ins)
 

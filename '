@@ -25,7 +25,6 @@ import(
 const(
 	Count = 500
 	OutTime int64 = 604800
-	ListMaxLen int = 34560
 )
 
 var (
@@ -61,35 +60,21 @@ type Cache struct {
 	//tmpSample map[string]*cluster.Sample
 	tmpSample *sync.Map
 	db *bolt.DB
-	lastDateTime int64
-
-	EleList []config.Element
+	LastDateTime int64
 
 	//w sync.WaitGroup
-	m sync.RWMutex
+	//m sync.Mutex
 
 }
 
 func (self *Cache) syncAddPrice(){
 	for{
 		p := <-self.EleChan
-
-		self.m.Lock()
 		if e := self.GetLastElement();(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
 			self.part.ClearPostAll()
 			self.part = NewLevel(0,self,nil)
 		}
-		//self.EleList = append(self.EleList,p)
-		//le := len(self.EleList)
-		//if le  >= ListMaxLen {
-
-		//	self.EleList = self.EleList[le/2:le]
-		//	Elist := make([]config.Element,len(self.EleList),ListMaxLen)
-		//	copy(Elist, self.EleList)
-		//	self.EleList = Elist
-		//}
 		self.part.add(p,self.Ins)
-		self.m.Unlock()
 	}
 }
 
@@ -145,9 +130,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		EleChan:make(chan config.Element,1),
 		stop:make(chan bool),
 		chanStop:make(chan bool,1),
-		//EleChan:make([]config.Element,0,),
 		//pool:cluster.NewPool(ins.Name),
-		EleList:make([]config.Element,0,ListMaxLen),
 	}
 	c.part = NewLevel(0,c,nil)
 
@@ -173,38 +156,24 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 
 func (self *Cache) FindDur(dur int64) float64 {
 	//begin := self.FindLastTime()
-	self.m.RLock()
-	defer self.m.RUnlock()
 	end := self.GetLastElement()
-	if end == nil ||  end.DateTime() > dur {
+	if end == nil {
 		return 0
 	}
-	le := self.part
-	for{
-		if len(le.list) == 0 {
-			return 0
-		}
-		if le.list[0].DateTime() > dur {
-			break
-		}
-		if le.par == nil {
-			return 0
-		}
-		le = le.par
+	if end.DateTime() <= dur {
+		return 0
 	}
-
 	var begin config.Element
-	for _,_l := range le.list[1:] {
-		_l.Read(func(_e config.Element)bool{
-			if _e.DateTime()< dur {
-				begin = _e
-				return false
-			}
-			return true
-		})
-	}
-	if begin == nil {
-		panic(0)
+	self.part.readf(func(e config.Element) bool{
+		if e.DateTime() < dur {
+		//if (end.DateTime() - e.DateTime()) >= dur {
+			return false
+		}
+		begin = e
+		return true
+	})
+	if begin ==nil {
+		return 0
 	}
 	return end.Middle() - begin.Middle()
 
@@ -434,9 +403,9 @@ func (self *Cache) downCan (h func(config.Element)bool){
 	}
 }
 
-func (self *Cache) tmpRead(tmp chan config.Element,stop chan bool){
+func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element,stop chan bool){
 	be := make([]byte,8)
-	binary.BigEndian.PutUint64(be,uint64(self.lastDateTime))
+	binary.BigEndian.PutUint64(be,begin)
 	var k,v []byte
 	self.db.View(func(t *bolt.Tx)error{
 		b := t.Bucket([]byte{1})
@@ -445,10 +414,8 @@ func (self *Cache) tmpRead(tmp chan config.Element,stop chan bool){
 		}
 		c:= b.Cursor()
 		for k,v = c.Seek(be);k != nil;k,v = c.Next(){
-			can := NewCandlesMin(k,v)
 			select{
-			case tmp <- can:
-				self.lastDateTime = can.DateTime()+Scale
+			case tmp <- NewCandlesMin(k,v):
 			default:
 				return nil
 			}
@@ -543,18 +510,18 @@ func (self *Cache) ReadAll(hand func(t int64)){
 		select{
 		case c := <-self.tmpChan:
 			self.AddPrice(c)
-			//if c.DateTime()< self.LastDateTime{
-			//	fmt.Println(time.Unix(c.DateTime(),0),time.Unix(self.LastDateTime,0))
-			//	panic(0)
-			//}
-			//self.LastDateTime = c.DateTime()
-			hand(c.DateTime())
+			if c.DateTime()< self.LastDateTime{
+				fmt.Println(time.Unix(c.DateTime(),0))
+				panic(0)
+			}
+			self.LastDateTime = c.DateTime()
+			hand(self.LastDateTime)
 			return
 		case <- self.chanStop:
-			//if self.LastDateTime == 0 && self.pool != nil {
-			//	self.LastDateTime = self.pool.GetLastTime()
-			//}
-			go self.tmpRead(self.tmpChan,self.chanStop)
+			if self.LastDateTime == 0 && self.pool != nil {
+				self.LastDateTime = self.pool.GetLastTime()
+			}
+			go self.tmpRead(uint64(self.LastDateTime),self.tmpChan,self.chanStop)
 		}
 	}
 
@@ -562,14 +529,15 @@ func (self *Cache) ReadAll(hand func(t int64)){
 }
 
 func (self *Cache) Read(hand func(t int64)){
+	var beginU int64
 	if self.pool != nil{
-		self.lastDateTime = self.pool.GetLastTime()
+		beginU = self.pool.GetLastTime()
 	}
 	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
 	tmpChan := make(chan config.Element,Count*10)
 	var c config.Element
 	for{
-		self.tmpRead(tmpChan,self.chanStop)
+		self.tmpRead(uint64(beginU),tmpChan,self.chanStop)
 		G:
 		for {
 			select{
@@ -585,7 +553,9 @@ func (self *Cache) Read(hand func(t int64)){
 				break G
 			}
 		}
-		if c == nil {
+		if c != nil {
+			beginU = c.DateTime()+Scale
+		}else{
 			time.Sleep(time.Minute*5)
 		}
 	}

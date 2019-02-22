@@ -1,6 +1,6 @@
 package cluster
 import(
-	//"fmt"
+	"fmt"
 	"math"
 	"encoding/binary"
 	"encoding/gob"
@@ -19,7 +19,7 @@ type Set struct {
 
 	tag byte
 
-	count [2]int
+	count [3]int
 	key []byte
 
 	samp []*Sample
@@ -53,14 +53,21 @@ func NewSet(sa *Sample) (S *Set) {
 	})
 	S.Sn.Wei = CurveFitting(X,Y)
 	//S.List[0].DurDis = S.distance(sa)
-	S.count[int(sa.tag) &^ 2]++
+	//S.count[int(sa.tag) &^ 2]++
+
+	if len(S.Sn.Wei) == 0 {
+		//fmt.Println(sa)
+		//fmt.Println(X,Y)
+		panic("w1")
+		return nil
+	}
 	return
 
 }
 
-func (self *Set)CheckCountMax(n int) bool {
-	return self.count[n] > self.count[n^1]
-}
+//func (self *Set)CheckCountMax(n int) bool {
+//	return self.count[n] > self.count[n^1]
+//}
 
 func (self *Set) FindSameKey(k []byte) bool {
 	for _,_k := range self.List {
@@ -111,7 +118,7 @@ func (self *Set) toByte() []byte {
 
 func (S *Set) clear(){
 	S.Sn = &Snap{}
-	S.count = [2]int{0,0}
+	S.count = [3]int{0,0,0}
 	S.key = nil
 	S.List = nil
 	S.samp = nil
@@ -127,9 +134,9 @@ func (self *Set) load(k,v []byte) {
 	copy(self.key,k)
 	//self.key = k
 	self.tag = self.key[16]>>1
-	for _,l := range self.List{
-		self.count[int(l.Key[8]) &^ 2]++
-	}
+	//for _,l := range self.List{
+	//	self.count[int(l.Key[8]) &^ 2]++
+	//}
 }
 
 func (self *Set) loadSamp(sp *Pool) bool {
@@ -238,7 +245,7 @@ func (S *Set) update(sa []*Sample) {
 			//DurDis:s.durDis,
 		}
 		S.Sn.LengthX += float64(_s.Duration())
-		S.count[int(_s.tag) &^ 2]++
+		//S.count[int(_s.tag) &^ 2]++
 	}
 	le := float64(len(sa))
 	S.Sn.LengthX /= le
@@ -259,6 +266,10 @@ func (S *Set) update(sa []*Sample) {
 		Y[i] = Y[i] / S.Sn.LengthY
 	}
 	S.Sn.Wei = CurveFitting(X,Y)
+	if len(S.Sn.Wei) == 0 {
+		fmt.Println(X,Y)
+		panic("w")
+	}
 
 }
 
