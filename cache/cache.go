@@ -11,7 +11,7 @@ import(
 	"net/url"
 	"sync"
 	"os"
-	"math"
+	//"math"
 	"io"
 	"io/ioutil"
 	"encoding/binary"
@@ -48,6 +48,7 @@ type Cache struct {
 	EleChan chan config.Element
 	tmpChan chan config.Element
 	stop chan bool
+	chanStop chan bool
 	//wait chan bool
 	lastKey [8]byte
 	//CacheAll []*Cache
@@ -59,20 +60,20 @@ type Cache struct {
 	//tmpSample map[string]*cluster.Sample
 	tmpSample *sync.Map
 	db *bolt.DB
+	LastDateTime int64
+
+	//w sync.WaitGroup
+	//m sync.Mutex
 
 }
 
 func (self *Cache) syncAddPrice(){
 	for{
-		select{
-		case p := <-self.EleChan:
-			if e := self.GetLastElement();(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
-				self.part = NewLevel(0,self,nil)
-			}
-			self.part.add(p,self.Ins)
-		case <-self.stop:
-			return
+		p := <-self.EleChan
+		if e := self.GetLastElement();(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
+			self.part = NewLevel(0,self,nil)
 		}
+		self.part.add(p,self.Ins)
 	}
 }
 
@@ -125,8 +126,9 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		tmpChan : make(chan config.Element,Count),
 		tmpSample:new(sync.Map),
 		CandlesChan:make(chan *CandlesMin,Count),
-		EleChan:make(chan config.Element,2),
+		EleChan:make(chan config.Element,1),
 		stop:make(chan bool),
+		chanStop:make(chan bool,1),
 		//pool:cluster.NewPool(ins.Name),
 	}
 	c.part = NewLevel(0,c,nil)
@@ -146,6 +148,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 			nil);err != nil {
 		panic(err)
 	}
+	c.chanStop<-true
 	go c.syncAddPrice()
 	return c
 }
@@ -399,7 +402,7 @@ func (self *Cache) downCan (h func(config.Element)bool){
 	}
 }
 
-func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element){
+func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element,stop chan bool){
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,begin)
 	self.db.View(func(t *bolt.Tx)error{
@@ -418,6 +421,7 @@ func (self *Cache) tmpRead(begin uint64 ,tmp chan config.Element){
 		return nil
 
 	})
+	stop <- true
 	return
 }
 
@@ -473,24 +477,41 @@ func (self *Cache) SaveTestLog(from int64){
 }
 
 func (self *Cache) SyncReadAll(){
-
-	self.db.View(func(t *bolt.Tx)error{
-		b := t.Bucket([]byte{1})
-		if b == nil {
-			return nil
-		}
-		return b.ForEach(func(k,v []byte)error{
-			self.tmpChan <- NewCandlesMin(k,v)
-			return nil
-		})
-	})
+//	var beginU int64
+//	if self.pool != nil{
+//		beginU = self.pool.GetLastTime()
+//	}
+//
+//
+//	self.db.View(func(t *bolt.Tx)error{
+//		b := t.Bucket([]byte{1})
+//		if b == nil {
+//			return nil
+//		}
+//		return b.ForEach(func(k,v []byte)error{
+//			self.tmpChan <- NewCandlesMin(k,v)
+//			return nil
+//		})
+//	})
 }
 
 func (self *Cache) ReadAll(hand func(t int64)){
 	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-	c := <-self.tmpChan
-	hand(c.DateTime())
-	self.AddPrice(c)
+	for{
+		select{
+		case c := <-self.tmpChan:
+			self.AddPrice(c)
+			self.LastDateTime = c.DateTime()
+			hand(self.LastDateTime)
+			return
+		case <- self.chanStop:
+			if self.LastDateTime == 0 {
+				self.LastDateTime = self.pool.GetLastTime()
+			}
+			go self.tmpRead(uint64(self.LastDateTime),self.tmpChan,self.chanStop)
+		}
+	}
+
 
 }
 
@@ -500,10 +521,10 @@ func (self *Cache) Read(hand func(t int64)){
 		beginU = self.pool.GetLastTime()
 	}
 	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-	tmpChan := make(chan config.Element,Count)
+	tmpChan := make(chan config.Element,Count*10)
 	var c config.Element
 	for{
-		self.tmpRead(uint64(beginU),tmpChan)
+		self.tmpRead(uint64(beginU),tmpChan,self.chanStop)
 		G:
 		for {
 			select{
@@ -541,22 +562,21 @@ func (self *Cache) GetLastElement() config.Element {
 
 func (self *Cache) AddPrice(p config.Element) {
 
-	return
-	self.tmpSample.Range(func(k interface{},s_ interface{})bool{
-		s := s_.(*cluster.Sample)
-		d := p.Middle() - s.GetEndElement().Middle()
-		n := int((s.KeyName()[8] &^ 2) <<1)
-		if math.Abs(d) > math.Abs(s.GetDiff()) {
-			if (d>0) == (s.GetDiff()>0) {
-				self.Cshow[n]++
-			}else{
-				self.Cshow[n+1]++
-			}
-			self.tmpSample.Delete(k)
-		}
-		return true
-	})
-
+	//self.tmpSample.Range(func(k interface{},s_ interface{})bool{
+	//	s := s_.(*cluster.Sample)
+	//	d := p.Middle() - s.GetEndElement().Middle()
+	//	n := int((s.KeyName()[8] &^ 2) <<1)
+	//	if math.Abs(d) > math.Abs(s.GetDiff()) {
+	//		if (d>0) == (s.GetDiff()>0) {
+	//			self.Cshow[n]++
+	//		}else{
+	//			self.Cshow[n+1]++
+	//		}
+	//		self.tmpSample.Delete(k)
+	//	}
+	//	return true
+	//})
+	//return
 	self.EleChan <- p
 
 	//if e := self.GetLastElement();

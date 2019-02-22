@@ -9,6 +9,7 @@ import (
 	//"fmt"
 	"log"
 	"time"
+	//"math/rand"
 	//"sync"
 )
 
@@ -41,21 +42,18 @@ func (self *cacheList) Show() (n int) {
 	//return
 }
 func (self *cacheList) addTree(c *tree){
+
 	if self.topTree == nil {
 		self.topTree = c
 	}else{
 		self.topTree.Add(c)
 	}
-	self.count++
-	//fmt.Println(c.ca.Ins.Name,time.Unix(c.GetVal(),0),self.count)
-	//self.w.Done()
+
 }
 func (self *cacheList) UpdateTree(t *tree){
 	self.topTree = t
 }
 func (self *cacheList) PopTree() *_cache {
-	//self.count--
-	//self.w.Add(1)
 	return self.topTree.PopSmall(self).(*_cache)
 }
 
@@ -89,17 +87,9 @@ func (self *cacheList) Read(h func(int,interface{})){
 }
 
 func (self *cacheList) findMin() {
-	// Getfirst
-	//fmt.Println("run find")
 	for{
 		self.PopTree().Read()
 	}
-	//time.Sleep(time.Millisecond*1000)
-	//self.findMin()
-	//return
-
-
-
 }
 type _cache struct {
 	cas *cacheList
@@ -108,14 +98,15 @@ type _cache struct {
 	//index int
 	//wait chan int64
 	//wait chan bool
-	val int64
+	//val int64
 	begin int64
 	//w *sync.WaitGroup
-
 	noinfo *tree
+	//chanStop chan bool
+
 }
 func (self *_cache) GetVal() int64 {
-	return self.val
+	return self.ca.LastDateTime
 }
 func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	c = &_cache{
@@ -129,21 +120,22 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	c.ca.SetPool()
 	c.ca.Cl = cali
 	cali.cas= append(cali.cas, c)
-	go c.ca.SyncReadAll()
+	//go c.syncRead()
+	go c.ca.RunDown()
 	c.Read()
+	//fmt.Println(c.ca.Ins.Name)
 
-	//cali.w.Done()
-	//go c.ca.RunDown()
 	return c
 }
+
+
 func (self *_cache) Read() {
-	self.ca.ReadAll(func(t int64){
-		if t - self.begin > 604800 {
-			self.ca.SaveTestLog(t)
-			self.begin = t
+	self.ca.ReadAll(func(t_ int64){
+		if t_ - self.begin > 604800 {
+			self.ca.SaveTestLog(t_)
+			self.begin = t_
 		}
-		//fmt.Println("%s",self.cas.count)
-		self.val = t
+		//self.val = t_
 		self.cas.addTree(self.noinfo)
 		//go self.cas.findMin()
 	})
