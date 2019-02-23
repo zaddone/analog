@@ -51,6 +51,8 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	//}else{
 	sa = &Sample{
 		eleList:eles,
+		Y:make([]float64,0,2000),
+		X:make([]int64,0,2000),
 		//diff : eles[len(eles)-1].Diff(),
 	}
 	//}
@@ -62,8 +64,7 @@ func NewSample(eles []config.Element) (sa *Sample) {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
 				sa.YMin = y
-			}
-			if (sa.YMax < y) {
+			}else if (sa.YMax < y) {
 				sa.YMax = y
 			}
 			sa.Y = append(sa.Y,y)
@@ -90,16 +91,39 @@ func NewSample(eles []config.Element) (sa *Sample) {
 func (self *Sample) GetSet() *Set {
 	return self.s
 }
+
+func (self *Sample) Check() bool {
+	if self.s == nil || len(self.s.samp) < 3{
+		return false
+	}
+	var l,s int
+	for _,sa := range self.s.samp {
+		if (sa == self){
+			continue
+		}
+		if (sa.CaMap == nil) ||
+		(sa.tag != self.tag) {
+			s++
+			continue
+		}
+		if sa.Long {
+			l++
+		}else{
+			s++
+		}
+
+	}
+	return (l > s)
+}
 func (self *Sample) CheckMap() (m []byte) {
-	if self.s == nil || len(self.s.samp) < 2 {
+	if self.s == nil || len(self.s.samp) < 3 {
 		return nil
 	}
 	var l,s int
 	for _,sa := range self.s.samp {
-		if sa.CaMap == nil {
-			continue
-		}
-		if sa.tag != self.tag {
+		if (sa == self) ||
+		(sa.CaMap == nil) ||
+		(sa.tag != self.tag) {
 			continue
 		}
 
@@ -116,9 +140,9 @@ func (self *Sample) CheckMap() (m []byte) {
 			}
 		}
 	}
-	if s>l {
-		return nil
-	}
+	//if s >= l {
+	//	return nil
+	//}
 	return m
 }
 func (self *Sample) GetLastElement() config.Element{
@@ -181,6 +205,7 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	self.key = k.Key
 	//self.CaMap = k.CaMap
 	//self.dis = k.Dis
+
 	self.xMax = self.X[len(self.X)-1]
 	self.xMin = self.X[0]
 	self.tag = self.key[8]
@@ -222,31 +247,43 @@ func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
 func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	durdiff = self.Duration() - dur
 	xMin := self.xMin + durdiff
+	var x,x_ int64
+	var i,j int
 	if durdiff <=0 {
 		//xMin:= self.XMax - dur
-		for i,x := range self.X {
+		for i,x = range self.X {
 			f(float64(x - xMin),self.Y[i] -self.YMin)
 		}
 		return -durdiff
 	}
-	var yMin float64 = self.Y[0]
-	Le := len(self.X)
-	var X []int64 = make([]int64,0,Le)
-	var Y []float64 = make([]float64,0,Le)
-	var x int64
-	for i,y := range self.Y{
-		x = self.X[i]
-		if x >= xMin {
-			if (y < yMin){
-				yMin = y
-			}
-			X = append(X,x)
-			Y = append(Y,y)
+	for i,x_ = range self.X {
+		if x_ < xMin {
+			continue
 		}
-	}
-	for i,y := range Y {
-		f(float64(X[i]-xMin),y-yMin)
+		for j,x = range self.X[i:] {
+			f(float64(x - xMin),self.Y[i+j] -self.YMin)
+		}
+		break
 	}
 	return
+	//var yMin float64 = self.Y[0]
+	//Le := len(self.X)
+	//var X []int64 = make([]int64,0,Le)
+	//var Y []float64 = make([]float64,0,Le)
+	//var x int64
+	//for i,y := range self.Y{
+	//	x = self.X[i]
+	//	if x >= xMin {
+	//		if (y < yMin){
+	//			yMin = y
+	//		}
+	//		X = append(X,x)
+	//		Y = append(Y,y)
+	//	}
+	//}
+	//for i,y := range Y {
+	//	f(float64(X[i]-xMin),y-self.YMin)
+	//}
+	//return
 
 }

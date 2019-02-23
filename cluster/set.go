@@ -40,26 +40,23 @@ func NewSet(sa *Sample) (S *Set) {
 				//Dis:sa.dis,
 				//DurDis:sa.durDis,
 			}},
-		//Samplist:[][]byte{sa.KeyName()},
 		Sn:&Snap{
 			LengthX:float64(sa.xMax-sa.xMin),
 			LengthY:sa.YMax - sa.YMin,
 		},
 	}
-	var X,Y []float64
-	sa.GetDB(sa.Duration(),func(x,y float64){
-		X = append(X,x/S.Sn.LengthX)
-		Y = append(Y,y/S.Sn.LengthY)
-	})
+	X := make([]float64,0,len(sa.X))
+	Y := make([]float64,0,len(sa.X))
+	var i int
+	var x int64
+	for i,x = range sa.X {
+		X = append(X,float64(x-sa.xMin)/S.Sn.LengthX)
+		Y = append(Y,(sa.Y[i]-sa.YMin)/S.Sn.LengthY)
+	}
 	S.Sn.Wei = CurveFitting(X,Y)
-	//S.List[0].DurDis = S.distance(sa)
-	//S.count[int(sa.tag) &^ 2]++
 
 	if len(S.Sn.Wei) == 0 {
-		//fmt.Println(sa)
-		//fmt.Println(X,Y)
 		panic("w1")
-		return nil
 	}
 	return
 
@@ -237,6 +234,8 @@ func (S *Set) update(sa []*Sample) {
 	S.clear()
 	S.samp = sa
 	S.List = make([]*saEasy,len(S.samp))
+	var sum int64
+	var df float64
 	for _i,_s := range S.samp {
 		S.List[_i] =&saEasy{
 			Key:_s.KeyName(),
@@ -244,26 +243,23 @@ func (S *Set) update(sa []*Sample) {
 			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}
-		S.Sn.LengthX += float64(_s.Duration())
-		//S.count[int(_s.tag) &^ 2]++
+		sum +=_s.Duration()
+		df = _s.YMax - _s.YMin
+		if S.Sn.LengthY < df {
+			S.Sn.LengthY = df
+		}
 	}
-	le := float64(len(sa))
-	S.Sn.LengthX /= le
+	X := make([]float64,0,int(sum/5))
+	Y := make([]float64,0,int(sum/5))
 
-	var X,Y []float64
+	sum /= int64(len(sa))
+	//S.Sn.LengthX = float64(sum/ float64(len(sa))
+	S.Sn.LengthX = float64(sum)
 	for _,s := range S.samp {
-		s.GetDB(int64(S.Sn.LengthX),func(x,y float64){
-			X = append(X,x)
-			Y = append(Y,y)
-			if y>S.Sn.LengthY {
-				S.Sn.LengthY = y
-			}
+		s.GetDB(sum,func(x,y float64){
+			X = append(X,x/S.Sn.LengthX)
+			Y = append(Y,y/S.Sn.LengthY)
 		})
-	}
-
-	for i,x := range X {
-		X[i] = x / S.Sn.LengthX
-		Y[i] = Y[i] / S.Sn.LengthY
 	}
 	S.Sn.Wei = CurveFitting(X,Y)
 	if len(S.Sn.Wei) == 0 {

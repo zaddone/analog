@@ -11,7 +11,7 @@ import(
 	"net/url"
 	"sync"
 	"os"
-	//"math"
+	"math"
 	"io"
 	"io/ioutil"
 	"encoding/binary"
@@ -49,7 +49,7 @@ type Cache struct {
 	EleChan chan config.Element
 	tmpChan chan config.Element
 	stop chan bool
-	chanStop chan bool
+	//chanStop chan bool
 	//wait chan bool
 	lastKey [8]byte
 	//CacheAll []*Cache
@@ -61,35 +61,31 @@ type Cache struct {
 	//tmpSample map[string]*cluster.Sample
 	tmpSample *sync.Map
 	db *bolt.DB
+	mindb *bolt.DB
 	lastDateTime int64
 
-	EleList []config.Element
+	//EleList []config.Element
 
 	//w sync.WaitGroup
 	m sync.RWMutex
 
 }
 
+
+func (self *Cache) SyncAddPrice(){
+	self.syncAddPrice()
+}
 func (self *Cache) syncAddPrice(){
 	for{
 		p := <-self.EleChan
 
-		self.m.Lock()
+		//self.m.Lock()
 		if e := self.GetLastElement();(e!= nil) && ((p.DateTime() - e.DateTime()) >100) {
-			self.part.ClearPostAll()
+			//self.part.ClearPostAll()
 			self.part = NewLevel(0,self,nil)
 		}
-		//self.EleList = append(self.EleList,p)
-		//le := len(self.EleList)
-		//if le  >= ListMaxLen {
-
-		//	self.EleList = self.EleList[le/2:le]
-		//	Elist := make([]config.Element,len(self.EleList),ListMaxLen)
-		//	copy(Elist, self.EleList)
-		//	self.EleList = Elist
-		//}
 		self.part.add(p,self.Ins)
-		self.m.Unlock()
+		//self.m.Unlock()
 	}
 }
 
@@ -102,38 +98,6 @@ func (self *Cache) ShowPoolNum() int {
 	//return self.pool.ShowPoolNum()
 }
 
-func (self *Cache) FindLevelWithSame(dur int64) *level {
-
-	le := self.part
-	if le == nil {
-		return nil
-	}
-	var minLe *level
-	var min,max int64
-	for{
-		max = le.duration()
-		if ( max < dur) {
-			min = max
-			minLe = le
-			le = le.par
-			if le == nil {
-				return nil
-			}
-		}else{
-			break
-		}
-	}
-	if min == 0{
-		return le
-	}
-	if (dur-min) > (max-dur) {
-		return minLe
-	}else{
-		return le
-	}
-
-}
-
 func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
 		Ins:ins,
@@ -142,12 +106,12 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		tmpChan : make(chan config.Element,Count),
 		tmpSample:new(sync.Map),
 		CandlesChan:make(chan *CandlesMin,Count),
-		EleChan:make(chan config.Element,1),
+		EleChan:make(chan config.Element,2),
 		stop:make(chan bool),
-		chanStop:make(chan bool,1),
+		//chanStop:make(chan bool,1),
 		//EleChan:make([]config.Element,0,),
 		//pool:cluster.NewPool(ins.Name),
-		EleList:make([]config.Element,0,ListMaxLen),
+		//EleList:make([]config.Element,0,ListMaxLen),
 	}
 	c.part = NewLevel(0,c,nil)
 
@@ -166,11 +130,80 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 			nil);err != nil {
 		panic(err)
 	}
-	c.chanStop<-true
-	go c.syncAddPrice()
+	//c.SetLastTime()
+
+
+	if _,err = os.Stat(config.Conf.DbPath);err != nil {
+		if err = os.MkdirAll(config.Conf.DbPath,0700);err != nil {
+			panic(err)
+		}
+	}
+	if c.mindb,err = bolt.Open(
+		filepath.Join(
+			config.Conf.DbPath,
+			c.Ins.Name),
+			0600,
+			nil);err != nil {
+		panic(err)
+	}
+	//c.chanStop<-true
+	//go c.syncAddPrice()
 	return c
 }
+func (self *Cache) SaveMinDB() {
 
+	last := make([]byte,8)
+	err := self.mindb.View(func(t *bolt.Tx)error{
+		b := t.Bucket([]byte{0})
+		if b == nil {
+			return nil
+		}
+		k,_ := b.Cursor().Last()
+		if k != nil {
+			copy(last,k)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	tmp := make(chan config.Element,1000)
+	go func(){
+		err := self.db.View(func(t *bolt.Tx)error{
+			b := t.Bucket([]byte{1})
+			if b == nil {
+				return nil
+			}
+			c:= b.Cursor()
+			for k,v := c.Seek(last);k != nil;k,v = c.Next(){
+				tmp <- NewCandlesMin(k,v)
+			}
+			return nil
+		})
+		if err != nil {
+			panic(err)
+		}
+		close(tmp)
+	}()
+	err = self.mindb.Update(func(t *bolt.Tx)error{
+		b,er := t.CreateBucketIfNotExists([]byte{0})
+		if er != nil {
+			return er
+		}
+		for e := range tmp {
+			k,v := config.Zip(e)
+			er = b.Put(k,v)
+			if er != nil {
+				return er
+			}
+		}
+		return nil
+
+	})
+	if err != nil {
+		panic(err)
+	}
+}
 func (self *Cache) FindDur(dur int64) float64 {
 	//begin := self.FindLastTime()
 	self.m.RLock()
@@ -210,28 +243,6 @@ func (self *Cache) FindDur(dur int64) float64 {
 
 }
 
-//func (self *Cache) syncSaveToDB(){
-//
-//	self.CandlesChan = make(chan *Candles,Count)
-//	err := self.db.Update(func(t *bolt.Tx)error{
-//		b,er := t.CreateBucketIfNotExists([]byte{1})
-//		if er != nil {
-//			return er
-//		}
-//		for{
-//			c := <-self.CandlesChan
-//			er = b.Put(c.Key(),c.toByte())
-//			if er != nil {
-//				return er
-//			}
-//
-//		}
-//	})
-//	if err != nil {
-//		panic(err)
-//	}
-//
-//}
 func (self *Cache) saveToDB(can *CandlesMin){
 	if len(self.CandlesChan)== 0 {
 		return
@@ -269,55 +280,6 @@ func (self *Cache) saveToDB(can *CandlesMin){
 
 
 }
-
-//func (self *Cache) syncSaveCandles(){
-//
-//	var file *os.File = nil
-//	SaveToFile := func(can_ *Candles){
-//		df := time.Unix(can_.DateTime(),0).In(Loc)
-//		fname := df.Format("20060102")
-//		var err error
-//		if file != nil {
-//			if file.Name() == fname {
-//
-//				if err = json.NewEncoder(file).Encode(can_);err != nil {
-//					panic(err)
-//				}
-//				return
-//			}else{
-//				file.Close()
-//			}
-//		}
-//		p := filepath.Join(config.Conf.LogPath,self.Ins.Name,df.Format("200601"))
-//		if _,err = os.Stat(p); err != nil {
-//			if err = os.MkdirAll(p,0700);err != nil {
-//				panic(err)
-//			}
-//		}
-//		p = filepath.Join(p,fname)
-//		if file,err = os.OpenFile(p,os.O_APPEND|os.O_CREATE|os.O_RDWR,0700); err != nil {
-//			panic(err)
-//		}else{
-//			if err = json.NewEncoder(file).Encode(can_);err != nil {
-//				fmt.Println(can_)
-//				panic(err)
-//			}
-//		}
-//	}
-//	for{
-//	select{
-//	case <-self.stop:
-//		return
-//	case c := <-self.CandlesChan:
-//		SaveToFile(c)
-//	}
-//	}
-//	if file != nil {
-//		file.Close()
-//		file = nil
-//	}
-//
-//}
 
 func (self *Cache) FindLastTime() (lt int64) {
 	err := self.db.View(func(t *bolt.Tx) error{
@@ -434,7 +396,7 @@ func (self *Cache) downCan (h func(config.Element)bool){
 	}
 }
 
-func (self *Cache) tmpRead(tmp chan config.Element,stop chan bool){
+func (self *Cache) tmpRead(tmp chan config.Element){
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,uint64(self.lastDateTime))
 	var k,v []byte
@@ -456,11 +418,8 @@ func (self *Cache) tmpRead(tmp chan config.Element,stop chan bool){
 		return nil
 
 	})
-	if k == nil {
-		time.Sleep(time.Minute*5)
-	}
-	stop <- true
 	return
+
 }
 
 func (self *Cache) SetPool(){
@@ -486,19 +445,14 @@ func (self *Cache) Close(){
 func (self *Cache) SaveTestLog(from int64){
 
 	p := filepath.Join(config.Conf.ClusterPath,self.Ins.Name)
-	if _,err := os.Stat(p); err != nil{
+	_,err := os.Stat(p)
+	if err != nil{
 		if err = os.MkdirAll(p,0700);err != nil {
 			panic(err)
 		}
 	}
-		//return
-	f,err := os.OpenFile(
-	filepath.Join(config.Conf.ClusterPath,self.Ins.Name,"log"),
-	os.O_APPEND|os.O_CREATE|os.O_RDWR,
-	0700,)
-	if err == nil {
-	f.WriteString(
-		fmt.Sprintf(
+
+	str := fmt.Sprintf(
 			"%s %s %.2f %.2f %.2f %.2f %.0f %d\r\n",
 			time.Now().Format(config.TimeFormat),
 			time.Unix(from,0).Format(config.TimeFormat),
@@ -508,90 +462,71 @@ func (self *Cache) SaveTestLog(from int64){
 			self.Cshow[6]/self.Cshow[7],
 			self.Cshow,
 			self.ShowPoolNum(),
-		))
-		f.Close()
-	}else{
-		panic(err)
+		)
+		//return
+	f,err := os.OpenFile(
+	filepath.Join(p,"log"),
+	os.O_APPEND|os.O_CREATE|os.O_RDWR|os.O_SYNC,
+	0700,)
+	if err != nil {
+		fmt.Println(self.Ins.Name,str)
+		return
+		//panic(err)
 	}
+	f.WriteString(str)
+	f.Close()
 	//self.Cshow[7] = 0
 	//self.Cshow = [8]float64{0,0,0,0,0,0,0,0}
 
 }
 
-func (self *Cache) SyncReadAll(){
-//	var beginU int64
-//	if self.pool != nil{
-//		beginU = self.pool.GetLastTime()
-//	}
-//
-//
-//	self.db.View(func(t *bolt.Tx)error{
-//		b := t.Bucket([]byte{1})
-//		if b == nil {
-//			return nil
-//		}
-//		return b.ForEach(func(k,v []byte)error{
-//			self.tmpChan <- NewCandlesMin(k,v)
-//			return nil
-//		})
-//	})
+func (self *Cache) SyncReadAll(hand func(config.Element)){
+	self.db.View(func(t *bolt.Tx)error{
+		b := t.Bucket([]byte{1})
+		if b == nil {
+			return nil
+		}
+		return b.ForEach(func(k,v []byte)error{
+			hand(NewCandlesMin(k,v))
+			//self.tmpChan <- NewCandlesMin(k,v)
+			return nil
+		})
+	})
+}
+
+
+func (self *Cache) GetLastTime() int64 {
+
+	if self.pool != nil {
+		return self.pool.GetLastTime()
+	}
+	return 0
+
 }
 
 func (self *Cache) ReadAll(hand func(t int64)){
-	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-	for{
-		select{
-		case c := <-self.tmpChan:
-			self.AddPrice(c)
-			//if c.DateTime()< self.LastDateTime{
-			//	fmt.Println(time.Unix(c.DateTime(),0),time.Unix(self.LastDateTime,0))
-			//	panic(0)
-			//}
-			//self.LastDateTime = c.DateTime()
-			hand(c.DateTime())
-			return
-		case <- self.chanStop:
-			//if self.LastDateTime == 0 && self.pool != nil {
-			//	self.LastDateTime = self.pool.GetLastTime()
-			//}
-			go self.tmpRead(self.tmpChan,self.chanStop)
-		}
-	}
 
+	go self.SyncAddPrice()
+	be := make([]byte,8)
+	binary.BigEndian.PutUint64(be,uint64(self.GetLastTime()))
+	var k,v []byte
+	self.db.View(func(t *bolt.Tx)error{
+		b := t.Bucket([]byte{1})
+		if b == nil {
+			return nil
+		}
+		c:= b.Cursor()
+		for k,v = c.Seek(be);k != nil;k,v = c.Next(){
+			can := NewCandlesMin(k,v)
+			hand(can.DateTime())
+			self.AddPrice(can)
+		}
+		return nil
+
+	})
 
 }
 
-func (self *Cache) Read(hand func(t int64)){
-	if self.pool != nil{
-		self.lastDateTime = self.pool.GetLastTime()
-	}
-	//fmt.Println("begin",self.Ins.Name,time.Unix(beginU,0))
-	tmpChan := make(chan config.Element,Count*10)
-	var c config.Element
-	for{
-		self.tmpRead(tmpChan,self.chanStop)
-		G:
-		for {
-			select{
-			case c = <-tmpChan:
-				hand(c.DateTime())
-				//if (c != nil) && c_.DateTime() < c.DateTime() {
-				//	panic(9)
-				//}
-				//c = c_
-				//fmt.Println("add",self.Ins.Name,time.Unix(c.DateTime(),0))
-				self.AddPrice(c)
-			default:
-				break G
-			}
-		}
-		if c == nil {
-			time.Sleep(time.Minute*5)
-		}
-	}
-
-
-}
 
 func (self *Cache) GetLastElement() config.Element {
 
@@ -627,5 +562,67 @@ func (self *Cache) AddPrice(p config.Element) {
 	//	self.part = NewLevel(0,self,nil)
 	//}
 	//self.part.add(p,self.Ins)
+
+}
+
+func (self *Cache) GetCacheMap(b config.Element) (caMap []byte) {
+	if self.Cl == nil {
+		return nil
+	}
+	dif := self.GetLastElement().Middle() - b.Middle()
+	dur := b.DateTime()
+	absDif := math.Abs(dif)
+	le := self.Cl.Len()
+	sumlen := le/4+1
+	if le%4 >0 {
+		sumlen++
+	}
+	caMap = make([]byte,sumlen)
+	type tmpdb struct{
+		t byte
+		i int
+	}
+	chanTmp := make(chan *tmpdb,le)
+
+	var w,w_ sync.WaitGroup
+	w_.Add(1)
+	go func(_w_ *sync.WaitGroup){
+		for d :=range chanTmp {
+			//fmt.Println(len(caMap),d.i)
+			caMap[d.i] |= d.t
+		}
+		_w_.Done()
+	}(&w_)
+	w.Add(le)
+	self.Cl.Read(func(i int,_c interface{}){
+		go func(I int,c *Cache,_w *sync.WaitGroup){
+			chanTmp <- &tmpdb{
+			t:func()byte{
+				if c == self {
+					return 0
+				}
+				d := c.FindDur(dur)
+				if d == 0 {
+					return 0
+				}
+				if math.Abs(d) < absDif {
+					return 3
+				}
+				if d>0{
+					return 1
+				}else{
+					return 2
+				}
+			}() << uint(I%8),
+			i:I/8,
+			}
+			_w.Done()
+		}(i*2,_c.(*Cache),&w)
+
+	})
+	w.Wait()
+	close(chanTmp)
+	w_.Wait()
+	return caMap
 
 }

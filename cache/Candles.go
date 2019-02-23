@@ -57,6 +57,8 @@ func ObjToByte(db interface{}) []byte {
 	}
 	return b.Bytes()
 }
+
+
 func (self *CandlesMin) toByte() ([]byte){
 	var b bytes.Buffer
 	err := gob.NewEncoder(&b).Encode(self)

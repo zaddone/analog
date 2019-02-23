@@ -1,21 +1,37 @@
 package main
 import(
-
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/request"
-	"github.com/zaddone/analog/cache"
 	"github.com/zaddone/operate/oanda"
-	"github.com/boltdb/bolt"
+	"github.com/zaddone/analog/cache"
 	"encoding/json"
+	"github.com/boltdb/bolt"
 	"fmt"
 	//"time"
-	//"strings"
-
 )
 var (
 	calist []*cache.Cache
-	FirstCache *cache.Cache
 )
+
+func main(){
+	loadCache()
+	run := make(chan bool,4)
+	for _,ca := range calist{
+		go func(){
+			run<-true
+			fmt.Println(ca.Ins.Name)
+			ca.SaveMinDB()
+			<-run
+		}()
+	}
+
+	//t := time.Tick(time.Second * 3600)
+	//for e := range t {
+	//	log.Println(e)
+	//}
+
+}
+
 func loadCache(){
 	err := config.HandDB(func(db *bolt.DB)error{
 		return db.View(func(tx *bolt.Tx) error {
@@ -29,11 +45,7 @@ func loadCache(){
 				if err != nil {
 					panic(err)
 				}
-				ca := cache.NewCache(_ins)
-				if _ins.Name == config.Conf.InsName {
-					FirstCache  = ca
-				}
-				calist = append(calist,ca)
+				calist = append(calist,cache.NewCache(_ins))
 				//NewCache(_ins,InsList)
 				return nil
 			})
@@ -49,18 +61,4 @@ func loadCache(){
 		}
 		loadCache()
 	}
-}
-func main(){
-	loadCache()
-	FirstCache.SetPool()
-	var begin int64
-
-	FirstCache.ReadAll(func (t int64){
-		if t - begin > 604800 {
-			FirstCache.SaveTestLog(t)
-			begin = t
-		}
-	})
-	fmt.Println("read cache over")
-
 }

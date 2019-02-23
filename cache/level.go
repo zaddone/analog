@@ -4,7 +4,7 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/cluster"
 	"math"
-	"sync"
+	//"sync"
 	//"bytes"
 	//"fmt"
 	//"time"
@@ -71,6 +71,8 @@ func NewLevel(tag int,c *Cache,le *level) *level {
 		tag:tag,
 		ca:c,
 		child:le,
+		list:make([]config.Element,0,1000),
+		//post:make([]*postDB,0,100),
 	}
 }
 
@@ -103,69 +105,6 @@ func (self *level) readf( h func(e config.Element) bool){
 	}
 	//self.par
 }
-func (self *level) GetCacheMap(b,e config.Element) (caMap []byte) {
-	if self.ca.Cl == nil {
-		return nil
-	}
-	//lastCa := self.ca.GetLastElement()
-	dif := e.Middle() - b.Middle()
-	dur := b.DateTime()
-	absDif := math.Abs(dif)
-	le := self.ca.Cl.Len()
-	sumlen := le/4+1
-	if le%4 >0 {
-		sumlen++
-	}
-	caMap = make([]byte,sumlen)
-	type tmpdb struct{
-		t byte
-		i int
-	}
-	chanTmp := make(chan *tmpdb,le)
-
-	var w,w_ sync.WaitGroup
-	w_.Add(1)
-	go func(_w_ *sync.WaitGroup){
-		for d :=range chanTmp {
-			//fmt.Println(len(caMap),d.i)
-			caMap[d.i] |= d.t
-		}
-		_w_.Done()
-	}(&w_)
-	w.Add(le)
-	self.ca.Cl.Read(func(i int,_c interface{}){
-		go func(I int,c *Cache,_w *sync.WaitGroup){
-			chanTmp <- &tmpdb{
-			t:func()byte{
-				if c == self.ca {
-					return 0
-				}
-				d := c.FindDur(dur)
-				if d == 0 {
-					return 0
-				}
-				if math.Abs(d) < absDif {
-					return 3
-				}
-				if d>0{
-					return 1
-				}else{
-					return 2
-				}
-			}() << uint(I%8),
-			i:I/8,
-			}
-			_w.Done()
-		}(i*2,_c.(*Cache),&w)
-
-	})
-	w.Wait()
-	close(chanTmp)
-	w_.Wait()
-	return caMap
-
-}
-
 func (self *level) ClearPostAll(){
 	self.ClearPost()
 	if self.par == nil {
@@ -193,7 +132,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	//self.update = false
 	le := len(self.list)
 	if le == 0 {
-		self.list = []config.Element{e}
+		self.list =append(self.list,e)
 		return
 	}
 
@@ -223,7 +162,7 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
 
 	//self.update = true
-	self.ClearPost()
+	//self.ClearPost()
 
 	node := NewbNode(self.list[:maxid]...)
 
@@ -233,27 +172,40 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	}else{
 		if (self.par.par != nil) && (self.ca.pool != nil){
 			ea := cluster.NewSample(append(self.par.list, node))
+			self.ca.pool.Add(ea)
 			self.ca.Cshow[7]++
 			//ea.SetCaMap(self.GetCacheMap())
 			pli := self.par.list[len(self.par.list)-1]
 			if (self.sample!=nil) && (self.sample.GetLastElement() == pli ){
 
 				self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-				go func(_e *cluster.Sample,b,end config.Element){
-					_e.SetCaMap(self.GetCacheMap(b,end))
-					self.ca.pool.UpdateSample(_e)
-				}(self.sample,self.b,self.ca.GetLastElement())
+				if self.sample.Check() {
+					if self.sample.Long {
+						self.ca.Cshow[4]++
+					}else{
+						self.ca.Cshow[5]++
+					}
+				}
+				//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
+				go self.ca.pool.UpdateSample(self.sample)
+				//go func(_e *cluster.Sample,b,end config.Element){
+				//	.SetCaMap(self.GetCacheMap(b,end))
+				//	self.ca.pool.UpdateSample(_e)
+				//}(self.sample,self.b,self.ca.GetLastElement())
+			}else{
+				self.ca.Cshow[6]++
 			}
+
 			self.sample = ea
-			self.ca.pool.Add(ea)
-			if self.ca.Cl != nil {
-				self.ca.Cl.HandMap(
-					ea.CheckMap(),
-					func(ca interface{},t byte){
-						self.post =append(self.post,NewPostDB(ca.(*Cache),t))
-					},
-				)
-			}
+			//self.ca.pool.Add(ea)
+			//if self.ca.Cl != nil {
+			//	self.ca.Cl.HandMap(
+			//		ea.CheckMap(),
+			//		func(ca interface{},t byte){
+			//			self.post =append(self.post,NewPostDB(ca.(*Cache),t))
+			//		},
+			//	)
+			//}
 				//ea := cluster.NewSample(self.par.list, node)
 				//ea.SetCaMap(self.GetCacheMap())
 				//self.ca.pool.Add(ea)
@@ -287,7 +239,12 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	//self.tp = self.list[0]
 	//self.sl = self.list[self.maxid]
 
-	self.list = self.list[maxid:]
+	//self.list = self.list[maxid:]
+
+	li := self.list[maxid:]
+	self.list = make([]config.Element,len(li),len(self.list))
+	copy(self.list,li)
+
 	self.b = self.ca.GetLastElement()
 	self.dis = max
 

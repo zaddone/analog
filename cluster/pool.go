@@ -284,9 +284,78 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 //
 //}
 
+func (self *Pool) add_(e *Sample) bool {
+	Sets:=make([]*Set,0,100)
+	keys:=make([][]byte,0,100)
+	self.findSetDouble(e,e.tag>>1,func(s *Set){
+		keys = append(keys,s.Key())
+		if s.loadSamp(self){
+			Sets = append(Sets,s)
+		}
+	})
+	le := len(Sets)
+	if le == 0 {
+		return false
+	}
+	tmps := make([][]*Sample,le+1)
+	for i:=0;i<le ;i++{
+		tmps[i] = make([]*Sample,0,100)
+	}
+	Sets = append(Sets,e.s)
+	tmps[le] = append(tmps[le],e)
+	var I int
+	var d float64
+	for i,s := range Sets[:le] {
+		for _,_e := range s.samp {
+			I = i
+			_e.diff = s.distance(_e)
+			for _i,_s := range Sets{
+				if i == _i {
+					continue
+				}
+				d = _s.distance(_e)
+				if _e.diff > d {
+					_e.diff = d
+					I = _i
+				}
+			}
+			tmps[I] = append(tmps[I],_e)
+		}
+	}
+	for i,_t := range tmps {
+		if len(_t) >0 {
+			Sets[i].update(_t)
+		}else{
+			Sets[i]=nil
+		}
+	}
+	go self.updatePoolDB([]byte{e.s.tag},
+	func(db *bolt.Bucket)(err error){
+		for _,k:= range keys {
+			err = db.Delete(k)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, _s := range Sets {
+			if _s == nil {
+				continue
+			}
+			err = db.Put(_s.Key(),_s.toByte())
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	return true
+
+}
+
 func (self *Pool) add(e *Sample) bool {
-	Sets:=make([]*Set,0,10)
-	SetsChan := make( chan *Set,10)
+	Sets:=make([]*Set,0,100)
+	SetsChan := make( chan *Set,100)
 	var keys [][]byte
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
@@ -319,8 +388,8 @@ func (self *Pool) add(e *Sample) bool {
 	tmps := make([][]*Sample,le)
 	w_.Add(le)
 	for i:=0;i<le ;i++{
-		tmps[i] = make([]*Sample,0,10)
-		tmpchan[i] = make(chan *Sample,10)
+		tmps[i] = make([]*Sample,0,100)
+		tmpchan[i] = make(chan *Sample,100)
 		go func(_w *sync.WaitGroup,i_ int,tc chan *Sample){
 			for _e := range tc {
 				tmps[i_] = append(tmps[i_],_e)

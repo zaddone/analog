@@ -124,7 +124,7 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	cali.cas= append(cali.cas, c)
 
 	c.ca.SetPool()
-	go c.ca.RunDown()
+	//go c.ca.RunDown()
 	c.Read()
 	//fmt.Println(c.ca.Ins.Name)
 

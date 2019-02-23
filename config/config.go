@@ -7,6 +7,7 @@ import(
 	"path/filepath"
 	"time"
 	//"net/http"
+	"encoding/binary"
 )
 const (
 	Authorization string = "d35019efd0aa18b844697b3f9cce744f-a57d33002bb3b74297cb2e216d348b58"
@@ -49,6 +50,24 @@ type Element interface{
 	Duration() int64
 	Read(func(Element) bool ) bool
 	Readf(func(Element) bool ) bool
+}
+func UnZip(k,v []byte) (int64,float64){
+	v_ := make([]byte,8)
+	copy(v_,v)
+	return int64(binary.BigEndian.Uint64(k)),float64(binary.LittleEndian.Uint64(v_))
+}
+func Zip(e Element) (k,v []byte){
+	k = make([]byte,8)
+	v = make([]byte,8)
+	binary.BigEndian.PutUint64(k,uint64(e.DateTime()))
+	binary.LittleEndian.PutUint64(v,uint64(e.Middle()))
+	for i,_v := range v {
+		if _v == 0 {
+			v = v[:i]
+			break
+		}
+	}
+	return
 }
 func GetTime() time.Time {
 	loc,err := time.LoadLocation("Etc/GMT-3")
