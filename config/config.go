@@ -6,6 +6,7 @@ import(
 	"log"
 	"path/filepath"
 	"time"
+	"math"
 	//"net/http"
 	"encoding/binary"
 )
@@ -51,22 +52,15 @@ type Element interface{
 	Read(func(Element) bool ) bool
 	Readf(func(Element) bool ) bool
 }
-func UnZip(k,v []byte) (int64,float64){
-	v_ := make([]byte,8)
-	copy(v_,v)
-	return int64(binary.BigEndian.Uint64(k)),float64(binary.LittleEndian.Uint64(v_))
+func UnZip(k,v []byte) (int64,float64,float64){
+	return int64(binary.BigEndian.Uint32(k)),float64(binary.BigEndian.Uint32(v[:4])),float64(binary.BigEndian.Uint32(v[4:]))
 }
 func Zip(e Element) (k,v []byte){
-	k = make([]byte,8)
+	k = make([]byte,4)
 	v = make([]byte,8)
-	binary.BigEndian.PutUint64(k,uint64(e.DateTime()))
-	binary.LittleEndian.PutUint64(v,uint64(e.Middle()))
-	for i,_v := range v {
-		if _v == 0 {
-			v = v[:i]
-			break
-		}
-	}
+	binary.BigEndian.PutUint32(k,uint32(e.DateTime()))
+	binary.BigEndian.PutUint32(v,uint32(e.Middle()))
+	binary.BigEndian.PutUint32(v[4:],uint32(math.Abs(e.Diff())))
 	return
 }
 func GetTime() time.Time {
@@ -98,6 +92,7 @@ type Config struct {
 	Debug bool
 	//BEGINTIME string
 	Port string
+	SocketType string
 	InsName string
 	Server bool
 	//Price bool
@@ -190,6 +185,7 @@ func NewConfig()  *Config {
 	if err != nil {
 		c.AccountID = "101-011-2471429-001"
 		c.Port=":8080"
+		c.SocketType="unix"
 		c.Templates = "./templates/*"
 		c.Units = 100
 		c.InsName = "EUR_USD"

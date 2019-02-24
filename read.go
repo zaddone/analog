@@ -8,12 +8,12 @@ import(
 	"github.com/boltdb/bolt"
 	"encoding/json"
 	"fmt"
-	//"time"
+	"time"
 	//"strings"
 
 )
 var (
-	calist []*cache.Cache
+	calist []*oanda.Instrument
 	FirstCache *cache.Cache
 )
 func loadCache(){
@@ -29,11 +29,11 @@ func loadCache(){
 				if err != nil {
 					panic(err)
 				}
-				ca := cache.NewCache(_ins)
+				//ca := cache.NewCache(_ins)
 				if _ins.Name == config.Conf.InsName {
-					FirstCache  = ca
+					FirstCache  = cache.NewCache(_ins)
 				}
-				calist = append(calist,ca)
+				calist = append(calist,_ins)
 				//NewCache(_ins,InsList)
 				return nil
 			})
@@ -54,8 +54,9 @@ func main(){
 	loadCache()
 	FirstCache.SetPool()
 	var begin int64
-
+	fmt.Println(FirstCache.Ins.Name)
 	FirstCache.ReadAll(func (t int64){
+		fmt.Println(time.Unix(t,0))
 		if t - begin > 604800 {
 			FirstCache.SaveTestLog(t)
 			begin = t

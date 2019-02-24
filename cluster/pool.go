@@ -19,18 +19,16 @@ type tmpdb struct {
 type Pool struct {
 	PoolDB *bolt.DB
 	SampDB *bolt.DB
-	TmpSa chan *Sample
+	TmpSa [2]chan *Sample
 }
-func (self *Pool) syncAdd(){
+func (self *Pool) syncAdd(chanSa chan *Sample){
 	for{
-		e := <-self.TmpSa
+		e := <-chanSa
 		e.s = NewSet(e)
-		if e.s == nil {
-			continue
-		}
 		if !self.add(e){
 			e.s.saveDB(self)
 		}
+		e.stop<-true
 	}
 }
 func (self *Pool) ShowPoolNum() (Count int) {
@@ -108,7 +106,7 @@ func NewPool(ins string) (po *Pool) {
 		}
 	}
 	po = &Pool{
-		TmpSa:make(chan *Sample,5),
+		TmpSa:[2]chan *Sample{make(chan *Sample,5),make(chan *Sample,5)},
 	}
 
 	po.SampDB,err = bolt.Open(filepath.Join(p,config.Conf.SampleDbPath),0600,nil)
@@ -119,7 +117,8 @@ func NewPool(ins string) (po *Pool) {
 	if err != nil {
 		panic(err)
 	}
-	go po.syncAdd()
+	go po.syncAdd(po.TmpSa[0])
+	go po.syncAdd(po.TmpSa[1])
 	return po
 
 }
@@ -128,57 +127,6 @@ func (self *Pool) Close(){
 	self.PoolDB.Close()
 	self.SampDB.Close()
 }
-//func (self *Pool) CheckSet(e *Sample) (m []byte) {
-
-	//var minS,minSf *Set
-	//var w sync.WaitGroup
-	//w.Add(2)
-	//go func(){
-	//	var diff,minDiff float64
-	//	self.findSetDouble(e,e.tag>>1,func(s *Set){
-	//		diff = s.distance(e)
-	//		if diff < minDiff || minDiff == 0 {
-	//			minDiff = diff
-	//			minS = s
-	//		}
-	//	})
-	//	w.Done()
-	//}()
-	//go func(){
-	//	var diff,minDiff float64
-	//	self.findSetDouble(e,(e.tag>>1)^1,func(s *Set){
-	//		diff = s.distanceF(e)
-	//		if diff < minDiff || minDiff == 0 {
-	//			minDiff = diff
-	//			minSf = s
-	//		}
-	//	})
-	//	w.Done()
-	//}()
-	//w.Wait()
-	//if (minS == nil) || (minSf == nil)  {
-	//	return nil
-	//}
-
-
-	//m = minS.List[0].CaMap
-	//for _,_m := range minS.List[1:]{
-	//	for i,n := range m{
-	//		m[i] = _m.CaMap[i]|n
-	//	}
-	//}
-	//for _,_m := range minSf.List{
-	//	for i,n := range m{
-	//		m[i] = (^_m.CaMap[i])|n
-	//	}
-	//}
-	//return
-
-	//if len(minS.List) < config.MinSam {
-	//	return nil
-	//}
-
-//}
 
 func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 
@@ -238,51 +186,6 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 	})
 
 }
-//func (self *Pool) Check(e *Sample) bool {
-//
-//	return false
-//	//return minS.CheckCountMax(n)
-//}
-
-//func (self *Pool) find(e *Sample) *Set {
-//	var Sets []*Set
-//	self.findSetDouble(e,e.tag>>1,func(s *Set){
-//		if s.loadSamp(self){
-//			Sets = append(Sets,s)
-//		}
-//	})
-//	le := len(Sets)
-//	if le == 0 {
-//		return nil
-//	}
-//
-//	ns := NewSet(e)
-//	Sets = append(Sets,ns)
-//	var I int
-//	for i,s := range Sets[:le] {
-//		for _,_e := range s.samp {
-//			I = i
-//			_e.diff = s.distance(_e)
-//			for _i,_s := range Sets{
-//				if i == _i {
-//					continue
-//				}
-//				d := _s.distance(_e)
-//				if _e.diff > d {
-//					_e.diff = d
-//					I = _i
-//				}
-//			}
-//			if I == le{
-//				ns.samp = append(ns.samp,_e)
-//				ns.count[int(_e.tag &^ 2)] ++
-//			}
-//		}
-//	}
-//	return ns
-//	//return nil
-//
-//}
 
 func (self *Pool) add_(e *Sample) bool {
 	Sets:=make([]*Set,0,100)
@@ -329,7 +232,7 @@ func (self *Pool) add_(e *Sample) bool {
 			Sets[i]=nil
 		}
 	}
-	go self.updatePoolDB([]byte{e.s.tag},
+	self.updatePoolDB([]byte{e.s.tag},
 	func(db *bolt.Bucket)(err error){
 		for _,k:= range keys {
 			err = db.Delete(k)
@@ -337,7 +240,6 @@ func (self *Pool) add_(e *Sample) bool {
 				return err
 			}
 		}
-
 		for _, _s := range Sets {
 			if _s == nil {
 				continue
@@ -506,5 +408,5 @@ func (sp *Pool) Add(e *Sample) {
 			panic(err)
 		}
 	}(e)
-	sp.TmpSa <- e
+	sp.TmpSa[int(e.tag>>1)] <- e
 }

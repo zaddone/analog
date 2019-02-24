@@ -39,13 +39,14 @@ type CandlesMin struct{
 
 func NewCandlesMin(k,db []byte) (c *CandlesMin) {
 	c = &CandlesMin{}
-	err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(c)
-	if err != nil {
-		fmt.Println(string(db))
-		//return nil
-		panic(err)
-	}
-	c.time = int64(binary.BigEndian.Uint64(k))
+	c.time,c.Val,c.Dif = config.UnZip(k,db)
+	//err := gob.NewDecoder(bytes.NewBuffer(db)).Decode(c)
+	//if err != nil {
+	//	fmt.Println(string(db))
+	//	//return nil
+	//	panic(err)
+	//}
+	//c.time = int64(binary.BigEndian.Uint64(k))
 	//fmt.Println(c)
 	return c
 }

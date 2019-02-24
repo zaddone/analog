@@ -34,6 +34,7 @@ type Sample struct {
 	tag byte
 	//i int
 	s *Set
+	stop chan bool
 
 }
 func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
@@ -53,6 +54,7 @@ func NewSample(eles []config.Element) (sa *Sample) {
 		eleList:eles,
 		Y:make([]float64,0,2000),
 		X:make([]int64,0,2000),
+		stop:make(chan bool,1),
 		//diff : eles[len(eles)-1].Diff(),
 	}
 	//}
@@ -93,23 +95,19 @@ func (self *Sample) GetSet() *Set {
 }
 
 func (self *Sample) Check() bool {
-	if self.s == nil || len(self.s.samp) < 3{
-		return false
-	}
+	<-self.stop
 	var l,s int
-	for _,sa := range self.s.samp {
+	for _,sa := range self.s.samp[1:] {
 		if (sa == self){
+			panic(0)
 			continue
 		}
-		if (sa.CaMap == nil) ||
-		(sa.tag != self.tag) {
+		if (sa.tag != self.tag) || !sa.Long {
 			s++
 			continue
 		}
 		if sa.Long {
 			l++
-		}else{
-			s++
 		}
 
 	}

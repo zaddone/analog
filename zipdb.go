@@ -6,7 +6,7 @@ import(
 	"github.com/zaddone/analog/cache"
 	"encoding/json"
 	"github.com/boltdb/bolt"
-	"fmt"
+	//"fmt"
 	//"time"
 )
 var (
@@ -15,19 +15,20 @@ var (
 
 func main(){
 	loadCache()
-	run := make(chan bool,4)
+	//run := make(chan bool,3)
 	for _,ca := range calist{
-		go func(){
-			run<-true
-			fmt.Println(ca.Ins.Name)
+		//go func(){
+		//	run<-true
+			//fmt.Println(ca.Ins.Name)
 			ca.SaveMinDB()
-			<-run
-		}()
+			ca.Close()
+		//	<-run
+		//}()
 	}
 
 	//t := time.Tick(time.Second * 3600)
 	//for e := range t {
-	//	log.Println(e)
+	//	fmt.Println(e)
 	//}
 
 }
