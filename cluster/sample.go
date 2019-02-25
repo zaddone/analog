@@ -90,28 +90,45 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	return
 
 }
+func (self *Sample) GetTag() byte {
+	return self.tag
+}
 func (self *Sample) GetSet() *Set {
 	return self.s
 }
 
-func (self *Sample) Check() bool {
+func (self *Sample) Count() (int) {
+
 	<-self.stop
-	var l,s int
+	return len(self.s.samp)
+}
+
+func (self *Sample) Check() (bool) {
+	//<-self.stop
+	//var l,s int
+
 	for _,sa := range self.s.samp[1:] {
 		if (sa == self){
 			panic(0)
 			continue
 		}
-		if (sa.tag != self.tag) || !sa.Long {
-			s++
-			continue
-		}
-		if sa.Long {
-			l++
-		}
+		self.s.count[int(sa.tag &^ 2)]++
+		//if (sa.tag != self.tag) {
+		//	s++
+		//}else{
+		//	l++
+		//}
+		//if (sa.tag != self.tag) || !sa.Long {
+		//	s++
+		//	continue
+		//}
+		//if sa.Long {
+		//	l++
+		//}
 
 	}
-	return (l > s)
+	n := int(self.tag &^ 2)
+	return (self.s.count[n] > self.s.count[n^1])
 }
 func (self *Sample) CheckMap() (m []byte) {
 	if self.s == nil || len(self.s.samp) < 3 {

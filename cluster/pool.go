@@ -17,8 +17,8 @@ type tmpdb struct {
 }
 
 type Pool struct {
-	//PoolDB *bolt.DB
-	//SampDB *bolt.DB
+	PoolDB *bolt.DB
+	SampDB *bolt.DB
 	path string
 	//samp string
 	TmpSa [2]chan *Sample
@@ -49,23 +49,25 @@ func (self *Pool) ShowPoolNum() (Count int) {
 	return
 }
 
-func (self *Pool) openSampDB() *bolt.DB{
+func (self *Pool) openSampDB() {
 	sampDB,err := bolt.Open(filepath.Join(self.path,config.Conf.SampleDbPath),0600,nil)
 	if err != nil {
 		panic(err)
 	}
-	return sampDB
+	self.SampDB = sampDB
+	return
 }
-func (self *Pool) openPoolDB() *bolt.DB{
+func (self *Pool) openPoolDB(){
 	PoolDB,err := bolt.Open(filepath.Join(self.path,config.Conf.PoolDbPath),0600,nil)
 	if err != nil {
 		panic(err)
 	}
-	return PoolDB
+	self.PoolDB = PoolDB
+	return
 }
 func (self *Pool) viewPoolDB(bucket []byte,h func(*bolt.Bucket)error){
-	pooldb := self.openPoolDB()
-	err := pooldb.View(func(tx *bolt.Tx)error{
+	//pooldb := self.openPoolDB()
+	err :=self.PoolDB.View(func(tx *bolt.Tx)error{
 		db := tx.Bucket(bucket)
 		if db == nil {
 			return nil
@@ -75,11 +77,11 @@ func (self *Pool) viewPoolDB(bucket []byte,h func(*bolt.Bucket)error){
 	if err != nil {
 		panic(err)
 	}
-	pooldb.Close()
+	//pooldb.Close()
 }
 func (self *Pool) updatePoolDB(bucket []byte,h func(*bolt.Bucket)error){
-	pooldb := self.openPoolDB()
-	err := pooldb.Update(func(tx *bolt.Tx)error{
+	//pooldb := self.openPoolDB()
+	err := self.PoolDB.Update(func(tx *bolt.Tx)error{
 		db, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
 			return err
@@ -90,11 +92,11 @@ func (self *Pool) updatePoolDB(bucket []byte,h func(*bolt.Bucket)error){
 	if err != nil {
 		panic(err)
 	}
-	pooldb.Close()
+	//pooldb.Close()
 }
 func (self *Pool) GetLastTime() (t int64) {
-	SampDB := self.openSampDB()
-	err := SampDB.View(func(_t *bolt.Tx)error{
+	//SampDB := self.openSampDB()
+	err := self.SampDB.View(func(_t *bolt.Tx)error{
 		db := _t.Bucket([]byte{9})
 		if db == nil {
 			return nil
@@ -109,7 +111,7 @@ func (self *Pool) GetLastTime() (t int64) {
 	if err != nil {
 		panic(err)
 	}
-	SampDB.Close()
+	//SampDB.Close()
 	return
 }
 
@@ -127,6 +129,8 @@ func NewPool(ins string) (po *Pool) {
 			panic(err)
 		}
 	}
+	po.openSampDB()
+	po.openPoolDB()
 	//po.SampDB,err = bolt.Open(filepath.Join(p,config.Conf.SampleDbPath),0600,nil)
 	//if err != nil {
 	//	panic(err)
@@ -202,10 +206,9 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 		w.Wait()
 		return nil
 	})
-
 }
 
-func (self *Pool) add_(e *Sample) bool {
+func (self *Pool) add(e *Sample) bool {
 	Sets:=make([]*Set,0,100)
 	keys:=make([][]byte,0,100)
 	self.findSetDouble(e,e.tag>>1,func(s *Set){
@@ -273,7 +276,7 @@ func (self *Pool) add_(e *Sample) bool {
 
 }
 
-func (self *Pool) add(e *Sample) bool {
+func (self *Pool) add_(e *Sample) bool {
 	Sets:=make([]*Set,0,100)
 	SetsChan := make( chan *Set,100)
 	var keys [][]byte
@@ -387,8 +390,8 @@ func (self *Pool) add(e *Sample) bool {
 }
 
 func (self *Pool) UpdateSample(e *Sample) {
-	sampDB := self.openSampDB()
-	err := sampDB.Batch(func(tx *bolt.Tx)error{
+	//sampDB := self.openSampDB()
+	err := self.SampDB.Batch(func(tx *bolt.Tx)error{
 		db, err := tx.CreateBucketIfNotExists([]byte{9})
 		if err != nil {
 			return err
@@ -398,7 +401,7 @@ func (self *Pool) UpdateSample(e *Sample) {
 	if err != nil {
 		panic(err)
 	}
-	sampDB.Close()
+	//sampDB.Close()
 }
 func (sp *Pool) Add(e *Sample) {
 
@@ -409,8 +412,8 @@ func (sp *Pool) Add(e *Sample) {
 	go func(_e *Sample){
 		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
 		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
-		db := sp.openSampDB()
-		err := db.Batch(func(tx *bolt.Tx)error{
+		//db := sp.openSampDB()
+		err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{9})
 			if err != nil {
 				return err
@@ -428,7 +431,7 @@ func (sp *Pool) Add(e *Sample) {
 		if err != nil {
 			panic(err)
 		}
-		db.Close()
+		//db.Close()
 	}(e)
 	sp.TmpSa[int(e.tag>>1)] <- e
 }

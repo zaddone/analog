@@ -173,21 +173,33 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		if (self.par.par != nil) && (self.ca.pool != nil){
 			ea := cluster.NewSample(append(self.par.list, node))
 			self.ca.pool.Add(ea)
+			self.ca.Cshow[int(ea.GetTag() &^ 2)]++
 			self.ca.Cshow[7]++
 			//ea.SetCaMap(self.GetCacheMap())
 			pli := self.par.list[len(self.par.list)-1]
-			if (self.sample!=nil) && (self.sample.GetLastElement() == pli ){
-
-				self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-				if self.sample.Check() {
-					if self.sample.Long {
-						self.ca.Cshow[4]++
-					}else{
-						self.ca.Cshow[5]++
-					}
+			if (self.sample != nil) &&
+			(self.sample.GetLastElement() == pli ){
+				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+				self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
+				if self.sample.Long {
+					self.ca.Cshow[3]++
+				}else{
+					self.ca.Cshow[2]++
 				}
+				go func (e_ *cluster.Sample){
+					if (e_.Count()>1) {
+						if e_.Check() {
+							self.ca.Cshow[5]++
+						}else{
+							self.ca.Cshow[4]++
+						}
+					}
+					//}
+					//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
+					self.ca.pool.UpdateSample(e_)
+				}(self.sample)
+
 				//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
-				go self.ca.pool.UpdateSample(self.sample)
 				//go func(_e *cluster.Sample,b,end config.Element){
 				//	.SetCaMap(self.GetCacheMap(b,end))
 				//	self.ca.pool.UpdateSample(_e)

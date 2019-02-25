@@ -56,6 +56,7 @@ type Cache struct {
 	//db *bolt.DB
 	dbPath string
 	lastDateTime int64
+	//m sync.Mutex
 
 }
 
@@ -76,12 +77,12 @@ func (self *Cache) syncAddPrice(){
 }
 
 func (self *Cache) ShowPoolNum() int {
-	if self.Cl != nil {
-		return self.Cl.Show()
-	}else{
-		return 0
-	}
-	//return self.pool.ShowPoolNum()
+	//if self.Cl != nil {
+	//	return self.Cl.Show()
+	//}else{
+	//	return 0
+	//}
+	return self.pool.ShowPoolNum()
 }
 
 func NewCache(ins *oanda.Instrument) (c *Cache) {
