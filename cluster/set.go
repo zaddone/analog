@@ -139,7 +139,8 @@ func (self *Set) load(k,v []byte) {
 func (self *Set) loadSamp(sp *Pool) bool {
 
 	self.samp = make([]*Sample,0,len(self.List))
-	err := sp.SampDB.View(func(t *bolt.Tx)error{
+	samp := sp.openSampDB()
+	err := samp.View(func(t *bolt.Tx)error{
 		b := t.Bucket([]byte{9})
 		if b == nil {
 			return nil
@@ -156,6 +157,7 @@ func (self *Set) loadSamp(sp *Pool) bool {
 	if err != nil {
 		panic(err)
 	}
+	samp.Close()
 	//sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
 	//	for _,k := range self.List {
 	//		v := db.Get(k.Key)

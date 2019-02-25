@@ -29,7 +29,7 @@ const(
 )
 
 var (
-	Bucket  = []byte{1}
+	Bucket  = []byte{0}
 )
 
 type CacheList interface{
@@ -53,7 +53,8 @@ type Cache struct {
 	Cl CacheList
 	pool *cluster.Pool
 	tmpSample *sync.Map
-	db *bolt.DB
+	//db *bolt.DB
+	dbPath string
 	lastDateTime int64
 
 }
@@ -90,26 +91,33 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 		tmpSample:new(sync.Map),
 		CandlesChan:make(chan *CandlesMin,Count),
 		EleChan:make(chan config.Element,Count),
+		dbPath:filepath.Join(config.Conf.DbPath),
 		//stop:make(chan bool),
 	}
 	c.part = NewLevel(0,c,nil)
-	_,err := os.Stat(config.Conf.DbPath)
+	//c.dbPath =filepath.Join(config.Conf.DbPath)
+	_,err := os.Stat(c.dbPath)
 	if err != nil {
-		if err = os.MkdirAll(config.Conf.DbPath,0700);err != nil {
+		if err = os.MkdirAll(c.dbPath,0700);err != nil {
 			panic(err)
 		}
 	}
-	if c.db,err = bolt.Open(
-		filepath.Join(
-			config.Conf.DbPath,
-			c.Ins.Name),
-			0600,
-			nil);err != nil {
-		panic(err)
-	}
+	c.dbPath = filepath.Join(c.dbPath,c.Ins.Name)
+	//_,err = os.Stat(c.dbPath)
+	//if err != nil {
+	//	panic(err)
+	//}
 	fmt.Println(c.Ins.Name,"New")
 	return c
 
+}
+func (self *Cache) openDB() *bolt.DB {
+
+	db,err := bolt.Open(self.dbPath,0600,nil);
+	if err != nil {
+		panic(err)
+	}
+	return db
 }
 
 //func (self *Cache) FindDur(dur int64) float64 {
@@ -157,8 +165,9 @@ func (self *Cache) saveToDB(can *CandlesMin){
 	}
 	//t := time.Now().Unix()
 	var c *CandlesMin
-	err := self.db.Batch(func(t *bolt.Tx)error{
-		b,er := t.CreateBucketIfNotExists([]byte{1})
+	db := self.openDB()
+	err := db.Batch(func(t *bolt.Tx)error{
+		b,er := t.CreateBucketIfNotExists(Bucket)
 		if er != nil {
 			return er
 		}
@@ -185,13 +194,15 @@ func (self *Cache) saveToDB(can *CandlesMin){
 	if err != nil {
 		panic(err)
 	}
+	db.Close()
 	//log.Println(time.Now().Unix() - t,time.Unix(c.DateTime(),0))
 
 }
 
 func (self *Cache) FindLastTime() (lt int64) {
-	err := self.db.View(func(t *bolt.Tx) error{
-		b := t.Bucket([]byte{1})
+	db := self.openDB()
+	err := db.View(func(t *bolt.Tx) error{
+		b := t.Bucket(Bucket)
 		if b == nil {
 			return nil
 		}
@@ -206,6 +217,7 @@ func (self *Cache) FindLastTime() (lt int64) {
 	if err != nil {
 		panic(err)
 	}
+	db.Close()
 	fmt.Println("e",time.Unix(lt,0),self.Ins.Name)
 	return
 }
@@ -303,8 +315,9 @@ func (self *Cache) tmpRead(tmp chan config.Element){
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,uint64(self.lastDateTime))
 	var k,v []byte
-	self.db.View(func(t *bolt.Tx)error{
-		b := t.Bucket([]byte{1})
+	db := self.openDB()
+	db.View(func(t *bolt.Tx)error{
+		b := t.Bucket(Bucket)
 		if b == nil {
 			return nil
 		}
@@ -321,6 +334,7 @@ func (self *Cache) tmpRead(tmp chan config.Element){
 		return nil
 
 	})
+	db.Close()
 	return
 
 }
@@ -334,14 +348,14 @@ func (self *Cache) RunDown(){
 	self.downCan(nil)
 	//self.Close()
 }
-func (self *Cache) Close(){
-	if self.pool != nil {
-		self.pool.Close()
-	}
-	self.db.Close()
-	//self.mindb.Close()
-
-}
+//func (self *Cache) Close(){
+//	if self.pool != nil {
+//		self.pool.Close()
+//	}
+//	//self.db.Close()
+//	//self.mindb.Close()
+//
+//}
 func (self *Cache) SaveTestLog(from int64){
 
 	p := filepath.Join(config.Conf.ClusterPath,self.Ins.Name)
@@ -394,9 +408,13 @@ func (self *Cache) ReadAll(hand func(t int64)){
 	go self.SyncAddPrice()
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,uint64(self.GetLastTime()))
+
+	//fmt.Println(time.Unix(self.GetLastTime(),0))
 	var k,v []byte
-	self.db.View(func(t *bolt.Tx)error{
-		b := t.Bucket([]byte{1})
+	db := self.openDB()
+	//fmt.Println(db.Path())
+	err := db.View(func(t *bolt.Tx)error{
+		b := t.Bucket(Bucket)
 		if b == nil {
 			return nil
 		}
@@ -409,6 +427,10 @@ func (self *Cache) ReadAll(hand func(t int64)){
 		return nil
 
 	})
+	if err != nil {
+		panic(err)
+	}
+	db.Close()
 
 }
 
