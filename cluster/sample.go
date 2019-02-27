@@ -30,16 +30,20 @@ type Sample struct {
 	key []byte
 	//Same []byte
 	endEle config.Element
-	eleList []config.Element
+	//eleList []config.Element
+	eleLast config.Element
 	tag byte
 	//i int
 	s *Set
+	setMap map[*Set]bool
 	stop chan bool
+	check bool
 
 }
 func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
 	sa = &Sample{}
 	sa.load(db,k)
+	sa.setMap = make(map[*Set]bool)
 	return
 }
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -51,10 +55,12 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	//	}
 	//}else{
 	sa = &Sample{
-		eleList:eles,
+		//eleList:eles,
+		eleLast:eles[len(eles)-1],
 		Y:make([]float64,0,2000),
 		X:make([]int64,0,2000),
 		stop:make(chan bool,1),
+		setMap:make(map[*Set]bool),
 		//diff : eles[len(eles)-1].Diff(),
 	}
 	//}
@@ -101,18 +107,18 @@ func (self *Sample) Count() (int) {
 
 	<-self.stop
 	return len(self.s.samp)
+
 }
 
 func (self *Sample) Check() (bool) {
 	//<-self.stop
 	//var l,s int
-
-	for _,sa := range self.s.samp[1:] {
+	for _,sa := range self.s.samp {
 		if (sa == self){
-			panic(0)
+			//panic(0)
 			continue
 		}
-		self.s.count[int(sa.tag &^ 2)]++
+		self.s.count[int(sa.tag >> 1)]++
 		//if (sa.tag != self.tag) {
 		//	s++
 		//}else{
@@ -127,7 +133,7 @@ func (self *Sample) Check() (bool) {
 		//}
 
 	}
-	n := int(self.tag &^ 2)
+	n := int(self.tag >> 1)
 	return (self.s.count[n] > self.s.count[n^1])
 }
 func (self *Sample) CheckMap() (m []byte) {
@@ -161,7 +167,8 @@ func (self *Sample) CheckMap() (m []byte) {
 	return m
 }
 func (self *Sample) GetLastElement() config.Element{
-	return self.eleList[len(self.eleList)-1]
+	return self.eleLast
+	//return self.eleList[len(self.eleList)-1]
 }
 func (self *Sample) SetDiff(diff float64) {
 	self.diff = diff
@@ -228,18 +235,18 @@ func (self *Sample) load(db []byte,k *saEasy) {
 
 }
 
-func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
+func (self *Sample) GetDB_(dur int64,f func(x ,y float64)) (durdiff int64) {
 
 	durdiff = self.Duration() - dur
 	xMin := self.xMin + durdiff
 	if durdiff <=0 {
 		//xMin:= self.XMax - dur
 		for i,x := range self.X {
-			f(float64(x - xMin),self.YMax - self.Y[i])
+			f(float64(x - xMin),self.Y[i] - self.YMin)
 		}
 		return -durdiff
 	}
-	var yMax float64
+	var yMin float64
 	Le := len(self.X)
 	var X []int64 = make([]int64,0,Le)
 	var Y []float64 = make([]float64,0,Le)
@@ -247,15 +254,15 @@ func (self *Sample) GetDBF(dur int64,f func(x ,y float64)) (durdiff int64) {
 	for i,y := range self.Y{
 		x = self.X[i]
 		if x >= xMin {
-			if (y > yMax) {
-				yMax = y
+			if (y < yMin) || (yMin == 0) {
+				yMin = y
 			}
 			X = append(X,x)
 			Y = append(Y,y)
 		}
 	}
 	for i,y := range Y {
-		f(float64(X[i]-xMin),yMax - y)
+		f(float64(X[i]-xMin),y - yMin)
 	}
 	return
 }

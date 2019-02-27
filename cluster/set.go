@@ -23,6 +23,8 @@ type Set struct {
 	key []byte
 
 	samp []*Sample
+	up bool
+	num int
 }
 func NewSetLoad(k,v []byte) (S *Set) {
 	S = &Set{}
@@ -58,6 +60,7 @@ func NewSet(sa *Sample) (S *Set) {
 	if len(S.Sn.Wei) == 0 {
 		panic("w1")
 	}
+	sa.setMap[S] = true
 	return
 
 }
@@ -75,23 +78,23 @@ func (self *Set) FindSameKey(k []byte) bool {
 	return false
 }
 
-func (self *Set)saveDB(sp *Pool){
-
-	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
-		return db.Put(self.Key(),self.toByte())
-	})
-	//sp.PoolCount++
-
-}
-
-func (self *Set) deleteDB(sp *Pool) {
-
-	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
-		return db.Delete(self.Key())
-	})
-	//sp.PoolCount--
-
-}
+//func (self *Set)saveDB(sp *Pool){
+//
+//	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
+//		return db.Put(self.Key(),self.toByte())
+//	})
+//	//sp.PoolCount++
+//
+//}
+//
+//func (self *Set) deleteDB(sp *Pool) {
+//
+//	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
+//		return db.Delete(self.Key())
+//	})
+//	//sp.PoolCount--
+//
+//}
 func (S *Set) Key() ([]byte){
 
 	if S.key == nil {
@@ -119,6 +122,7 @@ func (S *Set) clear(){
 	S.key = nil
 	S.List = nil
 	S.samp = nil
+	S.up = false
 }
 
 func (self *Set) load(k,v []byte) {
@@ -150,7 +154,9 @@ func (self *Set) loadSamp(sp *Pool) bool {
 			if len(v) == 0 {
 				continue
 			}
-			self.samp=append(self.samp,NewSampleDB(v,k))
+			e := NewSampleDB(v,k)
+			e.setMap[self] = true
+			self.samp=append(self.samp,e)
 		}
 		return nil
 	})
@@ -245,6 +251,7 @@ func (S *Set) update(sa []*Sample) {
 			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}
+		_s.diff = 0
 		sum +=_s.Duration()
 		df = _s.YMax - _s.YMin
 		if S.Sn.LengthY < df {
@@ -258,6 +265,7 @@ func (S *Set) update(sa []*Sample) {
 	//S.Sn.LengthX = float64(sum/ float64(len(sa))
 	S.Sn.LengthX = float64(sum)
 	for _,s := range S.samp {
+		s.setMap[S] = true
 		s.GetDB(sum,func(x,y float64){
 			X = append(X,x/S.Sn.LengthX)
 			Y = append(Y,y/S.Sn.LengthY)
@@ -268,23 +276,24 @@ func (S *Set) update(sa []*Sample) {
 		fmt.Println(X,Y)
 		panic("w")
 	}
+	S.num++
 
 }
 
-func (self *Set) distanceF(e *Sample) float64 {
-	var longDis,l float64
-	//ld := float64(e.GetDBF(int64(self.Sn.LengthX),func(x,y float64){
-	//	longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
-	//	l++
-	//}))
-	//ld /=5
-	//return (longDis+ld)/(l+ld)
-	e.GetDBF(int64(self.Sn.LengthX),func(x,y float64){
-		longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
-		l++
-	})
-	return longDis/l
-}
+//func (self *Set) distanceF(e *Sample) float64 {
+//	var longDis,l float64
+//	//ld := float64(e.GetDBF(int64(self.Sn.LengthX),func(x,y float64){
+//	//	longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
+//	//	l++
+//	//}))
+//	//ld /=5
+//	//return (longDis+ld)/(l+ld)
+//	e.GetDBF(int64(self.Sn.LengthX),func(x,y float64){
+//		longDis += math.Pow(self.Sn.GetWeiY(x/self.Sn.LengthX)-y/self.Sn.LengthY,2)
+//		l++
+//	})
+//	return longDis/l
+//}
 func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,l float64

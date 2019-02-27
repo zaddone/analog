@@ -391,7 +391,7 @@ func (self *Cache) SaveTestLog(from int64){
 	f.WriteString(str)
 	f.Close()
 	//self.Cshow[7] = 0
-	//self.Cshow = [8]float64{0,0,0,0,0,0,0,0}
+	self.Cshow = [8]float64{self.Cshow[0],self.Cshow[1],0,0,0,0,self.Cshow[6],self.Cshow[7]}
 
 }
 
@@ -406,7 +406,7 @@ func (self *Cache) GetLastTime() int64 {
 
 func (self *Cache) ReadAll(hand func(t int64)){
 
-	go self.SyncAddPrice()
+	go self.syncAddPrice()
 	be := make([]byte,8)
 	binary.BigEndian.PutUint64(be,uint64(self.GetLastTime()))
 

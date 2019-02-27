@@ -181,23 +181,25 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 			(self.sample.GetLastElement() == pli ){
 				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
 				self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
-				if self.sample.Long {
-					self.ca.Cshow[3]++
-				}else{
-					self.ca.Cshow[2]++
-				}
+				//if self.sample.Long {
+				//	self.ca.Cshow[3]++
+				//}else{
+				//	self.ca.Cshow[2]++
+				//}
 				go func (e_ *cluster.Sample){
-					if (e_.Count()>1) {
-						if e_.Check() {
-							self.ca.Cshow[5]++
-						}else{
-							self.ca.Cshow[4]++
-						}
+					if e_.Count()>1{
+					//if self.ca.pool.Check(e_) {
+					if  e_.Check() {
+						self.ca.Cshow[5]++
+					}else{
+						self.ca.Cshow[4]++
+					}
 					}
 					//}
 					//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
 					self.ca.pool.UpdateSample(e_)
 				}(self.sample)
+
 
 				//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
 				//go func(_e *cluster.Sample,b,end config.Element){
