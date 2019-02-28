@@ -159,19 +159,22 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	(absMax < sumdif/float64(le)) {
 		return
 	}
-
-
 	//self.update = true
 	//self.ClearPost()
-
 	node := NewbNode(self.list[:maxid]...)
-
 	if self.par == nil {
 		tag := self.tag+1
 		self.par = NewLevel(tag,self.ca,self)
 	}else{
 		if (self.par.par != nil) && (self.ca.pool != nil){
 			ea := cluster.NewSample(append(self.par.list, node))
+			go func(_e *cluster.Sample){
+				if self.ca.pool.Check(_e){
+					self.ca.Cshow[5]++
+				}else{
+					self.ca.Cshow[4]++
+				}
+			}(ea)
 			self.ca.pool.Add(ea)
 			self.ca.Cshow[int(ea.GetTag() &^ 2)]++
 			self.ca.Cshow[7]++
@@ -186,21 +189,22 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 				//}else{
 				//	self.ca.Cshow[2]++
 				//}
-				go func (e_ *cluster.Sample){
-					if e_.Count()>1{
-					//if self.ca.pool.Check(e_) {
-					if  e_.Check() {
-						self.ca.Cshow[5]++
-					}else{
-						self.ca.Cshow[4]++
-					}
-					}
-					//}
-					//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
-					self.ca.pool.UpdateSample(e_)
-				}(self.sample)
 
+				//go func (e_ *cluster.Sample){
+				//	if e_.Count()>1{
+				//	//if self.ca.pool.Check(e_) {
+				//		if e_.Check() {
+				//			self.ca.Cshow[5]++
+				//		}else{
+				//			self.ca.Cshow[4]++
+				//		}
+				//	}
+				//	//}
+				//	//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
+				//	self.ca.pool.UpdateSample(e_)
+				//}(self.sample)
 
+				go self.ca.pool.UpdateSample(self.sample)
 				//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
 				//go func(_e *cluster.Sample,b,end config.Element){
 				//	.SetCaMap(self.GetCacheMap(b,end))

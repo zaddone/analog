@@ -24,7 +24,7 @@ type Set struct {
 
 	samp []*Sample
 	up bool
-	num int
+	//num int
 }
 func NewSetLoad(k,v []byte) (S *Set) {
 	S = &Set{}
@@ -60,7 +60,8 @@ func NewSet(sa *Sample) (S *Set) {
 	if len(S.Sn.Wei) == 0 {
 		panic("w1")
 	}
-	sa.setMap[S] = true
+	sa.setMap.Store(S,true)
+	//sa.setMap[S] = true
 	return
 
 }
@@ -135,9 +136,9 @@ func (self *Set) load(k,v []byte) {
 	copy(self.key,k)
 	//self.key = k
 	self.tag = self.key[16]>>1
-	//for _,l := range self.List{
-	//	self.count[int(l.Key[8]) &^ 2]++
-	//}
+	for _,l := range self.List{
+		self.count[int(l.Key[8]>>1)]++
+	}
 }
 
 func (self *Set) loadSamp(sp *Pool) bool {
@@ -155,7 +156,8 @@ func (self *Set) loadSamp(sp *Pool) bool {
 				continue
 			}
 			e := NewSampleDB(v,k)
-			e.setMap[self] = true
+			//e.setMap[self] = true
+			e.setMap.Store(self,true)
 			self.samp=append(self.samp,e)
 		}
 		return nil
@@ -251,21 +253,23 @@ func (S *Set) update(sa []*Sample) {
 			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}
+		_s.setMap.Store(S,true)
 		_s.diff = 0
 		sum +=_s.Duration()
-		df = _s.YMax - _s.YMin
-		if S.Sn.LengthY < df {
-			S.Sn.LengthY = df
-		}
+		df += _s.YMax - _s.YMin
+		//if S.Sn.LengthY < df {
+		//	S.Sn.LengthY = df
+		//}
 	}
 	X := make([]float64,0,int(sum/5))
 	Y := make([]float64,0,int(sum/5))
-
-	sum /= int64(len(sa))
+	le := len(sa)
+	S.Sn.LengthY = df/float64(le)
+	sum /= int64(le)
 	//S.Sn.LengthX = float64(sum/ float64(len(sa))
 	S.Sn.LengthX = float64(sum)
 	for _,s := range S.samp {
-		s.setMap[S] = true
+		//s.setMap[S] = true
 		s.GetDB(sum,func(x,y float64){
 			X = append(X,x/S.Sn.LengthX)
 			Y = append(Y,y/S.Sn.LengthY)
@@ -276,7 +280,7 @@ func (S *Set) update(sa []*Sample) {
 		fmt.Println(X,Y)
 		panic("w")
 	}
-	S.num++
+	//S.num++
 
 }
 
@@ -294,6 +298,7 @@ func (S *Set) update(sa []*Sample) {
 //	})
 //	return longDis/l
 //}
+
 func (self *Set) distance(e *Sample) float64 {
 
 	var longDis,l float64

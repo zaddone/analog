@@ -6,6 +6,7 @@ import(
 	"encoding/binary"
 	"bytes"
 	"encoding/gob"
+	"sync"
 )
 
 type Sample struct {
@@ -33,9 +34,10 @@ type Sample struct {
 	//eleList []config.Element
 	eleLast config.Element
 	tag byte
-	//i int
+
 	s *Set
-	setMap map[*Set]bool
+	setMap *sync.Map
+
 	stop chan bool
 	check bool
 
@@ -43,7 +45,7 @@ type Sample struct {
 func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
 	sa = &Sample{}
 	sa.load(db,k)
-	sa.setMap = make(map[*Set]bool)
+	sa.setMap = new(sync.Map)// make(map[*Set]bool)
 	return
 }
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -60,7 +62,8 @@ func NewSample(eles []config.Element) (sa *Sample) {
 		Y:make([]float64,0,2000),
 		X:make([]int64,0,2000),
 		stop:make(chan bool,1),
-		setMap:make(map[*Set]bool),
+		//setMap:make(map[*Set]bool),
+		setMap:new(sync.Map),
 		//diff : eles[len(eles)-1].Diff(),
 	}
 	//}

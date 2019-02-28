@@ -211,123 +211,43 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 		return nil
 	})
 }
+func (self *Pool) Check(e *Sample) bool {
 
-func (self *Pool) add_2(e *Sample) bool {
-
-	SetsChan := make( chan *Set,100)
-	Sets:=make([]*Set,0,100)
-	keys:=make([][]byte,0,100)
-	var w,w_ sync.WaitGroup
-	w_.Add(1)
 	var diff,minDiff float64
 	var minSet *Set
-	go func () {
-		for s := range SetsChan {
-			Sets = append(Sets,s)
+	SetsChan := make(chan *Set,100)
+	var w sync.WaitGroup
+	w.Add(1)
+	go func(){
+		for s := range SetsChan{
 			diff = s.distance(e)
-			if (diff < minDiff) || (minDiff == 0) {
-				minSet = s
+			if minDiff > diff || minDiff == 0 {
 				minDiff = diff
+				minSet = s
 			}
 		}
-		w_.Done()
+		w.Done()
 	}()
 	//self.findSetDouble(e,e.tag>>1,func(s *Set){
 	self.findSetDouble(e,0,func(s *Set){
-		keys = append(keys,s.Key())
-		w.Add(1)
-		go func(s_ *Set){
-			if s_.loadSamp(self){
-				SetsChan<-s_
-			}
-			w.Done()
-		}(s)
+		SetsChan <- s
 	})
-	w.Wait()
 	close(SetsChan)
-	w_.Wait()
+	w.Wait()
 	if minSet == nil {
 		return false
 	}
-	if minSet.checkDar(minDiff){
-		e.diff = minDiff
-		e.s = minSet
-	}else{
-		e.s = NewSet(e)
-		Sets = append(Sets,e.s)
-	}
-	le := len(Sets)
-	tmps := make([][]*Sample,le)
-	for i:=0;i<le ;i++{
-		tmps[i] = make([]*Sample,0,100)
-	}
+	n := e.tag>>1
+	return minSet.count[n] > minSet.count[n^1]
 
-	var I int
-	var d float64
-	for i,s := range Sets {
-		for _,_e := range s.samp {
-
-			I = i
-			if _e == e {
-				tmps[I] = append(tmps[I],_e)
-				continue
-			}
-			if _e.diff == 0 {
-				_e.diff = s.distance(_e)
-			}
-			for _i,_s := range Sets{
-				if i == _i {
-					continue
-				}
-				d = _s.distance(_e)
-				if _e.diff > d {
-					_e.diff = d
-					I = _i
-				}
-			}
-			tmps[I] = append(tmps[I],_e)
-		}
-	}
-	for i,_t := range tmps {
-		if len(_t) >0 {
-			Sets[i].update(_t)
-		}else{
-			Sets[i]=nil
-		}
-	}
-	//self.updatePoolDB([]byte{e.s.tag},
-	self.updatePoolDB([]byte{0},
-	func(db *bolt.Bucket)(err error){
-		for _,k:= range keys {
-			err = db.Delete(k)
-			if err != nil {
-				return err
-			}
-		}
-		for _, _s := range Sets {
-			if _s == nil {
-				continue
-			}
-			err = db.Put(_s.Key(),_s.toByte())
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	return true
-
-}
-
-func (self *Pool) Check(e *Sample) bool {
-	return e.check
+	//return e.check
 }
 
 func (self *Pool) add(e *Sample) bool {
 	Sets:=make([]*Set,0,100)
 	SetsMap := new(sync.Map)
 	keys:=make([][]byte,0,100)
-	//self.findSetDouble(e,e.tag>>1,func(s *Set){
+	//self.findSetDouble(e,e.s.tag,func(s *Set){
 	self.findSetDouble(e,0,func(s *Set){
 		if s.loadSamp(self){
 			Sets = append(Sets,s)
@@ -358,7 +278,7 @@ func (self *Pool) add(e *Sample) bool {
 					_e.diff = s.distance(_e)
 				}
 				for _i,_s := range Sets{
-					if i == _i {
+					if _,ok := _e.setMap.Load(_s);ok {
 						continue
 					}
 					d = _s.distance(_e)
@@ -368,11 +288,6 @@ func (self *Pool) add(e *Sample) bool {
 					}
 				}
 				if I != i {
-
-					if _e.setMap[Sets[I]] {
-						tmps[i] = append(tmps[i],_e)
-						continue
-					}
 					up = true
 					s.up = true
 
@@ -425,70 +340,89 @@ func (self *Pool) add(e *Sample) bool {
 	return true
 }
 func (self *Pool) add_s(e *Sample) bool {
-	Sets:=make([]*Set,0,100)
+	Sets:= make([]*Set,0,100)
 	SetsMap := new(sync.Map)
-	keys:=make([][]byte,0,100)
-	var w sync.WaitGroup
+	KeysMap := new(sync.Map)
+	var w,w_ sync.WaitGroup
+	//self.findSetDouble(e,e.s.tag,func(s *Set){
 	self.findSetDouble(e,0,func(s *Set){
-		if s.loadSamp(self){
-			Sets = append(Sets,s)
-			SetsMap.Store(s,true)
-			//SetsMap[s] = true
-		}else{
-			keys = append(keys,s.Key())
-		}
+		w.Add(1)
+		go func(s_ *Set){
+			if s_.loadSamp(self){
+				SetsMap.Store(s_,true)
+			}else{
+				KeysMap.Store(string(s_.Key()),true)
+			}
+			w.Done()
+		}(s)
+	})
+	w.Wait()
+	SetsMap.Range(func(k,v interface{})bool{
+		Sets = append(Sets,k.(*Set))
+		return true
 	})
 	le := len(Sets)
 	if le == 0 {
 		return false
 	}
-
 	Sets = append(Sets,e.s)
-	var I int
-	var d float64
 	up := false
 	var Sets__ []*Set
 	for{
-		Sets__ = make([]*Set,0,len(Sets))
-		tmps := make([][]*Sample,len(Sets))
+		le = len(Sets)
+		Sets__ = make([]*Set,0,le)
+		tmps := make([][]*Sample,le)
+		tmpsChan := make([]chan *Sample,le)
+		w_.Add(le)
 		for i ,_ := range tmps {
 			tmps[i] = make([]*Sample,0,100)
+			tmpsChan[i] = make(chan *Sample,100)
+			go func(i_ int){
+				for e := range tmpsChan[i_]{
+					tmps[i_] = append(tmps[i_],e)
+				}
+				w_.Done()
+			}(i)
 		}
-		for i,s := range Sets {
-			for _,_e := range s.samp {
-				I = i
-				if _e.diff == 0 {
-					_e.diff = s.distance(_e)
-				}
-				for _i,_s := range Sets{
-					if i == _i {
-						continue
+		for i_,s := range Sets {
+			w.Add(len(s.samp))
+			for _,_e_ := range s.samp {
+				go func(i int,_e *Sample){
+					I := i
+					if _e.diff == 0 {
+						_e.diff = Sets[i].distance(_e)
 					}
-					d = _s.distance(_e)
-					if _e.diff > d {
-						_e.diff = d
-						I = _i
+					for _i,_s := range Sets{
+						if _,ok := _e.setMap.Load(_s);ok {
+							continue
+						}
+						d := _s.distance(_e)
+						if _e.diff > d {
+							_e.diff = d
+							I = _i
+						}
 					}
-				}
-				if I != i {
-					if _e.setMap[Sets[I]] {
-						tmps[i] = append(tmps[i],_e)
-						continue
+					if I != i {
+						up = true
+						s.up = true
+						Sets[I].up = true
 					}
-					up = true
-					s.up = true
-					Sets[I].up = true
-				}
-				tmps[I] = append(tmps[I],_e)
+					tmpsChan[I]<-_e
+					w.Done()
+				}(i_,_e_)
 			}
 		}
+		w.Wait()
+		for _,cn := range tmpsChan {
+			close(cn)
+		}
+		w_.Wait()
 		if !up{
 			break
 		}
 
 		le := len(Sets)
 		chanSets := make(chan *Set,le)
-		chanDel := make(chan []byte,le)
 		w.Add(le)
 		for i,s := range Sets {
 			go func(s_ *Set, tmp []*Sample){
@@ -499,7 +433,7 @@ func (self *Pool) add_s(e *Sample) bool {
 				}
 				if _,ok := SetsMap.Load(s_);ok {
 					SetsMap.Delete(s_)
-					chanDel<-s_.Key()
+					KeysMap.Store(string(s_.Key()),true)
 				}
 				if len(tmp) == 0 {
 					return
@@ -510,18 +444,11 @@ func (self *Pool) add_s(e *Sample) bool {
 		}
 		w.Wait()
 		close(chanSets)
-		close(chanDel)
-		for del := range chanDel {
-			keys = append(keys,del)
-		}
 		for s := range chanSets {
 			Sets__ = append(Sets__,s)
 		}
 
 		Sets = Sets__
-		//if len(Sets) < 2 {
-		//	break
-		//}
 		up = false
 
 	}
@@ -529,16 +456,14 @@ func (self *Pool) add_s(e *Sample) bool {
 	//self.updatePoolDB([]byte{e.s.tag},
 	self.updatePoolDB([]byte{0},
 	func(db *bolt.Bucket)(err error){
-		for _,k:= range keys {
-			err = db.Delete(k)
+		KeysMap.Range(func(k,v interface{})bool{
+			err = db.Delete([]byte(k.(string)))
 			if err != nil {
-				return err
+				panic(err)
 			}
-		}
+			return true
+		})
 		for _, _s := range Sets {
-			//if len(_s.samp) == 0 {
-			//	continue
-			//}
 			if _,ok := SetsMap.Load(_s);!ok {
 				err = db.Put(_s.Key(),_s.toByte())
 				if err != nil {
