@@ -79,14 +79,14 @@ func (self *Set) FindSameKey(k []byte) bool {
 	return false
 }
 
-//func (self *Set)saveDB(sp *Pool){
-//
-//	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
-//		return db.Put(self.Key(),self.toByte())
-//	})
-//	//sp.PoolCount++
-//
-//}
+func (self *Set)saveDB(sp *Pool){
+
+	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
+		return db.Put(self.Key(),self.toByte())
+	})
+	//sp.PoolCount++
+
+}
 //
 //func (self *Set) deleteDB(sp *Pool) {
 //
@@ -244,6 +244,7 @@ func (S *Set) update(sa []*Sample) {
 	S.clear()
 	S.samp = sa
 	S.List = make([]*saEasy,len(S.samp))
+	//fmt.Println("update",len(S.samp))
 	var sum int64
 	var df float64
 	for _i,_s := range S.samp {

@@ -8,7 +8,7 @@ import(
 	"github.com/boltdb/bolt"
 	"encoding/json"
 	"fmt"
-	"time"
+	//"time"
 	//"strings"
 
 )
@@ -56,7 +56,7 @@ func main(){
 	var begin int64
 	//fmt.Println(FirstCache.Ins.Name)
 	FirstCache.ReadAll(func (t int64){
-		fmt.Println(time.Unix(t,0))
+		//fmt.Println(time.Unix(t,0))
 		if t - begin > 604800 {
 			FirstCache.SaveTestLog(t)
 			begin = t
