@@ -2,7 +2,7 @@ package cluster
 import(
 	"github.com/boltdb/bolt"
 	"github.com/zaddone/analog/config"
-	"time"
+	//"time"
 	//"fmt"
 	"path/filepath"
 	"encoding/binary"
@@ -242,8 +242,7 @@ func (self *Pool) Check(e *Sample) bool {
 	if minSet == nil {
 		return false
 	}
-	n := e.tag>>1
-	return minSet.count[n] > minSet.count[n^1]
+	return minSet.count[(e.tag>>1)^1] == 0
 
 	//return e.check
 }
@@ -436,7 +435,7 @@ func (self *Pool) add_s(e *Sample) bool {
 		tmps := make([][]*Sample,le)
 		up := false
 		for i ,_ := range tmps {
-			tmps[i] = make([]*Sample,0,100)
+			tmps[i] = make([]*Sample,0,len(Sets[i].samp))
 		}
 		tmpsChan := make(chan *tmpDB,le)
 		w_.Add(1)
@@ -525,6 +524,7 @@ func (self *Pool) add_s(e *Sample) bool {
 		})
 		for _, _s := range Sets {
 			if _,ok := SetsMap.Load(_s);!ok {
+				_s.SortDB(self)
 				err = db.Put(_s.Key(),_s.toByte())
 				if err != nil {
 					return err
@@ -559,22 +559,22 @@ func (sp *Pool) Add(e *Sample) {
 	//	return
 	//}
 	go func(_e *Sample){
-		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
-		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
+		//DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
+		//ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
 		//db := sp.openSampDB()
 		err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{9})
 			if err != nil {
 				return err
 			}
-			c := db.Cursor()
-			for k,_ := c.First();k!=nil;k,_ = c.Next() {
-				if binary.BigEndian.Uint64(k[:8])<ke {
-					db.Delete(k)
-				}else{
-					break
-				}
-			}
+			//c := db.Cursor()
+			//for k,_ := c.First();k!=nil;k,_ = c.Next() {
+			//	if binary.BigEndian.Uint64(k[:8])<ke {
+			//		db.Delete(k)
+			//	}else{
+			//		break
+			//	}
+			//}
 			return db.Put(_e.KeyName(),_e.toByte())
 		})
 		if err != nil {

@@ -6,9 +6,11 @@ import(
 	"encoding/gob"
 	"bytes"
 	"github.com/boltdb/bolt"
+	"github.com/zaddone/analog/config"
 )
 type saEasy struct {
 	Key []byte
+	t uint64
 	//CaMap []byte
 	//Dis float64
 	//DurDis float64
@@ -114,6 +116,46 @@ func (self *Set) toByte() []byte {
 		panic(err)
 	}
 	return b.Bytes()
+
+}
+
+func (self *Set) SortDB(sp *Pool){
+
+	le := len(self.List)
+	Sli := make([]*saEasy,0,le)
+	var sort func(int)
+	sort = func(i int){
+		if i == 0 {
+			return
+		}
+		I:= i-1
+		if Sli[I].t < Sli[i].t {
+			return
+		}
+		Sli[I],Sli[i] = Sli[i],Sli[I]
+		sort(I)
+	}
+	for _i,l := range self.List {
+		l.t = binary.BigEndian.Uint64(l.Key[:8])
+		Sli = append(Sli,l)
+		sort(_i)
+	}
+	self.List = Sli
+	if le < config.Conf.MinSam {
+		return
+	}
+	go func(k []byte){
+		if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
+			db, err := tx.CreateBucketIfNotExists([]byte{9})
+			if err != nil {
+				return err
+			}
+			return db.Delete(k)
+		});err != nil {
+			panic(err)
+		}
+	}(self.List[0].Key)
+	self.List = self.List[1:]
 
 }
 
