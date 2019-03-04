@@ -2,6 +2,7 @@ package cluster
 import(
 	"fmt"
 	"math"
+	"sync"
 	"encoding/binary"
 	"encoding/gob"
 	"bytes"
@@ -14,6 +15,20 @@ type saEasy struct {
 	//CaMap []byte
 	//Dis float64
 	//DurDis float64
+}
+
+type Dar struct {
+	sum,psum,n,val float64
+}
+
+func (self *Dar) update (diff float64) {
+	self.sum += diff
+	self.n ++
+	self.psum += diff*diff
+}
+func (self *Dar)getVal() float64 {
+	self.val =math.Sqrt( (self.psum/(self.n*self.n)) - ((self.sum*self.sum) / self.n))
+	return self.val
 }
 type Set struct {
 
@@ -28,6 +43,7 @@ type Set struct {
 	samp []*Sample
 	up bool
 	tmp float64
+	dar *Dar
 	//num int
 }
 func NewSetLoad(k,v []byte) (S *Set) {
@@ -143,21 +159,29 @@ func (self *Set) SortDB(sp *Pool){
 		sort(_i)
 	}
 	self.List = Sli
-	if le < config.Conf.MinSam {
+	n :=le - config.Conf.MinSam
+	if n <= 0 {
 		return
 	}
-	go func(k []byte){
+	go func(k []*saEasy){
 		if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{9})
 			if err != nil {
 				return err
 			}
-			return db.Delete(k)
+			for _,k_ := range k {
+				err = db.Delete(k_.Key)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+			//return db.Delete(k)
 		});err != nil {
 			panic(err)
 		}
-	}(self.List[0].Key)
-	self.List = self.List[1:]
+	}(self.List[:n])
+	self.List = self.List[n:]
 
 }
 
@@ -168,6 +192,7 @@ func (S *Set) clear(){
 	S.List = nil
 	S.samp = nil
 	S.up = false
+	S.dar = nil
 }
 
 func (self *Set) load(k,v []byte) {
@@ -243,45 +268,64 @@ func (self *Set) sort(){
 	}
 
 }
+
+func (self *Set) SetDisAll(){
+	var w sync.WaitGroup
+	w.Add(len(self.samp))
+	for _,_e := range self.samp {
+		go func(e *Sample){
+			e.diff  = self.distance(e)
+			w.Done()
+		}(_e)
+	}
+	w.Wait()
+}
+func (self *Set) GetDar() float64 {
+
+	if self.dar == nil {
+		self.dar = &Dar{}
+		for _,s := range self.samp {
+			if s.diff == 0 {
+				s.diff  = self.distance(s)
+			}
+			self.dar.psum += s.diff*s.diff
+			self.dar.sum  += s.diff
+		}
+		self.dar.n = float64(len(self.samp))
+		self.dar.val = self.dar.psum/(self.dar.n*self.dar.n)-(self.dar.sum*self.dar.sum)/self.dar.n
+	}
+	return self.dar.val
+}
+
 func (self *Set) checkDar(d float64) bool {
 
-	var val,sum,psum,n float64
-	for _,s := range self.samp {
-		if s.diff == 0 {
-			s.diff  = self.distance(s)
-		}
-		psum += s.diff*s.diff
-		sum  += s.diff
-	}
-	n = float64(len(self.samp))
-	val = psum/(n*n)-(sum*sum)/n
+	val := self.GetDar()
+	sum := self.dar.sum + d
+	psum := self.dar.psum + (d * d)
 
-	sum += d
-	psum += d * d
-
-	n++
+	n := self.dar.n+1
 	return val > psum/(n*n)-(sum*sum)/n
 
 }
 
-func (S *Set) findLong() (sa *Sample,Max float64) {
-
-	if len(S.samp) == 0 {
-		return
-	}
-	//var id int
-	for _,s := range S.samp {
-		s.diff  = S.distance(s)
-		if s.diff > Max {
-			Max = s.diff
-			sa = s
-			//id = i
-		}
-	}
-	//S.samp = append(S.samp[:id],S.samp[id+1:]...)
-	return
-
-}
+//func (S *Set) findLong() (sa *Sample,Max float64) {
+//
+//	if len(S.samp) == 0 {
+//		return
+//	}
+//	//var id int
+//	for _,s := range S.samp {
+//		s.diff  = S.distance(s)
+//		if s.diff > Max {
+//			Max = s.diff
+//			sa = s
+//			//id = i
+//		}
+//	}
+//	//S.samp = append(S.samp[:id],S.samp[id+1:]...)
+//	return
+//
+//}
 
 func (S *Set) update(sa []*Sample) {
 

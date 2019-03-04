@@ -9,6 +9,7 @@ import(
 	"os"
 	"bytes"
 	"sync"
+	//"math"
 )
 
 type tmpdb struct {
@@ -435,6 +436,7 @@ func (self *Pool) add_s(e *Sample) {
 	var minSet *Set
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
+	var darVal Dar
 	go func(){
 		for s := range chanSets {
 			if (s.tmp < minDiff) || (minDiff ==0) {
@@ -442,6 +444,10 @@ func (self *Pool) add_s(e *Sample) {
 				minSet = s
 			}
 			Sets = append(Sets,s)
+			for _,_sa := range s.samp{
+				darVal.update(_sa.diff)
+			}
+			//darVal += math.Sqrt(s.GetDar())
 		}
 		w_.Done()
 	}()
@@ -452,6 +458,8 @@ func (self *Pool) add_s(e *Sample) {
 			if s_.loadSamp(self){
 				SetsMap.Store(s_,true)
 				s_.tmp = s_.distance(e)
+				s_.SetDisAll()
+				//s_.GetDar()
 				chanSets <- s_
 			}else{
 				KeysMap.Store(string(s_.Key()),true)
@@ -469,8 +477,10 @@ func (self *Pool) add_s(e *Sample) {
 		e.s.saveDB(self)
 		return
 	}
-
-	if len(minSet.samp) < config.Conf.MinSam/2 && minSet.checkDar(minDiff)  {
+	//if minSet.checkDar(minDiff) &&
+	//if len(minSet.samp) < config.Conf.MinSam/2 && minSet.checkDar(minDiff)  {
+	if (minSet.GetDar() < darVal.getVal()) &&
+	minSet.checkDar(minDiff) {
 		KeysMap.Store(string(minSet.Key()),true)
 		SetsMap.Delete(minSet)
 		minSet.samp = append(minSet.samp,e)
@@ -495,8 +505,6 @@ func (self *Pool) add_s(e *Sample) {
 		up := false
 		le = len(Sets)
 		//fmt.Println(le)
-
-		Sets__ = make([]*Set,0,le)
 		tmps := make([][]*Sample,le)
 		for i:=0; i<le; i++ {
 		//for i ,_ := range tmps {
@@ -546,6 +554,7 @@ func (self *Pool) add_s(e *Sample) {
 		if !up{
 			break
 		}
+		Sets__ = make([]*Set,0,le)
 		for i,s := range Sets {
 			if !s.up{
 				Sets__ = append(Sets__,s)
@@ -583,7 +592,7 @@ func (self *Pool) add_s(e *Sample) {
 		})
 		for _, _s := range Sets {
 			if _,ok := SetsMap.Load(_s);!ok {
-				_s.SortDB(self)
+				//_s.SortDB(self)
 				err = db.Put(_s.Key(),_s.toByte())
 				if err != nil {
 					return err
