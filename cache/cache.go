@@ -76,7 +76,7 @@ func (self *Cache) syncAddPrice(){
 	}
 }
 
-func (self *Cache) ShowPoolNum() int {
+func (self *Cache) ShowPoolNum() [3]int {
 	//if self.Cl != nil {
 	//	return self.Cl.Show()
 	//}else{

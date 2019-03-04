@@ -67,7 +67,6 @@ func NewSample(eles []config.Element) (sa *Sample) {
 		//diff : eles[len(eles)-1].Diff(),
 	}
 	//}
-
 	//sa = &Sample{)
 	var y float64
 	for _,ele := range eles {

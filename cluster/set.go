@@ -16,16 +16,18 @@ type saEasy struct {
 	//DurDis float64
 }
 type Set struct {
+
 	Sn *Snap
 	List  []*saEasy
 
 	tag byte
 
 	count [3]int
-	key []byte
+	_key []byte
 
 	samp []*Sample
 	up bool
+	tmp float64
 	//num int
 }
 func NewSetLoad(k,v []byte) (S *Set) {
@@ -81,7 +83,7 @@ func (self *Set) FindSameKey(k []byte) bool {
 	return false
 }
 
-func (self *Set)saveDB(sp *Pool){
+func (self *Set) saveDB (sp *Pool){
 
 	sp.updatePoolDB([]byte{self.tag},func(db *bolt.Bucket)error{
 		return db.Put(self.Key(),self.toByte())
@@ -100,12 +102,12 @@ func (self *Set)saveDB(sp *Pool){
 //}
 func (S *Set) Key() ([]byte){
 
-	if S.key == nil {
-		S.key = make([]byte,8)
-		binary.BigEndian.PutUint64(S.key,uint64(S.Sn.LengthX))
-		S.key =  append(S.key,S.List[0].Key...)
+	if S._key == nil {
+		S._key = make([]byte,8,20)
+		binary.BigEndian.PutUint64(S._key,uint64(S.Sn.LengthX))
+		S._key =  append(S._key,S.List[0].Key...)
 	}
-	return S.key
+	return S._key
 
 }
 func (self *Set) toByte() []byte {
@@ -162,7 +164,7 @@ func (self *Set) SortDB(sp *Pool){
 func (S *Set) clear(){
 	S.Sn = &Snap{}
 	S.count = [3]int{0,0,0}
-	S.key = nil
+	S._key = nil
 	S.List = nil
 	S.samp = nil
 	S.up = false
@@ -174,10 +176,10 @@ func (self *Set) load(k,v []byte) {
 	if err != nil {
 		panic(err)
 	}
-	self.key = make([]byte,len(k))
-	copy(self.key,k)
+	self._key = make([]byte,len(k))
+	copy(self._key,k)
 	//self.key = k
-	self.tag = self.key[16]>>1
+	self.tag = self._key[16]>>1
 	for _,l := range self.List{
 		self.count[int(l.Key[8]>>1)]++
 	}
