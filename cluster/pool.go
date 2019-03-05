@@ -9,7 +9,7 @@ import(
 	"os"
 	"bytes"
 	"sync"
-	//"math"
+	"math"
 )
 
 type tmpdb struct {
@@ -423,6 +423,7 @@ func (self *Pool) add(e *Sample) bool {
 		return nil
 	})
 	return true
+
 }
 
 func (self *Pool) add_s(e *Sample) {
@@ -479,7 +480,7 @@ func (self *Pool) add_s(e *Sample) {
 	}
 	//if minSet.checkDar(minDiff) &&
 	//if len(minSet.samp) < config.Conf.MinSam/2 && minSet.checkDar(minDiff)  {
-	if (minSet.GetDar() < darVal.getVal()) &&
+	if (math.Sqrt(minSet.GetDar()) < darVal.getVal()) &&
 	minSet.checkDar(minDiff) {
 		KeysMap.Store(string(minSet.Key()),true)
 		SetsMap.Delete(minSet)
