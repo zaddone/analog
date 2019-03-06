@@ -203,9 +203,12 @@ func (self *Sample) SetCaMap( m []byte){
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
-		self.key = make([]byte,9)
+		self.key = make([]byte,9,17)
 		binary.BigEndian.PutUint64(self.key,uint64(self.xMax))
+		k := make([]byte,8)
+		binary.BigEndian.PutUint64(k,uint64(self.xMin))
 		self.key[8] = self.tag
+		self.key = append(self.key,k...)
 		//if self.caMap != nil{
 		//	self.key = append(self.key,self.caMap...)
 		//}

@@ -222,6 +222,7 @@ func (self *Set) loadSamp(sp *Pool) bool {
 		for _,k := range self.List {
 			v := b.Get(k.Key)
 			if len(v) == 0 {
+				//panic(9)
 				continue
 			}
 			e := NewSampleDB(v,k)
