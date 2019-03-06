@@ -48,6 +48,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample){
 		e.stop<-true
 	}
 }
+
 func (self *Pool) ShowPoolNum() (count [3]int) {
 
 	err := self.SampDB.View(func(t *bolt.Tx)error{
@@ -535,10 +536,12 @@ func (self *Pool) add_s_1(e *Sample) {
 		NewSet(e).saveDB(self)
 		return
 	}
-	if minSet.checkDar(minDiff) && (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
+	//if minSet.checkDar(minDiff) && (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
+	//fmt.Println(math.Sqrt(minSet.GetDar()) , darVal.getVal())
+	if (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
 		minSet.samp = append(minSet.samp,e)
 		minSet.update(minSet.samp)
-
+		//fmt.Println("add",time.Unix(int64(binary.BigEndian.Uint64(e.KeyName()[:8])),0))
 	}else{
 		Sets = append(Sets,NewSet(e))
 	}

@@ -27,7 +27,9 @@ func (self *Dar) update (diff float64) {
 	self.psum += diff*diff
 }
 func (self *Dar)getVal() float64 {
-	self.val =math.Sqrt( (self.psum/(self.n*self.n)) - ((self.sum*self.sum) / self.n))
+	if self.val == 0 {
+		self.val = math.Sqrt( (self.psum/self.n) - ((self.sum*self.sum) / (self.n*self.n)) )
+	}
 	return self.val
 }
 type Set struct {
@@ -281,6 +283,7 @@ func (self *Set) SetDisAll(){
 	}
 	w.Wait()
 }
+
 func (self *Set) GetDar() float64 {
 
 	if self.dar == nil {
@@ -289,13 +292,15 @@ func (self *Set) GetDar() float64 {
 			if s.diff == 0 {
 				s.diff  = self.distance(s)
 			}
-			self.dar.psum += s.diff*s.diff
-			self.dar.sum  += s.diff
+			self.dar.update(s.diff)
+			//self.dar.psum += s.diff*s.diff
+			//self.dar.sum  += s.diff
 		}
-		self.dar.n = float64(len(self.samp))
-		self.dar.val = self.dar.psum/(self.dar.n*self.dar.n)-(self.dar.sum*self.dar.sum)/self.dar.n
+		//self.dar.n = float64(len(self.samp))
+		//self.dar.getVal()
+		//self.dar.val = self.dar.psum/(self.dar.n*self.dar.n)-(self.dar.sum*self.dar.sum)/self.dar.n
 	}
-	return self.dar.val
+	return self.dar.getVal()
 }
 
 func (self *Set) checkDar(d float64) bool {
