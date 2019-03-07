@@ -205,6 +205,61 @@ func (self *Pool) findSetDouble(e *Sample,tag byte,h func(*Set)){
 	dur := uint64(e.Duration())
 	key := make([]byte,8+len(e.KeyName()))
 	binary.BigEndian.PutUint64(key,dur)
+
+	self.viewPoolDB([]byte{tag},
+	func(db *bolt.Bucket)error{
+		c := db.Cursor()
+		k,v := c.Seek(key)
+		if k == nil {
+			k,v := c.Prev()
+			if k == nil {
+				return nil
+			}
+			ke := k[:8]
+			h(NewSetLoad(k,v))
+			for k,v = c.Prev();k != nil;k,v = c.Prev() {
+				if !bytes.Equal(ke,k[:8]){
+					break
+				}
+				h(NewSetLoad(k,v))
+			}
+			return nil
+		}
+		h(NewSetLoad(k,v))
+		ke := k[:8]
+		for k,v = c.Next();k != nil;k,v = c.Next() {
+			if !bytes.Equal(ke,k[:8]) {
+				if bytes.Equal(ke,key[:8]){
+					ke = k[:8]
+				}else{
+					break
+				}
+			}
+			h(NewSetLoad(k,v))
+		}
+
+		c.Seek(key)
+		k,v = c.Prev()
+		if k == nil {
+			return nil
+		}
+		ke = k[:8]
+		for k,v := c.Prev();k != nil;k,v = c.Prev() {
+			if !bytes.Equal(ke,k[:8]) {
+				break
+			}
+			h(NewSetLoad(k,v))
+		}
+		return nil
+
+	})
+
+}
+func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
+
+	dur := uint64(e.Duration())
+	key := make([]byte,8+len(e.KeyName()))
+	binary.BigEndian.PutUint64(key,dur)
 	//var ke []byte
 	self.viewPoolDB([]byte{tag},
 	func(db *bolt.Bucket)error{
@@ -509,6 +564,7 @@ func (self *Pool) add_check(e *Sample) {
 }
 
 func (self *Pool) add_s_1(e *Sample) {
+
 	Sets:= make([]*Set,0,100)
 	chanSets:= make(chan *Set,100)
 	KeysMap := new(sync.Map)
@@ -535,6 +591,7 @@ func (self *Pool) add_s_1(e *Sample) {
 	self.findSetDouble(e,e.tag>>1,func(s *Set){
 		w.Add(1)
 		go func(s_ *Set){
+			s_.SortDB(self)
 			if s_.loadSamp(self){
 				s_.tmp = s_.distance(e)
 				//s_.SetDisAll()
