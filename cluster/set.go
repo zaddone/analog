@@ -27,9 +27,9 @@ func (self *Dar) update (diff float64) {
 	self.psum += diff*diff
 }
 func (self *Dar)getVal() float64 {
-	if self.val == 0 {
-		self.val = math.Sqrt( (self.psum/self.n) - ((self.sum*self.sum) / (self.n*self.n)) )
-	}
+	//if self.val == 0 {
+	self.val = (self.psum/self.n) - ((self.sum*self.sum) / (self.n*self.n))
+	//}
 	return self.val
 }
 type Set struct {
@@ -83,6 +83,7 @@ func NewSet(sa *Sample) (S *Set) {
 		panic("w1")
 	}
 	sa.setMap.Store(S,true)
+	sa.init = true
 	//sa.setMap[S] = true
 	return
 
@@ -286,31 +287,37 @@ func (self *Set) SetDisAll(){
 
 func (self *Set) GetDar() float64 {
 
-	if self.dar == nil {
-		self.dar = &Dar{}
-		for _,s := range self.samp {
-			if s.diff == 0 {
-				s.diff  = self.distance(s)
-			}
-			self.dar.update(s.diff)
-			//self.dar.psum += s.diff*s.diff
-			//self.dar.sum  += s.diff
+	//if self.dar == nil {
+	self.dar = &Dar{}
+	for _,e := range self.samp {
+		if e.diff == 0 {
+			e.diff  = self.distance(e)
 		}
+		//fmt.Println("diff", s.diff)
+		self.dar.update(e.diff)
+		//self.dar.psum += s.diff*s.diff
+		//self.dar.sum  += s.diff
+	}
 		//self.dar.n = float64(len(self.samp))
 		//self.dar.getVal()
 		//self.dar.val = self.dar.psum/(self.dar.n*self.dar.n)-(self.dar.sum*self.dar.sum)/self.dar.n
-	}
+	//}
 	return self.dar.getVal()
 }
 
 func (self *Set) checkDar(d float64) bool {
-
 	val := self.GetDar()
+	if val == 0 {
+		return true
+	}
 	sum := self.dar.sum + d
 	psum := self.dar.psum + (d * d)
 
 	n := self.dar.n+1
-	return val > psum/(n*n)-(sum*sum)/n
+
+	v1 := (psum/n) - ((sum*sum)/(n*n))
+	//fmt.Println(val,v1)
+	return val > v1
 
 }
 

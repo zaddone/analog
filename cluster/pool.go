@@ -9,7 +9,7 @@ import(
 	"os"
 	"bytes"
 	"sync"
-	"math"
+	//"math"
 )
 
 type tmpdb struct {
@@ -27,12 +27,15 @@ type Pool struct {
 
 	//runChan chan bool
 	//runChan := make(chan bool,7)
+	setCount float64
+	samCount float64
 }
 
 func (self *Pool) syncAdd(chanSa chan *Sample){
 	for{
 		e := <-chanSa
 		//e.s = NewSet(e)
+		self.samCount++
 		if e.check {
 			self.add_check(e)
 		}else{
@@ -51,19 +54,20 @@ func (self *Pool) syncAdd(chanSa chan *Sample){
 
 func (self *Pool) ShowPoolNum() (count [3]int) {
 
-	err := self.SampDB.View(func(t *bolt.Tx)error{
-		db := t.Bucket([]byte{9})
-		if db == nil {
-			return nil
-		}
-		return db.ForEach(func(k,v []byte)error{
-			count[2]++
-			return nil
-		})
-	})
-	if err != nil {
-		panic(err)
-	}
+	count[2] = int(self.setCount)
+	//err := self.SampDB.View(func(t *bolt.Tx)error{
+	//	db := t.Bucket([]byte{9})
+	//	if db == nil {
+	//		return nil
+	//	}
+	//	return db.ForEach(func(k,v []byte)error{
+	//		count[2]++
+	//		return nil
+	//	})
+	//})
+	//if err != nil {
+	//	panic(err)
+	//}
 
 	self.viewPoolDB([]byte{0},func(db *bolt.Bucket)error{
 		return db.ForEach(func(k,v []byte)error{
@@ -307,20 +311,27 @@ func Dressing(Sets []*Set) []*Set {
 		up = false
 		le = len(Sets)
 		tmps = make([][]*Sample,le)
+		Sets__ = make([]*Set,0,le)
 		for i:=0; i<le; i++ {
 			tmps[i] = make([]*Sample,0,len(Sets[i].samp)*2)
 		}
 		for i,s := range Sets {
 			for _,_e := range s.samp {
 				I := i
+				if _e.init {
+					tmps[I] = append(tmps[I],_e)
+					continue
+				}
 				if _e.diff == 0 {
 					_e.diff = s.distance(_e)
 				}
-				G:
 				for _i,_s := range Sets{
-					if _,ok := _e.setMap.Load(_s);ok {
-						continue G
+					if i == _i {
+						continue
 					}
+					//if _,ok := _e.setMap.Load(_s);ok {
+					//	continue G
+					//}
 					d := _s.distance(_e)
 					if _e.diff > d {
 						_e.diff = d
@@ -330,6 +341,10 @@ func Dressing(Sets []*Set) []*Set {
 				if I != i {
 					up = true
 					s.up = true
+					if _,ok := _e.setMap.Load(Sets[I]); ok {
+						Sets__ = append(Sets__,NewSet(_e))
+						continue
+					}
 					Sets[I].up = true
 				}
 				tmps[I] = append(tmps[I],_e)
@@ -338,7 +353,6 @@ func Dressing(Sets []*Set) []*Set {
 		if !up {
 			break
 		}
-		Sets__ = make([]*Set,0,le)
 		for i,s := range Sets {
 			if len(tmps[i]) == 0 {
 				continue
@@ -498,9 +512,11 @@ func (self *Pool) add_s_1(e *Sample) {
 	Sets:= make([]*Set,0,100)
 	chanSets:= make(chan *Set,100)
 	KeysMap := new(sync.Map)
+
 	var minDiff float64
 	var minSet *Set
-	var darVal Dar
+	//var darVal Dar
+
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
 	go func(){
@@ -510,19 +526,18 @@ func (self *Pool) add_s_1(e *Sample) {
 				minSet = s
 			}
 			Sets = append(Sets,s)
-			for _,_sa := range s.samp{
-				darVal.update(_sa.diff)
-			}
+			//for _,_sa := range s.samp{
+			//	darVal.update(_sa.diff)
+			//}
 		}
 		w_.Done()
 	}()
-
 	self.findSetDouble(e,e.tag>>1,func(s *Set){
 		w.Add(1)
 		go func(s_ *Set){
 			if s_.loadSamp(self){
 				s_.tmp = s_.distance(e)
-				s_.SetDisAll()
+				//s_.SetDisAll()
 				chanSets <- s_
 			}
 			KeysMap.Store(string(s_.Key()),true)
@@ -532,24 +547,31 @@ func (self *Pool) add_s_1(e *Sample) {
 	w.Wait()
 	close(chanSets)
 	w_.Wait()
-	if len(Sets) == 0 {
+	le := len(Sets)
+	if le == 0 {
 		NewSet(e).saveDB(self)
 		return
 	}
-	//if minSet.checkDar(minDiff) && (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
-	//fmt.Println(math.Sqrt(minSet.GetDar()) , darVal.getVal())
-	if (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
-		minSet.samp = append(minSet.samp,e)
-		minSet.update(minSet.samp)
-		//fmt.Println("add",time.Unix(int64(binary.BigEndian.Uint64(e.KeyName()[:8])),0))
+	if minSet.checkDar(minDiff) {
+		minSet.update(append(minSet.samp,e))
 	}else{
 		Sets = append(Sets,NewSet(e))
 	}
+	//if minSet.checkDar(minDiff) && (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
+	//fmt.Println(math.Sqrt(minSet.GetDar()) , darVal.getVal())
+	//if (math.Sqrt(minSet.GetDar()) < darVal.getVal()) {
+	//	minSet.samp = append(minSet.samp,e)
+	//	minSet.update(minSet.samp)
+	//	//fmt.Println("add",time.Unix(int64(binary.BigEndian.Uint64(e.KeyName()[:8])),0))
+	//}else{
+	//	Sets = append(Sets,NewSet(e))
+	//}
 	Sets = Dressing_s(Sets)
+	self.setCount += float64(len(Sets) - le)
 	self.updatePoolDB([]byte{e.tag>>1},
 	func(db *bolt.Bucket)(err error){
 		for _, _s := range Sets {
-			_s.SortDB(self)
+			//_s.SortDB(self)
 			err = db.Put(_s.Key(),_s.toByte())
 			if err != nil {
 				return err
@@ -712,7 +734,7 @@ func (self *Pool) add_s1(e *Sample) {
 		Sets = append(Sets,NewSet(e))
 	}
 
-	Sets = Dressing_s(Sets)
+	Sets = Dressing(Sets)
 
 	self.updatePoolDB([]byte{e.tag>>1},
 	//self.updatePoolDB([]byte{0},
@@ -770,7 +792,7 @@ func (sp *Pool) Add(e *Sample) {
 			}
 			//k,_ := db.Cursor().Last()
 			//if (k != nil) &&
-			//(int(time.Unix(int64(binary.BigEndian.Uint64(k[:8])),0).Weekday()) > int(time.Unix(int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0).Weekday())) {
+			//(int(time.Unix(int64(binary.BigEndian.Uint64(k[:8])),0).Year()) != int(time.Unix(int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0).Year())) {
 			//	_e.check = true
 			//}
 

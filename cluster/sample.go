@@ -40,6 +40,7 @@ type Sample struct {
 
 	stop chan bool
 	check bool
+	init bool
 
 }
 func NewSampleDB(db []byte,k *saEasy) (sa *Sample){
