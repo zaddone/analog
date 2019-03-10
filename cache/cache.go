@@ -11,7 +11,7 @@ import(
 	"net/url"
 	"sync"
 	"os"
-	//"math"
+	"math"
 	"io"
 	"io/ioutil"
 	"encoding/binary"
@@ -40,6 +40,79 @@ type CacheList interface{
 	Show() int
 }
 
+type TmpCache struct {
+	Ins *oanda.Instrument
+	db *bolt.DB
+}
+func NewTmpCache(ins *oanda.Instrument) (c *TmpCache) {
+
+	c = &TmpCache{
+		Ins:ins,
+	}
+	var err error
+	c.db,err = bolt.Open(filepath.Join(config.Conf.DbPath,c.Ins.Name),0600,nil);
+	if err != nil {
+		return nil
+	}
+	return c
+
+}
+
+func (self *TmpCache) FindDB(b,e int64,h func(config.Element)) {
+	begin := make([]byte,4)
+	//end := make([]byte,4)
+	binary.BigEndian.PutUint32(begin,uint32(b))
+	//binary.BigEndian.PutUint32(end,uint32(e))
+	err := self.db.View(func(t *bolt.Tx) error{
+		b := t.Bucket(Bucket)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k,v := c.Seek(begin);k!= nil;k,v = c.Next() {
+			can := NewCandlesMin(k,v)
+			if can.DateTime() > e {
+				break
+			}
+			h(can)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (self *TmpCache) TmpCheck(begin,end int64) (ral float64){
+
+	l := NewLevel(0,nil,nil)
+	self.FindDB(begin,end,func(_e config.Element){
+		l.add(_e,self.Ins)
+	})
+	var li []config.Element
+	for{
+		if l.par == nil {
+			break
+		}
+		li = l.list
+		l = l.par
+	}
+	if len(l.list) == 0 {
+		return 0
+	}
+	if len(li) == 0 {
+		li = l.list
+	}else{
+		li = append(l.list,NewbNode(li...))
+	}
+	var diffSum float64
+	for _,n := range li {
+		diffSum += math.Abs(n.Diff())
+	}
+	return NewbNode(li...).Diff()/(diffSum/float64(len(li)))
+	//return NewbNode(li...).Diff()
+
+}
 type Cache struct {
 
 	Ins *oanda.Instrument
@@ -108,10 +181,11 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 	//if err != nil {
 	//	panic(err)
 	//}
-	fmt.Println(c.Ins.Name,"New")
+	//fmt.Println(c.Ins.Name,"New")
 	return c
 
 }
+
 func (self *Cache) openDB() *bolt.DB {
 
 	db,err := bolt.Open(self.dbPath,0600,nil);
@@ -173,7 +247,9 @@ func (self *Cache) saveToDB(can *CandlesMin){
 			return er
 		}
 		if can != nil {
-			er = b.Put(can.Key(),can.toByte())
+			k,v := config.Zip(can)
+			er = b.Put(k,v)
+			//er = b.Put(can.Key(),can.toByte())
 			if er != nil {
 				return er
 			}
@@ -200,6 +276,65 @@ func (self *Cache) saveToDB(can *CandlesMin){
 
 }
 
+func (self *Cache) FindDB(b,e int64,h func(config.Element)) {
+	begin := make([]byte,4)
+	//end := make([]byte,4)
+	binary.BigEndian.PutUint32(begin,uint32(b))
+	//binary.BigEndian.PutUint32(end,uint32(e))
+	db := self.openDB()
+	err := db.View(func(t *bolt.Tx) error{
+		b := t.Bucket(Bucket)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k,v := c.Seek(begin);k!= nil;k,v = c.Next() {
+			can := NewCandlesMin(k,v)
+			if can.DateTime() > e {
+				break
+			}
+			h(can)
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	db.Close()
+}
+
+func (self *Cache) TmpCheck(begin,end int64) (ral float64){
+
+	l := NewLevel(0,self,nil)
+	self.FindDB(begin,end,func(_e config.Element){
+		l.add(_e,self.Ins)
+	})
+	var li []config.Element
+	for{
+		if l.par == nil {
+			break
+		}
+		li = l.list
+		l = l.par
+	}
+	if len(l.list) == 0 {
+		return 0
+	}
+	if len(li) == 0 {
+		li = l.list
+	}else{
+		li = append(l.list,NewbNode(li...))
+	}
+	var diffSum float64
+	for _,n := range li {
+		diffSum += math.Abs(n.Diff())
+	}
+	return NewbNode(li...).Diff()/(diffSum/float64(len(li)))
+	//return NewbNode(li...).Diff()
+
+}
+
 func (self *Cache) FindLastTime() (lt int64) {
 	db := self.openDB()
 	err := db.View(func(t *bolt.Tx) error{
@@ -209,7 +344,7 @@ func (self *Cache) FindLastTime() (lt int64) {
 		}
 		k,_ := b.Cursor().Last()
 		if k != nil {
-			lt = int64(binary.BigEndian.Uint64(k))+Scale
+			lt = int64(binary.BigEndian.Uint32(k))+Scale
 		}
 		//k_,_ := b.Cursor().First()
 		//fmt.Println("b",time.Unix(int64(binary.BigEndian.Uint64(k_)),0),self.Ins.Name)
@@ -458,6 +593,66 @@ func (self *Cache) AddPrice(p config.Element) {
 
 }
 
+func (self *Cache) GetCacheMap(begin,end int64,ral float64) (caMap []byte) {
+
+	if self.Cl == nil {
+		return nil
+	}
+
+	le := self.Cl.Len()
+	sumlen := le/4+1
+	if le%4 >0 {
+		sumlen++
+	}
+	caMap = make([]byte,sumlen)
+	type tmpdb struct{
+		t byte
+		i int
+	}
+	chanTmp := make(chan *tmpdb,le)
+
+	var w,w_ sync.WaitGroup
+	w_.Add(1)
+	go func(){
+		for d :=range chanTmp {
+			//fmt.Println(len(caMap),d.i)
+			caMap[d.i] |= d.t
+		}
+		w_.Done()
+	}()
+	w.Add(le)
+
+	self.Cl.Read(func(i int,_c interface{}){
+		go func(I int,c *TmpCache){
+			chanTmp <- &tmpdb{
+			t:func()byte{
+				d := c.TmpCheck(begin,end)
+				if d == 0 {
+					return 0
+				}
+				if math.Abs(d) < math.Abs(ral) {
+					return 3
+				}
+				if (d>0) == (ral>0){
+					return 1
+				}else{
+					return 2
+				}
+			}() << uint(I%8),
+			i:I/8,
+			}
+			w.Done()
+		}(i*2,_c.(*TmpCache))
+
+	})
+	w.Wait()
+	close(chanTmp)
+	w_.Wait()
+	//fmt.Println(caMap)
+	return caMap
+
+
+}
 //func (self *Cache) GetCacheMap(b,end config.Element) (caMap []byte) {
 //	if self.Cl == nil {
 //		return nil

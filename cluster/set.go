@@ -12,7 +12,7 @@ import(
 type saEasy struct {
 	Key []byte
 	t uint64
-	//CaMap []byte
+	CaMap []byte
 	//Dis float64
 	//DurDis float64
 }
@@ -60,7 +60,7 @@ func NewSet(sa *Sample) (S *Set) {
 		List:[]*saEasy{
 			&saEasy{
 				Key:sa.KeyName(),
-				//CaMap:sa.caMap,
+				CaMap:sa.caMap,
 				//Dis:sa.dis,
 				//DurDis:sa.durDis,
 			}},
@@ -162,10 +162,23 @@ func (self *Set) SortDB(sp *Pool){
 		sort(_i)
 	}
 	self.List = Sli
+	//fmt.Println(int(sp.samCount/sp.setCount) , config.Conf.MinSam,le)
+	//if !sp.open{
+	//	if sp.setCount >1000 {
+		if int(sp.samCount/sp.setCount) < config.Conf.MinSam {
+			return
+	//	}else{
+	//		sp.open = true
+		}
+	//	}else{
+	//		return
+	//	}
+	//}
 	n :=le - config.Conf.MinSam
 	if n <= 0 {
 		return
 	}
+	//fmt.Println(int(sp.samCount/sp.setCount) , config.Conf.MinSam,le,n)
 	go func(k []*saEasy){
 		if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 			db, err := tx.CreateBucketIfNotExists([]byte{9})
@@ -177,6 +190,7 @@ func (self *Set) SortDB(sp *Pool){
 				if err != nil {
 					return err
 				}
+				sp.samCount--
 			}
 			return nil
 			//return db.Delete(k)
@@ -209,7 +223,7 @@ func (self *Set) load(k,v []byte) {
 	//self.key = k
 	self.tag = self._key[16]>>1
 	for _,l := range self.List{
-		self.count[int(l.Key[8]>>1)]++
+		self.count[int(l.Key[8] &^ 2 )]++
 	}
 }
 
@@ -351,7 +365,7 @@ func (S *Set) update(sa []*Sample) {
 	for _i,_s := range S.samp {
 		S.List[_i] =&saEasy{
 			Key:_s.KeyName(),
-			//CaMap:_s.caMap,
+			CaMap:_s.caMap,
 			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}

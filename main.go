@@ -58,6 +58,7 @@ func (self *cacheList) PopTree() *_cache {
 }
 
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
+
 	if m == nil {
 		return
 	}

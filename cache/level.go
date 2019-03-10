@@ -154,9 +154,10 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 			absMax = absDiff
 		}
 	}
+	sumdif = sumdif/float64(le)
 	if (maxid == 0) ||
 	(absMax == 0) ||
-	(absMax < sumdif/float64(le)) {
+	(absMax < sumdif) {
 		return
 	}
 	//self.update = true
@@ -166,50 +167,26 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		tag := self.tag+1
 		self.par = NewLevel(tag,self.ca,self)
 	}else{
-		if (self.par.par != nil) && (self.ca.pool != nil){
+		if (self.par.par != nil) &&
+		(self.ca!= nil) &&
+		(self.ca.pool != nil){
 			ea := cluster.NewSample(append(self.par.list, node))
-			go func(_e *cluster.Sample){
-				if self.ca.pool.Check(_e){
-					self.ca.Cshow[5]++
-				}else{
-					self.ca.Cshow[4]++
-				}
+			go func(e_ *cluster.Sample){
+				self.ca.Cshow[self.ca.pool.Check(e_)]++
 			}(ea)
 			self.ca.pool.Add(ea)
-			self.ca.Cshow[int(ea.GetTag() &^ 2)]++
+			//self.ca.Cshow[int(ea.GetTag() &^ 2)]++
 			self.ca.Cshow[7]++
-			//ea.SetCaMap(self.GetCacheMap())
 			pli := self.par.list[len(self.par.list)-1]
 			if (self.sample != nil) &&
 			(self.sample.GetLastElement() == pli ){
 				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+
 				self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
-				//if self.sample.Long {
-				//	self.ca.Cshow[3]++
-				//}else{
-				//	self.ca.Cshow[2]++
-				//}
-
-				//go func (e_ *cluster.Sample){
-				//	if e_.Count()>1{
-				//	//if self.ca.pool.Check(e_) {
-				//		if e_.Check() {
-				//			self.ca.Cshow[5]++
-				//		}else{
-				//			self.ca.Cshow[4]++
-				//		}
-				//	}
-				//	//}
-				//	//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
-				//	self.ca.pool.UpdateSample(e_)
-				//}(self.sample)
-
-				go self.ca.pool.UpdateSample(self.sample)
-				//self.sample.SetCaMap(self.ca.GetCacheMap(self.b))
-				//go func(_e *cluster.Sample,b,end config.Element){
-				//	.SetCaMap(self.GetCacheMap(b,end))
-				//	self.ca.pool.UpdateSample(_e)
-				//}(self.sample,self.b,self.ca.GetLastElement())
+				go func(sa *cluster.Sample,b,e config.Element,ral float64){
+					sa.SetCaMap(self.ca.GetCacheMap(b.DateTime(),e.DateTime(),ral))
+					self.ca.pool.UpdateSample(sa)
+				}(self.sample,self.b,self.ca.GetLastElement(),node.Diff()/sumdif)
 			}else{
 				self.ca.Cshow[6]++
 			}
@@ -257,13 +234,15 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 	//self.tp = self.list[0]
 	//self.sl = self.list[self.maxid]
 
-	//self.list = self.list[maxid:]
+	self.list = self.list[maxid:]
 
-	li := self.list[maxid:]
-	self.list = make([]config.Element,len(li),len(self.list))
-	copy(self.list,li)
+	//li := self.list[maxid:]
+	//self.list = make([]config.Element,len(li),len(self.list))
+	//copy(self.list,li)
 
-	self.b = self.ca.GetLastElement()
+	if self.ca != nil {
+		self.b = self.ca.GetLastElement()
+	}
 	self.dis = max
 
 }

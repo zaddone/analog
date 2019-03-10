@@ -13,6 +13,9 @@ type bNode struct {
 }
 func NewbNode(li ...config.Element) (n *bNode) {
 	le := len(li)
+	if le == 0 {
+		return nil
+	}
 	endLi := li[le-1]
 	beginLi := li[0]
 	n = &bNode{

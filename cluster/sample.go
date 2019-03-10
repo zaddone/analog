@@ -20,7 +20,7 @@ type Sample struct {
 	//Dur int64
 	X []int64
 	Y []float64
-	CaMap []byte
+	caMap []byte
 	Long bool
 
 	dis float64
@@ -139,36 +139,36 @@ func (self *Sample) Check() (bool) {
 	n := int(self.tag >> 1)
 	return (self.s.count[n] > self.s.count[n^1])
 }
-func (self *Sample) CheckMap() (m []byte) {
-	if self.s == nil || len(self.s.samp) < 3 {
-		return nil
-	}
-	var l,s int
-	for _,sa := range self.s.samp {
-		if (sa == self) ||
-		(sa.CaMap == nil) ||
-		(sa.tag != self.tag) {
-			continue
-		}
-
-		if sa.Long {
-			l++
-		}else{
-			s++
-		}
-		if m == nil {
-			m = sa.CaMap
-		}else{
-			for i,n := range sa.CaMap{
-				m[i] |= n
-			}
-		}
-	}
-	//if s >= l {
-	//	return nil
-	//}
-	return m
-}
+//func (self *Sample) CheckMap() (m []byte) {
+//	if self.s == nil || len(self.s.samp) < 3 {
+//		return nil
+//	}
+//	var l,s int
+//	for _,sa := range self.s.samp {
+//		if (sa == self) ||
+//		(sa.caMap == nil) ||
+//		(sa.tag != self.tag) {
+//			continue
+//		}
+//
+//		if sa.Long {
+//			l++
+//		}else{
+//			s++
+//		}
+//		if m == nil {
+//			m = sa.caMap
+//		}else{
+//			for i,n := range sa.caMap{
+//				m[i] |= n
+//			}
+//		}
+//	}
+//	//if s >= l {
+//	//	return nil
+//	//}
+//	return m
+//}
 func (self *Sample) GetLastElement() config.Element{
 	return self.eleLast
 	//return self.eleList[len(self.eleList)-1]
@@ -200,7 +200,7 @@ func (self *Sample) Duration() int64 {
 	return self.xMax - self.xMin
 }
 func (self *Sample) SetCaMap( m []byte){
-	self.CaMap = m
+	self.caMap = m
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
@@ -231,7 +231,7 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	//self.key = make([]byte,len(k))
 	//copy(self.key,k)
 	self.key = k.Key
-	//self.CaMap = k.CaMap
+	self.caMap = k.CaMap
 	//self.dis = k.Dis
 
 	self.xMax = self.X[len(self.X)-1]
