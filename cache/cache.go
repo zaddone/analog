@@ -81,9 +81,10 @@ func (self *TmpCache) FindDB(b,e int64,h func(config.Element)) {
 	if err != nil {
 		panic(err)
 	}
+
 }
 
-func (self *TmpCache) TmpCheck(begin,end int64) (ral float64){
+func (self *TmpCache) TmpCheck(begin,end int64) (float64,float64){
 
 	l := NewLevel(0,nil,nil)
 	self.FindDB(begin,end,func(_e config.Element){
@@ -98,7 +99,7 @@ func (self *TmpCache) TmpCheck(begin,end int64) (ral float64){
 		l = l.par
 	}
 	if len(l.list) == 0 {
-		return 0
+		return 0,0
 	}
 	if len(li) == 0 {
 		li = l.list
@@ -109,7 +110,7 @@ func (self *TmpCache) TmpCheck(begin,end int64) (ral float64){
 	for _,n := range li {
 		diffSum += math.Abs(n.Diff())
 	}
-	return NewbNode(li...).Diff()/(diffSum/float64(len(li)))
+	return NewbNode(li...).Diff(),(diffSum/float64(len(li)))
 	//return NewbNode(li...).Diff()
 
 }
@@ -593,7 +594,7 @@ func (self *Cache) AddPrice(p config.Element) {
 
 }
 
-func (self *Cache) GetCacheMap(begin,end int64,ral float64) (caMap []byte) {
+func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte) {
 
 	if self.Cl == nil {
 		return nil
@@ -626,14 +627,20 @@ func (self *Cache) GetCacheMap(begin,end int64,ral float64) (caMap []byte) {
 		go func(I int,c *TmpCache){
 			chanTmp <- &tmpdb{
 			t:func()byte{
-				d := c.TmpCheck(begin,end)
+				d,l := c.TmpCheck(begin,end)
 				if d == 0 {
-					return 0
-				}
-				if math.Abs(d) < math.Abs(ral) {
 					return 3
 				}
-				if (d>0) == (ral>0){
+				absd := math.Abs(d)
+				absdiff := math.Abs(diff)
+				if absd < absdiff {
+					return 3
+				}
+				if absd/l < absdiff/long {
+					return 3
+				}
+				//if (d>0) == (ral>0){
+				if (d>0) {
 					return 1
 				}else{
 					return 2

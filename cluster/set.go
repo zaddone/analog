@@ -12,7 +12,7 @@ import(
 type saEasy struct {
 	Key []byte
 	t uint64
-	CaMap []byte
+	//CaMap []byte
 	//Dis float64
 	//DurDis float64
 }
@@ -60,7 +60,7 @@ func NewSet(sa *Sample) (S *Set) {
 		List:[]*saEasy{
 			&saEasy{
 				Key:sa.KeyName(),
-				CaMap:sa.caMap,
+				//CaMap:sa.caMap,
 				//Dis:sa.dis,
 				//DurDis:sa.durDis,
 			}},
@@ -190,7 +190,7 @@ func (self *Set) SortDB(sp *Pool){
 				if err != nil {
 					return err
 				}
-				sp.samCount--
+				//sp.samCount--
 			}
 			return nil
 			//return db.Delete(k)
@@ -365,7 +365,7 @@ func (S *Set) update(sa []*Sample) {
 	for _i,_s := range S.samp {
 		S.List[_i] =&saEasy{
 			Key:_s.KeyName(),
-			CaMap:_s.caMap,
+			//CaMap:_s.caMap,
 			//Dis:_s.dis,
 			//DurDis:s.durDis,
 		}

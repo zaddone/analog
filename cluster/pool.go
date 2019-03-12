@@ -27,6 +27,7 @@ type Pool struct {
 
 	//runChan chan bool
 	//runChan := make(chan bool,7)
+	setCountChan chan float64
 	setCount float64
 	samCount float64
 	open bool
@@ -34,14 +35,21 @@ type Pool struct {
 
 func (self *Pool) syncAdd(chanSa chan *Sample){
 	for{
-		e := <-chanSa
-		//e.s = NewSet(e)
-		self.samCount++
-		if e.check {
-			self.add_check(e)
-		}else{
+		select{
+		case e:=<-chanSa:
 			self.add_s_1(e)
+			e.stop<-true
+		case s:=<-self.setCountChan:
+			self.setCount += s
 		}
+		//e := <-chanSa
+		//e.s = NewSet(e)
+		//self.samCount++
+		//if e.check {
+		//	self.add_check(e)
+		//}else{
+		//self.add_s_1(e)
+		//}
 		//if !self.add_s(e){
 		//	e.s = NewSet(e)
 		//	e.s.saveDB(self)
@@ -49,27 +57,28 @@ func (self *Pool) syncAdd(chanSa chan *Sample){
 		//	//	return db.Put(e.s.Key(),e.s.toByte())
 		//	//})
 		//}
-		e.stop<-true
+		//e.stop<-true
 	}
 }
 
 func (self *Pool) ShowPoolNum() (count [3]int) {
 
-	count[2] = int(self.setCount)
-	count[0] = int(self.samCount)
-	//err := self.SampDB.View(func(t *bolt.Tx)error{
-	//	db := t.Bucket([]byte{9})
-	//	if db == nil {
-	//		return nil
-	//	}
-	//	return db.ForEach(func(k,v []byte)error{
-	//		count[2]++
-	//		return nil
-	//	})
-	//})
-	//if err != nil {
-	//	panic(err)
-	//}
+	//count[2] = int(self.setCount)
+	//count[0] = int(self.samCount)
+	err := self.SampDB.View(func(t *bolt.Tx)error{
+		db := t.Bucket([]byte{9})
+		if db == nil {
+			return nil
+		}
+		return db.ForEach(func(k,v []byte)error{
+			count[2]++
+			return nil
+		})
+	})
+	if err != nil {
+		panic(err)
+	}
+	self.samCount = float64(count[2])
 
 	self.viewPoolDB([]byte{0},func(db *bolt.Bucket)error{
 		return db.ForEach(func(k,v []byte)error{
@@ -121,7 +130,7 @@ func (self *Pool) viewPoolDB(bucket []byte,h func(*bolt.Bucket)error){
 }
 func (self *Pool) updatePoolDB(bucket []byte,h func(*bolt.Bucket)error){
 	//pooldb := self.openPoolDB()
-	err := self.PoolDB.Update(func(tx *bolt.Tx)error{
+	err := self.PoolDB.Batch(func(tx *bolt.Tx)error{
 		db, err := tx.CreateBucketIfNotExists(bucket)
 		if err != nil {
 			return err
@@ -161,6 +170,7 @@ func NewPool(ins string) (po *Pool) {
 	po = &Pool{
 		TmpSa:[2]chan *Sample{make(chan *Sample,3),make(chan *Sample,5)},
 		path:filepath.Join(config.Conf.ClusterPath,ins),
+		setCountChan:make(chan float64,100),
 		//runChan:make(chan bool,7)
 	}
 	_,err := os.Stat(po.path)
@@ -326,6 +336,87 @@ func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
 		return nil
 	})
 }
+
+func (self *Pool) GetSetMap(e *Sample) []byte {
+	_n :=int(e.tag &^ 2)
+	if _n == 1 {
+		return nil
+	}
+
+	var diff,minDiff float64
+	var minSet *Set
+	SetsChan := make(chan *Set,100)
+	var w,_w sync.WaitGroup
+	w.Add(1)
+	go func(){
+		for s := range SetsChan{
+			diff = s.distance(e)
+			if minDiff > diff || minDiff == 0 {
+				minDiff = diff
+				minSet = s
+			}
+		}
+		w.Done()
+	}()
+	self.findSetDouble(e,e.tag>>1,func(s *Set){
+	//self.findSetDouble(e,0,func(s *Set){
+		_w.Add(1)
+		go func(_s *Set){
+			if _s.loadSamp(self){
+				SetsChan <- _s
+			}
+			_w.Done()
+		}(s)
+	})
+	_w.Wait()
+	close(SetsChan)
+	w.Wait()
+	if minSet == nil {
+		return nil
+	}
+	if len(minSet.List) < config.Conf.MinSam{
+		return nil
+	}
+	//if minSet.count[0] <= minSet.count[1]{
+	//	return nil
+	//}
+	var m []byte
+	//m := make([]byte,len(minSet.List[0].CaMap))
+	for i,l := range minSet.List{
+		if (l.Key[8] == e.tag) && (minSet.samp[i].CaMap != nil) {
+			m = minSet.samp[i].CaMap
+			break
+		}
+	}
+	if m == nil {
+		return nil
+	}
+
+	for i,l := range minSet.List{
+
+		ma := minSet.samp[i].CaMap
+
+		if l.Key[8] == e.tag {
+
+			if ma == nil {
+				return nil
+			}
+			for i,n := range ma {
+				m[i] |= n
+			}
+		}else{
+
+			for i,n := range ma {
+			//for i,n := range l.CaMap{
+				m[i] |= ^n
+			}
+		}
+	}
+	return m
+
+
+}
+
 func (self *Pool) Check(e *Sample) int {
 
 	var diff,minDiff float64
@@ -350,22 +441,32 @@ func (self *Pool) Check(e *Sample) int {
 	close(SetsChan)
 	w.Wait()
 	if minSet == nil {
-		return 2
+		return 0
 		//return false
 	}
-	if len(minSet.List) < config.Conf.MinSam{
-		return 2
+	if len(minSet.List) < config.Conf.MinSam {
+		return 0
 	}
 	//minSet
 	n := int(e.tag &^ 2)
 	n1:= minSet.count[n]
 	n2:= minSet.count[n^1]
 	if (n1 == n2) {
-		return 3
-	}else if (n1>n2){
 		return 1
 	}else{
-		return 0
+		if n == 0 {
+			if (n1>n2){
+				return 2
+			}else{
+				return 3
+			}
+		}else{
+			if (n1>n2){
+				return 4
+			}else{
+				return 5
+			}
+		}
 	}
 
 	//return e.check
@@ -539,61 +640,61 @@ func (self *Pool) ClearSet(tag byte){
 
 }
 
-func (self *Pool) add_check(e *Sample) {
-
-	//SetsMap := new(sync.Map)
-	KeysMap := new(sync.Map)
-	Sets:= make([]*Set,0,100)
-	chanSets:= make(chan *Set,100)
-	var w,w_ sync.WaitGroup
-	w_.Add(1)
-	go func(){
-		for s := range chanSets {
-			Sets = append(Sets,s)
-		}
-		w_.Done()
-	}()
-	self.findAll(e.tag>>1,func(_s *Set){
-		w.Add(1)
-		go func(s_ *Set){
-			//s_.SortDB(self)
-			if s_.loadSamp(self){
-			//	SetsMap.Store(s_,true)
-				chanSets <- s_
-			//}else{
-			//	KeysMap.Store(string(s_.Key()),true)
-			}
-			KeysMap.Store(string(s_.Key()),true)
-			w.Done()
-		}(_s)
-	})
-	w.Wait()
-	close(chanSets)
-	w_.Wait()
-
-	Sets = Dressing_s(append(Sets,NewSet(e)))
-
-	self.updatePoolDB([]byte{e.tag>>1},
-	//self.updatePoolDB([]byte{0},
-	func(db *bolt.Bucket)(err error){
-		for _, _s := range Sets {
-			err = db.Put(_s.Key(),_s.toByte())
-			if err != nil {
-				return err
-			}
-			KeysMap.Delete(string(_s.Key()))
-		}
-		KeysMap.Range(func(k,v interface{})bool{
-			err = db.Delete([]byte(k.(string)))
-			if err != nil {
-				panic(err)
-			}
-			return true
-		})
-		return nil
-	})
-
-}
+//func (self *Pool) add_check(e *Sample) {
+//
+//	//SetsMap := new(sync.Map)
+//	KeysMap := new(sync.Map)
+//	Sets:= make([]*Set,0,100)
+//	chanSets:= make(chan *Set,100)
+//	var w,w_ sync.WaitGroup
+//	w_.Add(1)
+//	go func(){
+//		for s := range chanSets {
+//			Sets = append(Sets,s)
+//		}
+//		w_.Done()
+//	}()
+//	self.findAll(e.tag>>1,func(_s *Set){
+//		w.Add(1)
+//		go func(s_ *Set){
+//			//s_.SortDB(self)
+//			if s_.loadSamp(self){
+//			//	SetsMap.Store(s_,true)
+//				chanSets <- s_
+//			//}else{
+//			//	KeysMap.Store(string(s_.Key()),true)
+//			}
+//			KeysMap.Store(string(s_.Key()),true)
+//			w.Done()
+//		}(_s)
+//	})
+//	w.Wait()
+//	close(chanSets)
+//	w_.Wait()
+//
+//	Sets = Dressing_s(append(Sets,NewSet(e)))
+//
+//	self.updatePoolDB([]byte{e.tag>>1},
+//	//self.updatePoolDB([]byte{0},
+//	func(db *bolt.Bucket)(err error){
+//		for _, _s := range Sets {
+//			err = db.Put(_s.Key(),_s.toByte())
+//			if err != nil {
+//				return err
+//			}
+//			KeysMap.Delete(string(_s.Key()))
+//		}
+//		KeysMap.Range(func(k,v interface{})bool{
+//			err = db.Delete([]byte(k.(string)))
+//			if err != nil {
+//				panic(err)
+//			}
+//			return true
+//		})
+//		return nil
+//	})
+//
+//}
 
 func (self *Pool) add_s_1(e *Sample) {
 
@@ -661,17 +762,18 @@ func (self *Pool) add_s_1(e *Sample) {
 	//}
 	Sets = Dressing_s(Sets)
 
-	var co float64
+	var co int
 	KeysMap.Range(func(k,v interface{}) bool {
 		co++
 		return true
 	})
-	self.setCount += float64(len(Sets)) - co
+	self.setCountChan <- float64(len(Sets) - co)
+	//self.setCount += float64(len(Sets) - co)
 
 	self.updatePoolDB([]byte{e.tag>>1},
 	func(db *bolt.Bucket)(err error){
 		for _, _s := range Sets {
-			//_s.SortDB(self)
+			_s.SortDB(self)
 			err = db.Put(_s.Key(),_s.toByte())
 			if err != nil {
 				return err
@@ -867,6 +969,13 @@ func (self *Pool) UpdateSample(e *Sample) {
 		if err != nil {
 			return err
 		}
+
+		//if (self.setCount>10000) && int(self.samCount/self.setCount) > config.Conf.MinSam {
+		//	c := db.Cursor()
+		//	k,_ := c.First()
+		//	db.Delete(k)
+		//}
+		//self.samCount++
 		return db.Put(e.KeyName(),e.toByte())
 	})
 	if err != nil {
@@ -908,8 +1017,13 @@ func (sp *Pool) Add(e *Sample) {
 				c := db.Cursor()
 				k,_ := c.First()
 				db.Delete(k)
-				sp.samCount--
+				//sp.samCount--
+			//}else{
+				//sp.samCount++
 			}
+
+			sp.samCount++
+
 			return db.Put(_e.KeyName(),_e.toByte())
 		})
 		if err != nil {

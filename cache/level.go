@@ -4,10 +4,11 @@ import(
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/cluster"
 	"math"
+	//"log"
 	//"sync"
 	//"bytes"
-	//"fmt"
-	//"time"
+	"fmt"
+	"time"
 	//"encoding/binary"
 )
 const(
@@ -16,30 +17,47 @@ const(
 )
 
 type postDB struct {
-	ca *Cache
-	e config.Element
+	ca *TmpCache
+	b int64
 	t  byte
 }
-func NewPostDB(c *Cache,t byte ) *postDB {
+func NewPostDB(c *TmpCache,t byte,b int64 ) *postDB {
 	po := &postDB {
 		ca:c,
 		t:t,
-		e:c.GetLastElement(),
+		b:b,
 	}
 	//fmt.Println(c.Ins.Name,s.GetDiff())
-
-	c.Cshow[2]++
+	//c.Cshow[2]++
 	//c.tmpSample.Store(po.key,s)
 	return po
 }
-func (self *postDB) clear(){
+func (self *postDB) clear(e int64) byte {
 
-	d := self.ca.GetLastElement().Middle() - self.e.Middle()
-	if (d>0) == (self.t==1) {
-		self.ca.Cshow[0]++
-	}else{
-		self.ca.Cshow[1]++
+	var eEle,bEle config.Element
+	fmt.Println(time.Unix(self.b,0),time.Unix(e,0))
+	self.ca.FindDB(self.b,e,func(e config.Element){
+		if bEle == nil {
+			bEle = e
+		}
+		eEle = e
+		//elist = append(elist,e)
+	})
+	if eEle == nil || bEle == nil {
+		return 0
 	}
+
+	if (eEle.Middle() - bEle.Middle()) >0{
+		return 1
+	}else{
+		return 2
+	}
+	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
+	//if (d>0) == (self.t==1) {
+	//	self.ca.Cshow[0]++
+	//}else{
+	//	self.ca.Cshow[1]++
+	//}
 
 }
 
@@ -116,13 +134,22 @@ func (self *level) ClearPost(){
 	if len(self.post) == 0 {
 		return
 	}
+	e := self.ca.GetLastElement().DateTime()
 	for _,p := range self.post{
-		p.clear()
+		n := p.clear(e)
+		if n==0 {
+			self.ca.Cshow[4]++
+		}else if n == p.t {
+			self.ca.Cshow[2]++
+		}else{
+			self.ca.Cshow[3]++
+		}
+
+		self.ca.Cshow[1]++
 	}
 	//self.post.clear()
 	self.post = nil
 }
-
 
 func (self *level) add(e config.Element,ins *oanda.Instrument) {
 
@@ -161,32 +188,54 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		return
 	}
 	//self.update = true
-	//self.ClearPost()
+	self.ClearPost()
 	node := NewbNode(self.list[:maxid]...)
 	if self.par == nil {
 		tag := self.tag+1
 		self.par = NewLevel(tag,self.ca,self)
 	}else{
 		if (self.par.par != nil) &&
-		(self.ca!= nil) &&
-		(self.ca.pool != nil){
+		(self.ca != nil) &&
+		(self.ca.pool != nil) {
 			ea := cluster.NewSample(append(self.par.list, node))
-			go func(e_ *cluster.Sample){
-				self.ca.Cshow[self.ca.pool.Check(e_)]++
+			func(e_ *cluster.Sample){
+				self.ca.Cl.HandMap(self.ca.pool.GetSetMap(e_),func(_ca interface{},t byte){
+					//log.Println(_ca.(*TmpCache).Ins.Name)
+					self.post = append(self.post,NewPostDB(_ca.(*TmpCache),t,self.ca.GetLastElement().DateTime()))
+					self.ca.Cshow[0]++
+				})
+				//log.Println("----------")
+			//	self.ca.Cshow[self.ca.pool.Check(e_)]++
 			}(ea)
+
+			ea.SetCaMap(
+			self.ca.GetCacheMap(
+				self.b.DateTime(),
+				self.ca.GetLastElement().DateTime(),
+				node.Diff(),
+				sumdif,
+			))
 			self.ca.pool.Add(ea)
 			//self.ca.Cshow[int(ea.GetTag() &^ 2)]++
 			self.ca.Cshow[7]++
 			pli := self.par.list[len(self.par.list)-1]
 			if (self.sample != nil) &&
 			(self.sample.GetLastElement() == pli ){
-				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
 
-				self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
-				go func(sa *cluster.Sample,b,e config.Element,ral float64){
-					sa.SetCaMap(self.ca.GetCacheMap(b.DateTime(),e.DateTime(),ral))
-					self.ca.pool.UpdateSample(sa)
-				}(self.sample,self.b,self.ca.GetLastElement(),node.Diff()/sumdif)
+				self.sample.SetCaMap(
+				self.ca.GetCacheMap(
+					//self.list[0].DateTime(),
+					self.b.DateTime(),
+					self.ca.GetLastElement().DateTime(),
+					node.Diff(),
+					sumdif,
+				))
+				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+				//self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
+				//go func(sa *cluster.Sample,b,e config.Element,ral float64){
+				//	sa.SetCaMap(self.ca.GetCacheMap(b.DateTime(),e.DateTime(),ral))
+				self.ca.pool.UpdateSample(self.sample)
+				//}(self.sample,self.b,self.ca.GetLastElement(),node.Diff()/sumdif)
 			}else{
 				self.ca.Cshow[6]++
 			}
