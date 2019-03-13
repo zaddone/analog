@@ -20,7 +20,7 @@ type Sample struct {
 	//Dur int64
 	X []int64
 	Y []float64
-	CaMap []byte
+	caMap []byte
 	Long bool
 
 	dis float64
@@ -203,7 +203,8 @@ func (self *Sample) Duration() int64 {
 	return self.xMax - self.xMin
 }
 func (self *Sample) SetCaMap( m []byte){
-	self.CaMap = m
+	//fmt.Println(m)
+	self.caMap = m
 }
 func (self *Sample) KeyName() []byte {
 	if self.key == nil {
@@ -234,7 +235,7 @@ func (self *Sample) load(db []byte,k *saEasy) {
 	//self.key = make([]byte,len(k))
 	//copy(self.key,k)
 	self.key = k.Key
-	//self.CaMap = k.CaMap
+	self.caMap = k.CaMap
 	//self.dis = k.Dis
 
 	self.xMax = self.X[len(self.X)-1]

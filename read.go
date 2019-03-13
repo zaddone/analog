@@ -44,7 +44,7 @@ func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 	var t byte
 	var j,J uint
 	for i,n := range m {
-		if n == 255 {
+		if n == 255 || n == 0 {
 			continue
 		}
 		for j=0;j<4;j++{

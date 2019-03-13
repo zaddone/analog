@@ -2,7 +2,7 @@ package cluster
 import(
 	"github.com/boltdb/bolt"
 	"github.com/zaddone/analog/config"
-	//"time"
+	"time"
 	//"fmt"
 	"path/filepath"
 	"encoding/binary"
@@ -64,7 +64,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample){
 func (self *Pool) ShowPoolNum() (count [3]int) {
 
 	//count[2] = int(self.setCount)
-	//count[0] = int(self.samCount)
+	count[0] = int(self.samCount)
 	err := self.SampDB.View(func(t *bolt.Tx)error{
 		db := t.Bucket([]byte{9})
 		if db == nil {
@@ -78,7 +78,7 @@ func (self *Pool) ShowPoolNum() (count [3]int) {
 	if err != nil {
 		panic(err)
 	}
-	self.samCount = float64(count[2])
+	//self.samCount = float64(count[2])
 
 	self.viewPoolDB([]byte{0},func(db *bolt.Bucket)error{
 		return db.ForEach(func(k,v []byte)error{
@@ -339,14 +339,14 @@ func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
 
 func (self *Pool) GetSetMap(e *Sample) []byte {
 	_n :=int(e.tag &^ 2)
-	if _n == 1 {
-		return nil
-	}
+	//if _n == 1 {
+	//	return nil
+	//}
 
 	var diff,minDiff float64
 	var minSet *Set
 	SetsChan := make(chan *Set,100)
-	var w,_w sync.WaitGroup
+	var w sync.WaitGroup
 	w.Add(1)
 	go func(){
 		for s := range SetsChan{
@@ -359,16 +359,8 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 		w.Done()
 	}()
 	self.findSetDouble(e,e.tag>>1,func(s *Set){
-	//self.findSetDouble(e,0,func(s *Set){
-		_w.Add(1)
-		go func(_s *Set){
-			if _s.loadSamp(self){
-				SetsChan <- _s
-			}
-			_w.Done()
-		}(s)
+		SetsChan <- s
 	})
-	_w.Wait()
 	close(SetsChan)
 	w.Wait()
 	if minSet == nil {
@@ -377,14 +369,16 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 	if len(minSet.List) < config.Conf.MinSam{
 		return nil
 	}
-	//if minSet.count[0] <= minSet.count[1]{
-	//	return nil
-	//}
+	if minSet.count[_n] < minSet.count[_n^1] {
+		return nil
+	}
+
 	var m []byte
 	//m := make([]byte,len(minSet.List[0].CaMap))
-	for i,l := range minSet.List{
-		if (l.Key[8] == e.tag) && (minSet.samp[i].CaMap != nil) {
-			m = minSet.samp[i].CaMap
+	for _,l := range minSet.List{
+		if (l.Key[8] == e.tag) && (l.CaMap != nil) {
+		//if (l.Key[8] == e.tag) {
+			m = l.CaMap
 			break
 		}
 	}
@@ -392,22 +386,19 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 		return nil
 	}
 
-	for i,l := range minSet.List{
-
-		ma := minSet.samp[i].CaMap
-
-		if l.Key[8] == e.tag {
-
-			if ma == nil {
+	for _,l := range minSet.List{
+		if l.Key[8] == e.tag{
+			if l.CaMap == nil {
 				return nil
 			}
-			for i,n := range ma {
+			for i,n := range l.CaMap {
 				m[i] |= n
 			}
 		}else{
-
-			for i,n := range ma {
-			//for i,n := range l.CaMap{
+			if l.CaMap == nil {
+				continue
+			}
+			for i,n := range l.CaMap {
 				m[i] |= ^n
 			}
 		}
@@ -704,9 +695,7 @@ func (self *Pool) add_s_1(e *Sample) {
 
 	var minDiff float64
 	var minSet *Set
-
 	//var darVal Dar
-
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
 	go func(){
@@ -744,7 +733,7 @@ func (self *Pool) add_s_1(e *Sample) {
 		return
 	}
 	//if darVal.getVal() > minSet.GetDar(){
-	//	minSet.update(append(minSet.samp,e))
+		minSet.update(append(minSet.samp,e))
 	//}else if minSet.checkDar(minDiff) {
 	if minSet.checkDar(minDiff) {
 		minSet.update(append(minSet.samp,e))
@@ -990,8 +979,8 @@ func (sp *Pool) Add(e *Sample) {
 	//	return
 	//}
 	func(_e *Sample){
-		//DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
-		//ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
+		DateKey := time.Unix( int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0)
+		ke := uint64(DateKey.AddDate(-config.Conf.Year,0,0).Unix())
 		//db := sp.openSampDB()
 		//err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
 		err := sp.SampDB.Update(func(tx *bolt.Tx)error{
@@ -1004,23 +993,23 @@ func (sp *Pool) Add(e *Sample) {
 			//(int(time.Unix(int64(binary.BigEndian.Uint64(k[:8])),0).Year()) != int(time.Unix(int64(binary.BigEndian.Uint64(_e.KeyName()[:8])),0).Year())) {
 			//	_e.check = true
 			//}
-
-			//for k,_ := c.First();k!=nil;k,_ = c.Next() {
-			//	if binary.BigEndian.Uint64(k[:8])<ke {
-			//		db.Delete(k)
-			//	}else{
-			//		break
-			//	}
-			//}
-
-			if (sp.setCount>10000) && int(sp.samCount/sp.setCount) > config.Conf.MinSam {
-				c := db.Cursor()
-				k,_ := c.First()
-				db.Delete(k)
-				//sp.samCount--
-			//}else{
-				//sp.samCount++
+			c := db.Cursor()
+			for k,_ := c.First();k!=nil;k,_ = c.Next() {
+				if binary.BigEndian.Uint64(k[:8])<ke {
+					sp.samCount--
+					db.Delete(k)
+				}else{
+					break
+				}
 			}
+			//if (sp.setCount>10000) && int(sp.samCount/sp.setCount) > config.Conf.MinSam {
+			//	c := db.Cursor()
+			//	k,_ := c.First()
+			//	db.Delete(k)
+			//	//sp.samCount--
+			////}else{
+			//	//sp.samCount++
+			//}
 
 			sp.samCount++
 

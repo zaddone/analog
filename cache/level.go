@@ -7,8 +7,8 @@ import(
 	//"log"
 	//"sync"
 	//"bytes"
-	"fmt"
-	"time"
+	//"fmt"
+	//"time"
 	//"encoding/binary"
 )
 const(
@@ -28,14 +28,14 @@ func NewPostDB(c *TmpCache,t byte,b int64 ) *postDB {
 		b:b,
 	}
 	//fmt.Println(c.Ins.Name,s.GetDiff())
-	//c.Cshow[2]++
+	//c.Cshow[5]++
 	//c.tmpSample.Store(po.key,s)
 	return po
 }
 func (self *postDB) clear(e int64) byte {
 
 	var eEle,bEle config.Element
-	fmt.Println(time.Unix(self.b,0),time.Unix(e,0))
+	//fmt.Println(time.Unix(self.b,0),time.Unix(e,0))
 	self.ca.FindDB(self.b,e,func(e config.Element){
 		if bEle == nil {
 			bEle = e
@@ -136,16 +136,20 @@ func (self *level) ClearPost(){
 	}
 	e := self.ca.GetLastElement().DateTime()
 	for _,p := range self.post{
-		n := p.clear(e)
-		if n==0 {
-			self.ca.Cshow[4]++
-		}else if n == p.t {
-			self.ca.Cshow[2]++
-		}else{
-			self.ca.Cshow[3]++
-		}
+		self.ca.Cshow[p.clear(e)+1]++
+		//if n==0 {
+		//	self.ca.Cshow[4]++
+		//}else{
+		//	self.ca.Cshow[p.t+1]++
+		//}
+		//}else if n == p.t {
+		//}else if n == 2 {
+		//	self.ca.Cshow[2]++
+		//}else{
+		//	self.ca.Cshow[3]++
+		//}
 
-		self.ca.Cshow[1]++
+		self.ca.Cshow[4]++
 	}
 	//self.post.clear()
 	self.post = nil
@@ -198,30 +202,15 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		(self.ca != nil) &&
 		(self.ca.pool != nil) {
 			ea := cluster.NewSample(append(self.par.list, node))
-			func(e_ *cluster.Sample){
-				self.ca.Cl.HandMap(self.ca.pool.GetSetMap(e_),func(_ca interface{},t byte){
-					//log.Println(_ca.(*TmpCache).Ins.Name)
-					self.post = append(self.post,NewPostDB(_ca.(*TmpCache),t,self.ca.GetLastElement().DateTime()))
-					self.ca.Cshow[0]++
-				})
-				//log.Println("----------")
-			//	self.ca.Cshow[self.ca.pool.Check(e_)]++
-			}(ea)
-
-			ea.SetCaMap(
-			self.ca.GetCacheMap(
-				self.b.DateTime(),
-				self.ca.GetLastElement().DateTime(),
-				node.Diff(),
-				sumdif,
-			))
-			self.ca.pool.Add(ea)
-			//self.ca.Cshow[int(ea.GetTag() &^ 2)]++
+			self.ca.Cl.HandMap(self.ca.pool.GetSetMap(ea),func(_ca interface{},t byte){
+				self.post = append(self.post,NewPostDB(_ca.(*TmpCache),t,self.ca.GetLastElement().DateTime()))
+				self.ca.Cshow[5]++
+			})
 			self.ca.Cshow[7]++
+
 			pli := self.par.list[len(self.par.list)-1]
 			if (self.sample != nil) &&
 			(self.sample.GetLastElement() == pli ){
-
 				self.sample.SetCaMap(
 				self.ca.GetCacheMap(
 					//self.list[0].DateTime(),
@@ -230,64 +219,21 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 					node.Diff(),
 					sumdif,
 				))
-				//self.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-				//self.sample.Long = ((self.ca.GetLastElement().Middle() - self.b.Middle()) > 0) == (node.Diff()<0)
-				//go func(sa *cluster.Sample,b,e config.Element,ral float64){
-				//	sa.SetCaMap(self.ca.GetCacheMap(b.DateTime(),e.DateTime(),ral))
-				self.ca.pool.UpdateSample(self.sample)
-				//}(self.sample,self.b,self.ca.GetLastElement(),node.Diff()/sumdif)
+				self.ca.pool.Add(self.sample)
+				//self.ca.pool.UpdateSample(self.sample)
 			}else{
 				self.ca.Cshow[6]++
 			}
-
 			self.sample = ea
-			//self.ca.pool.Add(ea)
-			//if self.ca.Cl != nil {
-			//	self.ca.Cl.HandMap(
-			//		ea.CheckMap(),
-			//		func(ca interface{},t byte){
-			//			self.post =append(self.post,NewPostDB(ca.(*Cache),t))
-			//		},
-			//	)
-			//}
-				//ea := cluster.NewSample(self.par.list, node)
-				//ea.SetCaMap(self.GetCacheMap())
-				//self.ca.pool.Add(ea)
-				//self.ca.Cshow[7]++
-			//}else{
-
-
-				//self.ca.Cshow[7]++
-				//self.sample = cluster.NewSample(append(self.par.list, node),nil)
-				//if self.ca.pool.Check(sa){
-				//	sa.SetDiff(max)
-				//	sa.SetEndElement(self.ca.GetLastElement())
-				//	self.ca.tmpSample.Store(string(sa.KeyName()),sa)
-					//NewPostDB(self.ca,sa)
-				//}
-				//if self.ca.Cl != nil {
-				//	self.ca.Cl.HandMap(
-				//		self.ca.pool.CheckSet(sa),
-				//		func(ca interface{},t byte){
-				//			self.post =append(self.post,NewPostDB(ca.(*Cache),t))
-				//		},
-				//	)
-				//}
-			//}
 		}
 		//self.par.add(node,ins)
-
 	}
 	self.par.add(node,ins)
+	//self.list = self.list[maxid:]
 
-	//self.tp = self.list[0]
-	//self.sl = self.list[self.maxid]
-
-	self.list = self.list[maxid:]
-
-	//li := self.list[maxid:]
-	//self.list = make([]config.Element,len(li),len(self.list))
-	//copy(self.list,li)
+	li := self.list[maxid:]
+	self.list = make([]config.Element,len(li),len(self.list))
+	copy(self.list,li)
 
 	if self.ca != nil {
 		self.b = self.ca.GetLastElement()

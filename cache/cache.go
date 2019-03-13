@@ -600,8 +600,14 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 		return nil
 	}
 
+	absdiff := math.Abs(diff)
+	if long > absdiff {
+		return nil
+	}
+	dv := absdiff/long
+
 	le := self.Cl.Len()
-	sumlen := le/4+1
+	sumlen := le/4
 	if le%4 >0 {
 		sumlen++
 	}
@@ -623,6 +629,9 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 	}()
 	w.Add(le)
 
+
+	//fmt.Println(diff,long,dv)
+
 	self.Cl.Read(func(i int,_c interface{}){
 		go func(I int,c *TmpCache){
 			chanTmp <- &tmpdb{
@@ -631,12 +640,12 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 				if d == 0 {
 					return 3
 				}
+				//fmt.Println(d,l)
 				absd := math.Abs(d)
-				absdiff := math.Abs(diff)
 				if absd < absdiff {
 					return 3
 				}
-				if absd/l < absdiff/long {
+				if absd/l < dv {
 					return 3
 				}
 				//if (d>0) == (ral>0){
@@ -650,7 +659,6 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 			}
 			w.Done()
 		}(i*2,_c.(*TmpCache))
-
 	})
 	w.Wait()
 	close(chanTmp)
