@@ -36,7 +36,6 @@ type CandlesMin struct{
 	Dif float64
 	time int64
 }
-
 func NewCandlesMin(k,db []byte) (c *CandlesMin) {
 	c = &CandlesMin{}
 	c.time,c.Val,c.Dif = config.UnZip(k,db)

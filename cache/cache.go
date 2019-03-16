@@ -52,10 +52,37 @@ func NewTmpCache(ins *oanda.Instrument) (c *TmpCache) {
 	var err error
 	c.db,err = bolt.Open(filepath.Join(config.Conf.DbPath,c.Ins.Name),0600,nil);
 	if err != nil {
-		return nil
+		fmt.Println(err)
+		//return nil
 	}
 	return c
 
+}
+func (self *TmpCache) DB() *bolt.DB {
+
+	return self.db
+
+}
+
+func (self *TmpCache) FindDB_(b int64,h func(config.Element)bool) {
+	begin := make([]byte,4)
+	binary.BigEndian.PutUint32(begin,uint32(b))
+	err := self.db.View(func(t *bolt.Tx) error{
+		b := t.Bucket(Bucket)
+		if b == nil {
+			return nil
+		}
+		c := b.Cursor()
+		for k,v := c.Seek(begin);k!= nil;k,v = c.Next() {
+			if !h(NewCandlesMin(k,v)){
+				break
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
 }
 
 func (self *TmpCache) FindDB(b,e int64,h func(config.Element)) {
@@ -417,9 +444,9 @@ func (self *Cache) downCan (h func(config.Element)bool){
 				default:
 					go self.saveToDB(can)
 				}
-				if (h!=nil) && !h(can) {
-					return io.EOF
-				}
+				//if (h!=nil) && !h(can) {
+				//	return io.EOF
+				//}
 			}
 			return nil
 		})

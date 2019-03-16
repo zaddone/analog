@@ -162,6 +162,7 @@ func (self *Set) SortDB(sp *Pool){
 		sort(_i)
 	}
 	self.List = Sli
+	//return
 	//fmt.Println(int(sp.samCount/sp.setCount) , config.Conf.MinSam,le)
 	//if !sp.open{
 	//	if sp.setCount >1000 {
@@ -179,25 +180,25 @@ func (self *Set) SortDB(sp *Pool){
 		return
 	}
 	//fmt.Println(int(sp.samCount/sp.setCount) , config.Conf.MinSam,le,n)
-	go func(k []*saEasy){
-		if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
-			db, err := tx.CreateBucketIfNotExists([]byte{9})
-			if err != nil {
-				return err
-			}
-			for _,k_ := range k {
-				err = db.Delete(k_.Key)
-				if err != nil {
-					return err
-				}
-				sp.samCount--
-			}
-			return nil
-			//return db.Delete(k)
-		});err != nil {
-			panic(err)
-		}
-	}(self.List[:n])
+	//go func(k []*saEasy){
+	//	if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
+	//		db, err := tx.CreateBucketIfNotExists([]byte{9})
+	//		if err != nil {
+	//			return err
+	//		}
+	//		for _,k_ := range k {
+	//			err = db.Delete(k_.Key)
+	//			if err != nil {
+	//				return err
+	//			}
+	//			sp.samCount--
+	//		}
+	//		return nil
+	//		//return db.Delete(k)
+	//	});err != nil {
+	//		panic(err)
+	//	}
+	//}(self.List[:n])
 	self.List = self.List[n:]
 
 }

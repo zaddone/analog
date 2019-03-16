@@ -16,6 +16,8 @@ const (
 	StreamHost string = "https://Stream-fxpractice.oanda.com/v3"
 	TimeFormat = "2006-01-02T15:04:05"
 	DBType string = "sqlite3"
+
+	Scale int64 = 5
 )
 var (
 	FileName   = flag.String("c", "conf.log", "config log")
@@ -109,6 +111,8 @@ type Config struct {
 	FindLevel int
 	MinSam int
 	Year int
+
+	Local string
 
 }
 
@@ -205,6 +209,8 @@ func NewConfig()  *Config {
 		c.MinSam = 20
 		c.Debug = true
 		c.Year = 2
+		c.Local = "socket.db"
+
 		//c.LoadGranularity()
 		c.Save()
 	}else{

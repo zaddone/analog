@@ -149,7 +149,7 @@ func (self *level) ClearPost(){
 		//	self.ca.Cshow[3]++
 		//}
 
-		self.ca.Cshow[4]++
+		self.ca.Cshow[0]++
 	}
 	//self.post.clear()
 	self.post = nil
@@ -202,10 +202,15 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		(self.ca != nil) &&
 		(self.ca.pool != nil) {
 			ea := cluster.NewSample(append(self.par.list, node))
+			isa := false
 			self.ca.Cl.HandMap(self.ca.pool.GetSetMap(ea),func(_ca interface{},t byte){
 				self.post = append(self.post,NewPostDB(_ca.(*TmpCache),t,self.ca.GetLastElement().DateTime()))
-				self.ca.Cshow[5]++
+				//self.ca.Cshow[5]++
+				isa = true
 			})
+			if isa {
+				self.ca.Cshow[int(ea.GetTag()>>1 +4)]++
+			}
 			self.ca.Cshow[7]++
 
 			pli := self.par.list[len(self.par.list)-1]

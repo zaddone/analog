@@ -338,7 +338,8 @@ func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
 }
 
 func (self *Pool) GetSetMap(e *Sample) []byte {
-	_n :=int(e.tag &^ 2)
+
+	_n := int(e.tag &^ 2)
 	//if _n == 1 {
 	//	return nil
 	//}
@@ -733,7 +734,7 @@ func (self *Pool) add_s_1(e *Sample) {
 		return
 	}
 	//if darVal.getVal() > minSet.GetDar(){
-		minSet.update(append(minSet.samp,e))
+	//	minSet.update(append(minSet.samp,e))
 	//}else if minSet.checkDar(minDiff) {
 	if minSet.checkDar(minDiff) {
 		minSet.update(append(minSet.samp,e))
