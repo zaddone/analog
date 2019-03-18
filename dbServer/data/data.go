@@ -75,6 +75,26 @@ func (self *Data) read(b,e int64, h func([]byte,[]byte)) {
 	}
 }
 
+func (self *Data) StreamDBMain(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
+	var err error
+	var n int
+	R.E = time.Now().Unix()
+	self.read(R.B,R.E,func(k,v []byte){
+		n,err = c.WriteToUnix(append(k,v...),addr)
+		if err != nil {
+			panic(err)
+		}
+		if n  != 12 {
+			panic(n)
+		}
+	})
+	//c.CloseWrite()
+	//fmt.Println(R)
+	_,err = c.WriteToUnix(nil,addr)
+	//fmt.Println(addr.String())
+
+}
+
 func (self *Data) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
 	var err error
 	var n int
@@ -88,10 +108,9 @@ func (self *Data) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
 		}
 	})
 	//c.CloseWrite()
-	fmt.Println(R)
+	//fmt.Println(R)
 	_,err = c.WriteToUnix(nil,addr)
-	fmt.Println(addr.String())
-
+	//fmt.Println(addr.String())
 }
 
 func (self *Data) findLastTime() (lt int64) {

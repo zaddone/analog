@@ -13,6 +13,7 @@ var (
 type Proto struct {
 	Ins string
 	B,E int64
+	//Main bool
 	tmp string
 }
 func (self *Proto) ToByte()[]byte{

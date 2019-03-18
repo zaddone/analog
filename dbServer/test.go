@@ -1,7 +1,7 @@
 package main
 import(
 	"fmt"
-	"time"
+	//"time"
 	"net"
 	"os"
 )
@@ -13,6 +13,7 @@ func main(){
 		panic(err)
 	}
 	l,err := net.ListenUnixgram("unixgram",laddr)
+	l.SetWriteBuffer(0)
 	if err != nil {
 		panic(err)
 	}
@@ -27,8 +28,8 @@ func main(){
 		go func(addr *net.UnixAddr){
 			var i byte
 			for i=0;i<10;i++{
-				time.Sleep(time.Second)
-				l.WriteToUnix([]byte{i},addr)
+				fmt.Println(i)
+				l.WriteToUnix([]byte{i,255,255},addr)
 			}
 			l.WriteToUnix(nil,raddr)
 		}(raddr)

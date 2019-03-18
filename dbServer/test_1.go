@@ -9,8 +9,8 @@ import(
 
 func main(){
 	var w sync.WaitGroup
-	w.Add(100)
-	for i:=0;i<100;i++{
+	w.Add(10)
+	for i:=0;i<10;i++{
 		go func(){
 			run()
 			w.Done()
@@ -38,6 +38,8 @@ func run(){
 		panic(err)
 	}
 	var buf [1024]byte
+
+	time.Sleep(time.Second*20)
 	for{
 		n,err = c.Read(buf[:])
 		if err != nil {
@@ -48,6 +50,7 @@ func run(){
 		if n == 0 {
 			break
 		}
+		time.Sleep(time.Second)
 	}
 
 	os.Remove(addr)

@@ -55,7 +55,7 @@ func (self *Cache) SyncRun(cl CacheList){
 	self.SetPool()
 	go self.syncAddPrice()
 	begin := self.getLastTime()
-	self.read(begin,time.Now().Unix(),func(e config.Element){
+	self.read(fmt.Sprintf("%s_main",config.Conf.Local),begin,time.Now().Unix(),func(e config.Element){
 		self.eleChan <- e
 	})
 
@@ -95,13 +95,13 @@ func (self *Cache) getLastTime() int64 {
 	return 0
 }
 
-func (self *Cache) read(begin,end int64,hand func(e config.Element)){
+func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)){
 	p := &proto.Proto{Ins:self.ins.Name,B:begin,E:end}
 	lAddr, err := net.ResolveUnixAddr("unixgram", p.GetTmpPath())
 	if err != nil {
 		panic(err)
 	}
-	rAddr, err := net.ResolveUnixAddr("unixgram", config.Conf.Local)
+	rAddr, err := net.ResolveUnixAddr("unixgram", local)
 	if err != nil {
 		panic(err)
 	}
@@ -109,6 +109,7 @@ func (self *Cache) read(begin,end int64,hand func(e config.Element)){
 	if err != nil {
 		panic(err)
 	}
+	//c.SetReadBuffer(1048576)
 	//fmt.Println(c.LocalAddr(),c.RemoteAddr())
 	//defer c.Close()
 	_,err = c.Write(p.ToByte())
@@ -158,6 +159,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			sumdif,
 		))
 		self.pool.Add(l.sample)
+		//fmt.Println(l.sample)
 	}else{
 		self.Cshow[6]++
 	}
@@ -242,7 +244,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 func (self *Cache) TmpCheck(begin,end int64) (float64,float64){
 
 	l := NewLevel(0,nil,nil)
-	self.read(begin,end,func(_e config.Element){
+	self.read(config.Conf.Local,begin,end,func(_e config.Element){
 		l.add(_e,self.ins)
 	})
 	var li []config.Element

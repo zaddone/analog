@@ -72,16 +72,17 @@ func init(){
 }
 
 func main(){
-	//ch := CL.FindCa(config.Conf.InsName)
-	//fmt.Println(ch)
-	UnixServer()
+	go UnixServer(fmt.Sprintf("%s_main",config.Conf.Local))
+	go UnixServer(config.Conf.Local)
+	select{}
 }
-func UnixServer(){
-	err := os.Remove(config.Conf.Local)
+
+func UnixServer(local string){
+	err := os.Remove(local)
 	if err != nil {
 		fmt.Println(err)
 	}
-	unixAddr, err := net.ResolveUnixAddr("unixgram", config.Conf.Local)
+	unixAddr, err := net.ResolveUnixAddr("unixgram",local)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -91,6 +92,7 @@ func UnixServer(){
 		fmt.Println(err)
 		return
 	}
+	//ln.SetWriteBuffer(1048576)
 	var buf [1024]byte
 	for{
 		n,raddr,err := ln.ReadFromUnix(buf[:])
@@ -105,35 +107,4 @@ func UnixServer(){
 		go ca.StreamDB(p,ln,raddr)
 	}
 	ln.Close()
-	//for {
-	//	c, err := ln.Accept()
-	//	if err != nil {
-	//		//fmt.Println(err)
-	//		continue
-	//	}
-	//	go handleServerConnection(c)
-	//}
 }
-
-//func handleServerConnection(c io.ReadWriteCloser) {
-//	db := proto.ReadData(c)
-//	if db == nil {
-//		c.Close()
-//		return
-//	}
-//	R := &proto.Proto{}
-//	R.Load(c)
-//	ca := CL.FindCa(R.Ins)
-//	if ca == nil {
-//		c.Close()
-//		return
-//	}
-//	ca.StreamDB(R)
-//	_,err := c.Write([]byte(R.GetTmpPath()))
-//	if err != nil {
-//		panic(err)
-//	}
-//	//CL.FindCa(R.Ins).StreamDB(R.B,c)
-//	c.Close()
-//}
-//

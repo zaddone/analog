@@ -35,7 +35,7 @@ func NewPostDB(c *Cache,t byte,b int64 ) *postDB {
 func (self *postDB) clear(e int64) byte {
 
 	var eEle,bEle config.Element
-	self.ca.read(self.b,e,func(_e config.Element){
+	self.ca.read(config.Conf.Local,self.b,e,func(_e config.Element){
 		if bEle == nil {
 			bEle = _e
 		}
