@@ -128,7 +128,7 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 		}
 		hand(proto.NewCandlesMin(db[:4],db[4:]))
 	}
-	fmt.Println(lAddr.String())
+	//fmt.Println(lAddr.String())
 	c.Close()
 	os.Remove(p.GetTmpPath())
 }
@@ -139,15 +139,16 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		return
 	}
 	ea := cluster.NewSample(append(l.par.list, node))
-	isa := false
+	//isa := false
 	self.Cl.HandMap(self.pool.GetSetMap(ea),func(_ca interface{},t byte){
 		l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
 		//self.ca.Cshow[5]++
-		isa = true
+		//isa = true
 	})
-	if isa {
-		self.Cshow[int(ea.GetTag()>>1 +4)]++
-	}
+	//if isa {
+		//self.Cshow[int(ea.GetTag()>>1 +4)]++
+	//}
+	self.Cshow[int(ea.GetTag()&^2)+4]++
 	self.Cshow[7]++
 	if (l.sample != nil) {
 		l.sample.SetCaMap(
@@ -174,9 +175,9 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 		return nil
 	}
 	absdiff := math.Abs(diff)
-	if long > absdiff {
-		return nil
-	}
+	//if long > absdiff {
+	//	return nil
+	//}
 	dv := absdiff/long
 
 	le := self.Cl.Len()
@@ -215,9 +216,9 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 				}
 				//fmt.Println(d,l)
 				absd := math.Abs(d)
-				if absd < absdiff {
-					return 3
-				}
+				//if absd < absdiff {
+				//	return 3
+				//}
 				if absd/l < dv {
 					return 3
 				}

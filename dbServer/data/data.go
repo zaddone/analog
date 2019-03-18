@@ -54,7 +54,7 @@ func NewData(ins *oanda.Instrument) (c *Data) {
 	return c
 
 }
-func (self *Data) read(b,e int64, h func([]byte,[]byte)) {
+func (self *Data) read(b,e int64, h func([]byte,[]byte)bool) {
 
 	begin := make([]byte,4)
 	binary.BigEndian.PutUint32(begin,uint32(b))
@@ -65,8 +65,13 @@ func (self *Data) read(b,e int64, h func([]byte,[]byte)) {
 			return nil
 		}
 		c := bu.Cursor()
-		for k,v := c.Seek(begin);k!= nil && binary.BigEndian.Uint32(k) < end;k,v = c.Next() {
-			h(k,v)
+		for k,v := c.Seek(begin);k!= nil;k,v = c.Next() {
+			if binary.BigEndian.Uint32(k) > end {
+				return nil
+			}
+			if !h(k,v) {
+				return nil
+			}
 		}
 		return nil
 	})
@@ -75,41 +80,29 @@ func (self *Data) read(b,e int64, h func([]byte,[]byte)) {
 	}
 }
 
-func (self *Data) StreamDBMain(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
-	var err error
-	var n int
-	R.E = time.Now().Unix()
-	self.read(R.B,R.E,func(k,v []byte){
-		n,err = c.WriteToUnix(append(k,v...),addr)
-		if err != nil {
-			panic(err)
-		}
-		if n  != 12 {
-			panic(n)
-		}
-	})
-	//c.CloseWrite()
-	//fmt.Println(R)
-	_,err = c.WriteToUnix(nil,addr)
-	//fmt.Println(addr.String())
-
-}
-
 func (self *Data) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
 	var err error
 	var n int
-	self.read(R.B,R.E,func(k,v []byte){
+	self.read(R.B,R.E,func(k,v []byte)bool{
 		n,err = c.WriteToUnix(append(k,v...),addr)
 		if err != nil {
-			panic(err)
+			log.Println(err)
+			return false
 		}
 		if n  != 12 {
-			panic(n)
+			log.Println("n =",n)
+			return false
 		}
+		return true
 	})
 	//c.CloseWrite()
 	//fmt.Println(R)
-	_,err = c.WriteToUnix(nil,addr)
+	if err == nil {
+		_,err = c.WriteToUnix(nil,addr)
+		if err != nil {
+			log.Println(err)
+		}
+	}
 	//fmt.Println(addr.String())
 }
 

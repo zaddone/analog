@@ -177,28 +177,29 @@ func (self *Set) SortDB(sp *Pool){
 	//}
 	n :=le - config.Conf.MinSam
 	if n <= 0 {
+	//if le <= config.Conf.MinSam {
 		return
 	}
 	//fmt.Println(int(sp.samCount/sp.setCount) , config.Conf.MinSam,le,n)
-	//go func(k []*saEasy){
-	//	if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
-	//		db, err := tx.CreateBucketIfNotExists([]byte{9})
-	//		if err != nil {
-	//			return err
-	//		}
-	//		for _,k_ := range k {
-	//			err = db.Delete(k_.Key)
-	//			if err != nil {
-	//				return err
-	//			}
-	//			sp.samCount--
-	//		}
-	//		return nil
-	//		//return db.Delete(k)
-	//	});err != nil {
-	//		panic(err)
-	//	}
-	//}(self.List[:n])
+	func(k []*saEasy){
+		if err := sp.SampDB.Batch(func(tx *bolt.Tx)error{
+			db, err := tx.CreateBucketIfNotExists([]byte{9})
+			if err != nil {
+				return err
+			}
+			for _,k_ := range k {
+				err = db.Delete(k_.Key)
+				if err != nil {
+					return err
+				}
+				sp.samCount--
+			}
+			return nil
+			//return db.Delete(k)
+		});err != nil {
+			panic(err)
+		}
+	}(self.List[:n])
 	self.List = self.List[n:]
 
 }
@@ -253,20 +254,6 @@ func (self *Set) loadSamp(sp *Pool) bool {
 	if err != nil {
 		panic(err)
 	}
-	//samp.Close()
-	//sp.viewPoolDB([]byte{9},func(db *bolt.Bucket) error {
-	//	for _,k := range self.List {
-	//		v := db.Get(k.Key)
-	//		if len(v) == 0 {
-	//			continue
-	//		}
-	//		sa = &Sample{}
-	//		//sampTag[j] = k
-	//		sa.load(v,k)
-	//		self.samp=append(self.samp,sa)
-	//	}
-	//	return nil
-	//})
 	if len(self.samp) == 0 {
 		//go self.deleteDB(sp)
 		return false
