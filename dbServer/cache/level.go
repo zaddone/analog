@@ -51,18 +51,25 @@ func (self *postDB) clear(e int64) byte {
 	if eEle == nil || bEle == nil {
 		return 0
 	}
+	if (eEle.Middle() == bEle.Middle()) {
+		return 0
+	}
 
-	if (eEle.Middle() - bEle.Middle()) >0{
+	d := (eEle.Middle() - bEle.Middle())
+	//if d > 0 {
+	//	return 1
+	//}else{
+	//	return 2
+	//}
+	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
+
+	if (d>0) == (self.t==1) {
 		return 1
+		//self.ca.Cshow[0]++
 	}else{
 		return 2
+		//self.ca.Cshow[1]++
 	}
-	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
-	//if (d>0) == (self.t==1) {
-	//	self.ca.Cshow[0]++
-	//}else{
-	//	self.ca.Cshow[1]++
-	//}
 
 }
 

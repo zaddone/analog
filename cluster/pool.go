@@ -367,6 +367,7 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 	if minSet == nil {
 		return nil
 	}
+	//fmt.Println(len(minSet.List))
 	if len(minSet.List) < config.Conf.MinSam{
 		return nil
 	}
@@ -404,6 +405,7 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 			}
 		}
 	}
+	//fmt.Println(m)
 	return m
 
 
@@ -787,6 +789,7 @@ func (sp *Pool) Add(e *Sample) {
 				sp.samCount--
 				db.Delete(k)
 			}
+
 			//for k,_ := c.First();k!=nil;k,_ = c.Next() {
 			//	if binary.BigEndian.Uint64(k[:8])<ke {
 			//		sp.samCount--

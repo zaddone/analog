@@ -55,6 +55,11 @@ func (self *Cache) SyncRun(cl CacheList){
 	self.SetPool()
 	go self.syncAddPrice()
 	begin := self.getLastTime()
+	if begin == 0 {
+		begin = config.GetFromTime()
+	}
+	fmt.Println(time.Unix(begin,0))
+
 	self.read(fmt.Sprintf("%s_main",config.Conf.Local),begin,time.Now().Unix(),func(e config.Element){
 		self.eleChan <- e
 	})
@@ -89,10 +94,12 @@ func (self *Cache) getLastElement() config.Element {
 	return self.part.list[le-1]
 }
 func (self *Cache) getLastTime() int64 {
+
 	if self.pool != nil {
 		return self.pool.GetLastTime()
 	}
 	return 0
+
 }
 
 func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)){
@@ -194,6 +201,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
+	count :=0
 	go func(){
 		for d :=range chanTmp {
 			//fmt.Println(len(caMap),d.i)
@@ -223,6 +231,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 					return 3
 				}
 				//if (d>0) == (ral>0){
+				count ++
 				if (d>0) {
 					return 1
 				}else{
@@ -237,7 +246,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 	w.Wait()
 	close(chanTmp)
 	w_.Wait()
-	//fmt.Println(caMap)
+	//fmt.Println(caMap,count)
 	return caMap
 
 

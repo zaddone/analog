@@ -206,7 +206,7 @@ func NewConfig()  *Config {
 		c.Val = 3
 		c.BeginTime = "2005-01-01T00:00:00"
 		c.FindLevel = 2
-		c.MinSam = 20
+		c.MinSam = 3
 		c.Debug = true
 		c.Year = 2
 		c.Local = "socket.db"
