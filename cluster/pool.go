@@ -16,6 +16,9 @@ type tmpdb struct {
 	k []byte
 	v []byte
 }
+type CacheInter interface {
+	SetCShow(int)
+}
 
 type Pool struct {
 	PoolDB *bolt.DB
@@ -338,9 +341,9 @@ func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
 	})
 }
 
-func (self *Pool) GetSetMap(e *Sample) []byte {
+func (self *Pool) GetSetMap(e *Sample,c CacheInter ) []byte {
 
-	//_n := int(e.tag &^ 2)
+	_n := int(e.tag &^ 2)
 	//if _n == 1 {
 	//	return nil
 	//}
@@ -371,10 +374,12 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 	if len(minSet.List) < config.Conf.MinSam{
 		return nil
 	}
-	//if minSet.count[_n] < minSet.count[_n^1] {
-	//	return nil
-	//}
-
+	n := 4+_n*2
+	if minSet.count[_n] < minSet.count[_n^1] {
+		c.SetCShow(n+1)
+		return nil
+	}
+	c.SetCShow(n)
 	var m []byte
 	//m := make([]byte,len(minSet.List[0].CaMap))
 	for _,l := range minSet.List{
@@ -407,7 +412,6 @@ func (self *Pool) GetSetMap(e *Sample) []byte {
 	}
 	//fmt.Println(m)
 	return m
-
 
 }
 

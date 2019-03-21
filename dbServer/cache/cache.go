@@ -139,6 +139,9 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 	c.Close()
 	os.Remove(p.GetTmpPath())
 }
+func (self *Cache) SetCShow(i int) {
+	self.Cshow[i]++
+}
 func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	if (l.par.par == nil) ||
 	(self.pool == nil) ||
@@ -147,7 +150,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	}
 	ea := cluster.NewSample(append(l.par.list, node))
 	//isa := false
-	self.Cl.HandMap(self.pool.GetSetMap(ea),func(_ca interface{},t byte){
+	self.Cl.HandMap(self.pool.GetSetMap(ea,self),func(_ca interface{},t byte){
 		l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
 		//self.ca.Cshow[5]++
 		//isa = true
@@ -155,8 +158,8 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	//if isa {
 		//self.Cshow[int(ea.GetTag()>>1 +4)]++
 	//}
-	self.Cshow[int(ea.GetTag()&^2)+4]++
-	self.Cshow[7]++
+	//self.Cshow[int(ea.GetTag()&^2)+4]++
+	//self.Cshow[7]++
 	if (l.sample != nil) {
 		l.sample.SetCaMap(
 		self.GetCacheMap(
@@ -169,7 +172,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		self.pool.Add(l.sample)
 		//fmt.Println(l.sample)
 	}else{
-		self.Cshow[6]++
+		//self.Cshow[6]++
 	}
 	l.sample = ea
 
@@ -201,7 +204,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
-	count :=0
+	//count :=0
 	go func(){
 		for d :=range chanTmp {
 			//fmt.Println(len(caMap),d.i)
@@ -224,14 +227,14 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 				}
 				//fmt.Println(d,l)
 				absd := math.Abs(d)
-				//if absd < absdiff {
-				//	return 3
-				//}
+				if absd < absdiff {
+					return 3
+				}
 				if absd/l < dv {
 					return 3
 				}
 				//if (d>0) == (ral>0){
-				count ++
+				//count ++
 				if (d>0) {
 					return 1
 				}else{
