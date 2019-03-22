@@ -150,27 +150,49 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	}
 	ea := cluster.NewSample(append(l.par.list, node))
 	//isa := false
-	self.Cl.HandMap(self.pool.GetSetMap(ea,self),func(_ca interface{},t byte){
-		l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
-		//self.ca.Cshow[5]++
-		//isa = true
-	})
+	//self.Cl.HandMap(self.pool.GetSetMap(ea,self),func(_ca interface{},t byte){
+	//	l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
+	//	//self.ca.Cshow[5]++
+	//	//isa = true
+	//})
+
+	self.pool.Add(ea)
 	//if isa {
 		//self.Cshow[int(ea.GetTag()>>1 +4)]++
 	//}
 	//self.Cshow[int(ea.GetTag()&^2)+4]++
 	//self.Cshow[7]++
 	if (l.sample != nil) {
-		l.sample.SetCaMap(
-		self.GetCacheMap(
-			//self.list[0].DateTime(),
-			l.b.DateTime(),
-			self.getLastElement().DateTime(),
-			node.Diff(),
-			sumdif,
-		))
-		self.pool.Add(l.sample)
+		pli := l.par.list[len(l.par.list)-1]
+		if (l.sample.GetLastElement() == pli ){
+			l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+		}
+
+		//l.sample.SetCaMap(
+		//self.GetCacheMap(
+		//	//self.list[0].DateTime(),
+		//	l.b.DateTime(),
+		//	self.getLastElement().DateTime(),
+		//	node.Diff(),
+		//	sumdif,
+		//))
+		//self.pool.Add(l.sample)
 		//fmt.Println(l.sample)
+
+		go func(e *cluster.Sample){
+			if e.Long {
+				self.pool.UpdateSample(e)
+			}
+			e.Wait()
+			if e.GetCheck() {
+				n := (e.GetTag() &^ 2) *2
+				if e.Long {
+					self.Cshow[n]++
+				}else{
+					self.Cshow[n+1]++
+				}
+			}
+		}(l.sample)
 	}else{
 		//self.Cshow[6]++
 	}

@@ -99,6 +99,10 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	return
 
 }
+
+func (self *Sample) GetCheck() bool {
+	return self.check
+}
 func (self *Sample) GetTag() byte {
 	return self.tag
 }
