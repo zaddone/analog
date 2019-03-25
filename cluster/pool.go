@@ -25,7 +25,7 @@ type Pool struct {
 	SampDB *bolt.DB
 	path string
 	//samp string
-	TmpSa [2]chan *Sample
+	TmpSa [4]chan *Sample
 	//timeInterval int64
 	//runChan chan bool
 	//runChan := make(chan bool,7)
@@ -171,10 +171,13 @@ func (self *Pool) GetLastTime() (t int64) {
 func NewPool(ins string) (po *Pool) {
 
 	po = &Pool{
-		TmpSa:[2]chan *Sample{make(chan *Sample,3),make(chan *Sample,5)},
+		TmpSa:[4]chan *Sample{
+			make(chan *Sample,5),
+			make(chan *Sample,5),
+			make(chan *Sample,5),
+			make(chan *Sample,5),
+		},
 		path:filepath.Join(config.Conf.ClusterPath,ins),
-		//setCountChan:make(chan float64,100),
-		//runChan:make(chan bool,7)
 	}
 	_,err := os.Stat(po.path)
 	if err != nil {
@@ -195,6 +198,8 @@ func NewPool(ins string) (po *Pool) {
 	//}
 	go po.syncAdd(po.TmpSa[0])
 	go po.syncAdd(po.TmpSa[1])
+	go po.syncAdd(po.TmpSa[2])
+	go po.syncAdd(po.TmpSa[3])
 	return po
 
 }
@@ -340,134 +345,134 @@ func (self *Pool) findSetDoubleBak(e *Sample,tag byte,h func(*Set)){
 	})
 }
 
-func (self *Pool) GetSetMap(e *Sample,c CacheInter ) []byte {
+//func (self *Pool) GetSetMap(e *Sample,c CacheInter ) []byte {
+//
+//	_n := int(e.tag &^ 2)
+//	//if _n == 1 {
+//	//	return nil
+//	//}
+//	var diff,minDiff float64
+//	var minSet *Set
+//	SetsChan := make(chan *Set,100)
+//	var w sync.WaitGroup
+//	w.Add(1)
+//	go func(){
+//		for s := range SetsChan{
+//			diff = s.distance(e)
+//			if minDiff > diff || minDiff == 0 {
+//				minDiff = diff
+//				minSet = s
+//			}
+//		}
+//		w.Done()
+//	}()
+//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+//		SetsChan <- s
+//	})
+//	close(SetsChan)
+//	w.Wait()
+//	if minSet == nil {
+//		return nil
+//	}
+//	//fmt.Println(len(minSet.List))
+//	if len(minSet.List) < config.Conf.MinSam{
+//		return nil
+//	}
+//	n := 4+_n*2
+//	if minSet.count[_n] < minSet.count[_n^1] {
+//		c.SetCShow(n+1)
+//		return nil
+//	}
+//	c.SetCShow(n)
+//	var m []byte
+//	//m := make([]byte,len(minSet.List[0].CaMap))
+//	for _,l := range minSet.List{
+//		if (l.Key[8] == e.tag) && (l.CaMap != nil) {
+//		//if (l.Key[8] == e.tag) {
+//			m = l.CaMap
+//			break
+//		}
+//	}
+//	if m == nil {
+//		return nil
+//	}
+//
+//	for _,l := range minSet.List{
+//		if l.Key[8] == e.tag{
+//			if l.CaMap == nil {
+//				return nil
+//			}
+//			for i,n := range l.CaMap {
+//				m[i] |= n
+//			}
+//		}else{
+//			if l.CaMap == nil {
+//				continue
+//			}
+//			for i,n := range l.CaMap {
+//				m[i] |= ^n
+//			}
+//		}
+//	}
+//	//fmt.Println(m)
+//	return m
+//
+//}
 
-	_n := int(e.tag &^ 2)
-	//if _n == 1 {
-	//	return nil
-	//}
-	var diff,minDiff float64
-	var minSet *Set
-	SetsChan := make(chan *Set,100)
-	var w sync.WaitGroup
-	w.Add(1)
-	go func(){
-		for s := range SetsChan{
-			diff = s.distance(e)
-			if minDiff > diff || minDiff == 0 {
-				minDiff = diff
-				minSet = s
-			}
-		}
-		w.Done()
-	}()
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-		SetsChan <- s
-	})
-	close(SetsChan)
-	w.Wait()
-	if minSet == nil {
-		return nil
-	}
-	//fmt.Println(len(minSet.List))
-	if len(minSet.List) < config.Conf.MinSam{
-		return nil
-	}
-	n := 4+_n*2
-	if minSet.count[_n] < minSet.count[_n^1] {
-		c.SetCShow(n+1)
-		return nil
-	}
-	c.SetCShow(n)
-	var m []byte
-	//m := make([]byte,len(minSet.List[0].CaMap))
-	for _,l := range minSet.List{
-		if (l.Key[8] == e.tag) && (l.CaMap != nil) {
-		//if (l.Key[8] == e.tag) {
-			m = l.CaMap
-			break
-		}
-	}
-	if m == nil {
-		return nil
-	}
-
-	for _,l := range minSet.List{
-		if l.Key[8] == e.tag{
-			if l.CaMap == nil {
-				return nil
-			}
-			for i,n := range l.CaMap {
-				m[i] |= n
-			}
-		}else{
-			if l.CaMap == nil {
-				continue
-			}
-			for i,n := range l.CaMap {
-				m[i] |= ^n
-			}
-		}
-	}
-	//fmt.Println(m)
-	return m
-
-}
-
-func (self *Pool) Check(e *Sample) int {
-
-	var diff,minDiff float64
-	var minSet *Set
-	SetsChan := make(chan *Set,100)
-	var w sync.WaitGroup
-	w.Add(1)
-	go func(){
-		for s := range SetsChan{
-			diff = s.distance(e)
-			if minDiff > diff || minDiff == 0 {
-				minDiff = diff
-				minSet = s
-			}
-		}
-		w.Done()
-	}()
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-	//self.findSetDouble(e,0,func(s *Set){
-		SetsChan <- s
-	})
-	close(SetsChan)
-	w.Wait()
-	if minSet == nil {
-		return 0
-		//return false
-	}
-	if len(minSet.List) < config.Conf.MinSam {
-		return 0
-	}
-	//minSet
-	n := int(e.tag &^ 2)
-	n1:= minSet.count[n]
-	n2:= minSet.count[n^1]
-	if (n1 == n2) {
-		return 1
-	}else{
-		if n == 0 {
-			if (n1>n2){
-				return 2
-			}else{
-				return 3
-			}
-		}else{
-			if (n1>n2){
-				return 4
-			}else{
-				return 5
-			}
-		}
-	}
-
-	//return e.check
-}
+//func (self *Pool) Check(e *Sample) int {
+//
+//	var diff,minDiff float64
+//	var minSet *Set
+//	SetsChan := make(chan *Set,100)
+//	var w sync.WaitGroup
+//	w.Add(1)
+//	go func(){
+//		for s := range SetsChan{
+//			diff = s.distance(e)
+//			if minDiff > diff || minDiff == 0 {
+//				minDiff = diff
+//				minSet = s
+//			}
+//		}
+//		w.Done()
+//	}()
+//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+//	//self.findSetDouble(e,0,func(s *Set){
+//		SetsChan <- s
+//	})
+//	close(SetsChan)
+//	w.Wait()
+//	if minSet == nil {
+//		return 0
+//		//return false
+//	}
+//	if len(minSet.List) < config.Conf.MinSam {
+//		return 0
+//	}
+//	//minSet
+//	n := int(e.tag &^ 2)
+//	n1:= minSet.count[n]
+//	n2:= minSet.count[n^1]
+//	if (n1 == n2) {
+//		return 1
+//	}else{
+//		if n == 0 {
+//			if (n1>n2){
+//				return 2
+//			}else{
+//				return 3
+//			}
+//		}else{
+//			if (n1>n2){
+//				return 4
+//			}else{
+//				return 5
+//			}
+//		}
+//	}
+//
+//	//return e.check
+//}
 
 
 func Dressing(Sets []*Set) []*Set {
@@ -621,30 +626,30 @@ func Dressing_s(Sets []*Set) []*Set {
 
 }
 
-func (self *Pool) findMinSet(e *Sample) (minSet *Set) {
-
-	var diff,minDiff float64
-	SetsChan := make(chan *Set,100)
-	var w sync.WaitGroup
-	w.Add(1)
-	go func(){
-		for s := range SetsChan {
-			diff = s.distance(e)
-			if (minDiff > diff) || (minDiff == 0) {
-				minDiff = diff
-				minSet = s
-			}
-		}
-		w.Done()
-	}()
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-		SetsChan <- s
-	})
-	close(SetsChan)
-	w.Wait()
-	return
-
-}
+//func (self *Pool) findMinSet(e *Sample) (minSet *Set) {
+//
+//	var diff,minDiff float64
+//	SetsChan := make(chan *Set,100)
+//	var w sync.WaitGroup
+//	w.Add(1)
+//	go func(){
+//		for s := range SetsChan {
+//			diff = s.distance(e)
+//			if (minDiff > diff) || (minDiff == 0) {
+//				minDiff = diff
+//				minSet = s
+//			}
+//		}
+//		w.Done()
+//	}()
+//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+//		SetsChan <- s
+//	})
+//	close(SetsChan)
+//	w.Wait()
+//	return
+//
+//}
 
 func (self *Pool) add(e *Sample) {
 
@@ -665,7 +670,7 @@ func (self *Pool) add(e *Sample) {
 		}
 		w_.Done()
 	}()
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
+	self.findSetDouble(e,e.tag,func(s *Set){
 		w.Add(1)
 		go func(s_ *Set){
 			if s_.loadSamp(self){
@@ -685,24 +690,23 @@ func (self *Pool) add(e *Sample) {
 		return
 	}
 	//n := e.GetTag() &^ 2
-	//if (len(minSet.samp) == config.Conf.MinSam) &&
-	//if (minSet.count[n] > minSet.count[n^1]) {
-		for _,e_ := range minSet.samp {
-			if e_.GetTag() == e.GetTag() {
-				e.check = e_.Long
-				if !e_.Long{
-					break
-				}
-			}
-		}
-	//}
+	if (len(minSet.samp) == config.Conf.MinSam) &&
+	 (minSet.count[1]==0) {
+		e.check = true
+		//for _,e_ := range minSet.samp {
+		//	e.check = e_.Long
+		//	if !e_.Long{
+		//		break
+		//	}
+		//}
+	}
 	if minSet.checkDar(minDiff) {
 		minSet.update(append(minSet.samp,e))
 	}else{
 		Sets = append(Sets,NewSet(e))
 	}
 	Sets = Dressing_s(Sets)
-	self.updatePoolDB([]byte{e.tag>>1},
+	self.updatePoolDB([]byte{e.tag},
 	func(db *bolt.Bucket)(err error){
 		for _, _s := range Sets {
 			_s.SortDB(self)
@@ -725,82 +729,82 @@ func (self *Pool) add(e *Sample) {
 
 }
 
-func (self *Pool) add_s_1(e *Sample) {
-
-	Sets:= make([]*Set,0,100)
-	chanSets:= make(chan *Set,100)
-	KeysMap := new(sync.Map)
-
-	var minDiff float64
-	var minSet *Set
-	//var darVal Dar
-	var w,w_ sync.WaitGroup
-	w_.Add(1)
-	go func(){
-		for s := range chanSets {
-			if (s.tmp < minDiff) || (minDiff ==0) {
-				minDiff = s.tmp
-				minSet = s
-			}
-			Sets = append(Sets,s)
-		}
-		w_.Done()
-	}()
-	self.findSetDouble(e,e.tag>>1,func(s *Set){
-		w.Add(1)
-		go func(s_ *Set){
-			if s_.loadSamp(self){
-				s_.tmp = s_.distance(e)
-				chanSets <- s_
-			}
-			KeysMap.Store(string(s_.Key()),true)
-			w.Done()
-		}(s)
-	})
-	w.Wait()
-	close(chanSets)
-	w_.Wait()
-	le := len(Sets)
-	if le == 0 {
-		NewSet(e).saveDB(self)
-		return
-	}
-	if minSet.checkDar(minDiff) {
-		minSet.update(append(minSet.samp,e))
-	}else{
-		Sets = append(Sets,NewSet(e))
-	}
-	Sets = Dressing_s(Sets)
-
-	//var co int
-	//KeysMap.Range(func(k,v interface{}) bool {
-	//	co++
-	//	return true
-	//})
-	//self.setCountChan <- float64(len(Sets) - co)
-
-	self.updatePoolDB([]byte{e.tag>>1},
-	func(db *bolt.Bucket)(err error){
-		for _, _s := range Sets {
-			_s.SortDB(self)
-			err = db.Put(_s.Key(),_s.toByte())
-			if err != nil {
-				return err
-			}
-			KeysMap.Delete(string(_s.Key()))
-		}
-		KeysMap.Range(func(k,v interface{})bool{
-			err = db.Delete([]byte(k.(string)))
-			if err != nil {
-				panic(err)
-			}
-			return true
-		})
-		return nil
-	})
-	return
-
-}
+//func (self *Pool) add_s_1(e *Sample) {
+//
+//	Sets:= make([]*Set,0,100)
+//	chanSets:= make(chan *Set,100)
+//	KeysMap := new(sync.Map)
+//
+//	var minDiff float64
+//	var minSet *Set
+//	//var darVal Dar
+//	var w,w_ sync.WaitGroup
+//	w_.Add(1)
+//	go func(){
+//		for s := range chanSets {
+//			if (s.tmp < minDiff) || (minDiff ==0) {
+//				minDiff = s.tmp
+//				minSet = s
+//			}
+//			Sets = append(Sets,s)
+//		}
+//		w_.Done()
+//	}()
+//	self.findSetDouble(e,e.tag>>1,func(s *Set){
+//		w.Add(1)
+//		go func(s_ *Set){
+//			if s_.loadSamp(self){
+//				s_.tmp = s_.distance(e)
+//				chanSets <- s_
+//			}
+//			KeysMap.Store(string(s_.Key()),true)
+//			w.Done()
+//		}(s)
+//	})
+//	w.Wait()
+//	close(chanSets)
+//	w_.Wait()
+//	le := len(Sets)
+//	if le == 0 {
+//		NewSet(e).saveDB(self)
+//		return
+//	}
+//	if minSet.checkDar(minDiff) {
+//		minSet.update(append(minSet.samp,e))
+//	}else{
+//		Sets = append(Sets,NewSet(e))
+//	}
+//	Sets = Dressing_s(Sets)
+//
+//	//var co int
+//	//KeysMap.Range(func(k,v interface{}) bool {
+//	//	co++
+//	//	return true
+//	//})
+//	//self.setCountChan <- float64(len(Sets) - co)
+//
+//	self.updatePoolDB([]byte{e.tag>>1},
+//	func(db *bolt.Bucket)(err error){
+//		for _, _s := range Sets {
+//			_s.SortDB(self)
+//			err = db.Put(_s.Key(),_s.toByte())
+//			if err != nil {
+//				return err
+//			}
+//			KeysMap.Delete(string(_s.Key()))
+//		}
+//		KeysMap.Range(func(k,v interface{})bool{
+//			err = db.Delete([]byte(k.(string)))
+//			if err != nil {
+//				panic(err)
+//			}
+//			return true
+//		})
+//		return nil
+//	})
+//	return
+//
+//}
 
 func (self *Pool) UpdateSample(e *Sample) {
 	//sampDB := self.openSampDB()
@@ -860,6 +864,6 @@ func (sp *Pool) SaveSample(_e *Sample) {
 func (sp *Pool) Add(e *Sample) {
 
 	sp.SaveSample(e)
-	sp.TmpSa[int(e.tag>>1)] <- e
+	sp.TmpSa[int(e.tag)] <- e
 
 }

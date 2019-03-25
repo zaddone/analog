@@ -2,7 +2,7 @@ package cache
 import(
 	"github.com/zaddone/operate/oanda"
 	"github.com/zaddone/analog/config"
-	"github.com/zaddone/analog/cluster"
+	cluster "github.com/zaddone/analog/telecar"
 	//"encoding/binary"
 	//"github.com/boltdb/bolt"
 	//"io"
@@ -95,9 +95,9 @@ func (self *Cache) getLastElement() config.Element {
 }
 func (self *Cache) getLastTime() int64 {
 
-	if self.pool != nil {
-		return self.pool.GetLastTime()
-	}
+	//if self.pool != nil {
+	//	return self.pool.GetLastTime()
+	//}
 	return 0
 
 }
@@ -161,41 +161,47 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		//self.Cshow[int(ea.GetTag()>>1 +4)]++
 	//}
 	//self.Cshow[int(ea.GetTag()&^2)+4]++
-	//self.Cshow[7]++
-	if (l.sample != nil) {
-		pli := l.par.list[len(l.par.list)-1]
-		if (l.sample.GetLastElement() == pli ){
-			l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-		}
+	//n:= ea.GetTag()&^2 *2
+	//self.Cshow[n+1]++
 
-		//l.sample.SetCaMap(
-		//self.GetCacheMap(
-		//	//self.list[0].DateTime(),
-		//	l.b.DateTime(),
-		//	self.getLastElement().DateTime(),
-		//	node.Diff(),
-		//	sumdif,
-		//))
-		//self.pool.Add(l.sample)
-		//fmt.Println(l.sample)
+	//if (l.sample != nil) {
+	//	pli := l.par.list[len(l.par.list)-1]
+	//	if (l.sample.GetLastElement() == pli ){
+	//		l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
+	//		//if l.sample.Long {
+	//		//	n:= l.sample.GetTag()&^2 *2
+	//		//	self.Cshow[n]++
+	//		//}
+	//	}
 
-		go func(e *cluster.Sample){
-			if e.Long {
-				self.pool.UpdateSample(e)
-			}
-			e.Wait()
-			if e.GetCheck() {
-				n := (e.GetTag() &^ 2) *2
-				if e.Long {
-					self.Cshow[n]++
-				}else{
-					self.Cshow[n+1]++
-				}
-			}
-		}(l.sample)
-	}else{
-		//self.Cshow[6]++
-	}
+	//	//l.sample.SetCaMap(
+	//	//self.GetCacheMap(
+	//	//	//self.list[0].DateTime(),
+	//	//	l.b.DateTime(),
+	//	//	self.getLastElement().DateTime(),
+	//	//	node.Diff(),
+	//	//	sumdif,
+	//	//))
+	//	//self.pool.Add(l.sample)
+	//	//fmt.Println(l.sample)
+
+	//	go func(e *cluster.Sample){
+	//		if e.Long {
+	//			self.pool.UpdateSample(e)
+	//		}
+	//		e.Wait()
+	//		if e.GetCheck() {
+	//			n := (e.GetTag() &^ 2) *2
+	//			if e.Long {
+	//				self.Cshow[n]++
+	//			}else{
+	//				self.Cshow[n+1]++
+	//			}
+	//		}
+	//	}(l.sample)
+	//}else{
+	//	//self.Cshow[6]++
+	//}
 	l.sample = ea
 
 }

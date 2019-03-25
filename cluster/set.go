@@ -223,10 +223,11 @@ func (self *Set) load(k,v []byte) {
 	self._key = make([]byte,len(k))
 	copy(self._key,k)
 	//self.key = k
-	self.tag = self._key[16]>>1
-	for _,l := range self.List{
-		self.count[int(l.Key[8] &^ 2 )]++
-	}
+	self.tag = self._key[16]
+	//self.tag = self._key[16]>>1
+	//for _,l := range self.List{
+	//	self.count[int(l.Key[8] &^ 2 )]++
+	//}
 }
 
 func (self *Set) loadSamp(sp *Pool) bool {
@@ -248,6 +249,11 @@ func (self *Set) loadSamp(sp *Pool) bool {
 			//e.setMap[self] = true
 			e.setMap.Store(self,true)
 			self.samp=append(self.samp,e)
+			if e.Long {
+				self.count[0]++
+			}else{
+				self.count[1]++
+			}
 		}
 		return nil
 	})

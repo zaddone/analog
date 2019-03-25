@@ -2,7 +2,8 @@ package cache
 import(
 	"github.com/zaddone/operate/oanda"
 	"github.com/zaddone/analog/config"
-	"github.com/zaddone/analog/cluster"
+	//"github.com/zaddone/analog/cluster"
+	cluster "github.com/zaddone/analog/telecar"
 	"math"
 	//"log"
 	//"sync"
