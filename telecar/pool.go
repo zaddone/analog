@@ -1,8 +1,9 @@
 package telecar
 import(
+	"github.com/zaddone/analog/config"
 	"sync"
 	//"fmt"
-	//"time"
+	"time"
 
 )
 type tmpSet struct {
@@ -15,7 +16,8 @@ type Pool struct {
 	ins string
 	sets [2][]*set
 	chanSam [2]chan *Sample
-	count [2]int
+	count [4]int
+	weekDay int
 }
 func NewPool(ins string) (po *Pool){
 
@@ -43,8 +45,9 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 		select{
 		case e:=<-chanSa:
 			//fmt.Println(time.Unix(e.XMax(),0),i)
-			self.count[i]++
-			self.add(e,i)
+			//self.count[i]++
+			//self.add(e,i)
+			self.addAndCheck(e,i)
 			e.stop<-true
 			//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
 		}
@@ -54,6 +57,11 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 func (sp *Pool) Add(e *Sample) {
 	n := int(e.tag >> 1)
 	//fmt.Println(n)
+	w := int(time.Unix(e.XMax(),0).Weekday())
+	if sp.weekDay > w {
+		sp.setsUpdate()
+	}
+	sp.weekDay = w
 	sp.chanSam[n]<- e
 }
 
@@ -87,7 +95,42 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 	w.Wait()
 	return
 }
+func (self *Pool)SetSampleCheck(t *tmpSet,e *Sample) {
+	if len(t.s.samp) < config.Conf.MinSam{
+		return
+	}
+	for _,_e := range t.s.samp{
+		if _e.tag == e.tag {
+			if !_e.Long{
+				return
+			}
+		}else{
+			if _e.Long {
+				return
+			}
+		}
+	}
+	e.check = true
+}
 
+func (self *Pool) addAndCheck(e *Sample,n int) {
+
+	t := self.FindMinSet(e,n)
+	if t == nil {
+		self.sets[n] = append(self.sets[n],NewSet(e))
+		return
+	}
+	self.SetSampleCheck(t,e)
+
+	if t.s.check(t.dis) {
+		t.s.update(append(t.s.samp,e))
+	}else{
+		t.s = NewSet(e)
+		self.sets[n] = append(self.sets[n],t.s)
+	}
+	self.Dressing(map[*set]bool{t.s:true},n)
+
+}
 func (self *Pool) add(e *Sample,n int) {
 
 	//n := int(e.tag >> 1)
@@ -192,24 +235,43 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 	self.Dressing(_tmp,n)
 
 }
+func (self *Pool) setsUpdate(){
+	for i,sets := range self.sets{
+		_sets := make([]*set,0,len(sets))
+		for _,s := range sets {
+			if s.active >0 {
+				_sets = append(_sets,s)
+				s.active = 0
+			}
+		}
+		self.sets[i] = _sets
+	}
+}
 
 func (self *Pool) clearSet(n int){
 
 	sets := make([]*set,0,len(self.sets[n]))
+	var w sync.WaitGroup
 	for _,s := range self.sets[n] {
 		if len(s.samp) == 0 {
 			continue
 		}
-		s.Sort()
+		w.Add(1)
+		go func (_s *set){
+			_s.Sort()
+			//_s.update(_s.samp)
+			w.Done()
+		}(s)
 		sets = append(sets,s)
 	}
 	self.sets[n] = sets
+	w.Wait()
 
 }
-func (self *Pool) ShowPoolNum() (count [4]int) {
+func (self *Pool) ShowPoolNum() (count [2]int) {
+
 	count[0] = len(self.sets[0])
 	count[1] = len(self.sets[1])
-	count[2] = self.count[0]
-	count[3] = self.count[1]
 	return
+
 }

@@ -164,44 +164,50 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	//n:= ea.GetTag()&^2 *2
 	//self.Cshow[n+1]++
 
-	//if (l.sample != nil) {
-	//	pli := l.par.list[len(l.par.list)-1]
-	//	if (l.sample.GetLastElement() == pli ){
-	//		l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-	//		//if l.sample.Long {
-	//		//	n:= l.sample.GetTag()&^2 *2
-	//		//	self.Cshow[n]++
-	//		//}
-	//	}
+	self.Cshow[7]++
 
-	//	//l.sample.SetCaMap(
-	//	//self.GetCacheMap(
-	//	//	//self.list[0].DateTime(),
-	//	//	l.b.DateTime(),
-	//	//	self.getLastElement().DateTime(),
-	//	//	node.Diff(),
-	//	//	sumdif,
-	//	//))
-	//	//self.pool.Add(l.sample)
-	//	//fmt.Println(l.sample)
+	if (l.sample != nil) {
+		pli := l.par.list[len(l.par.list)-1]
+		if (l.sample.GetLastElement() == pli ){
+			l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
 
-	//	go func(e *cluster.Sample){
-	//		if e.Long {
-	//			self.pool.UpdateSample(e)
-	//		}
-	//		e.Wait()
-	//		if e.GetCheck() {
-	//			n := (e.GetTag() &^ 2) *2
-	//			if e.Long {
-	//				self.Cshow[n]++
-	//			}else{
-	//				self.Cshow[n+1]++
-	//			}
-	//		}
-	//	}(l.sample)
-	//}else{
-	//	//self.Cshow[6]++
-	//}
+			if l.sample.Long {
+				self.Cshow[6]++
+			}
+			//if l.sample.Long {
+			//	n:= l.sample.GetTag()&^2 *2
+			//	self.Cshow[n]++
+			//}
+		}
+
+		//l.sample.SetCaMap(
+		//self.GetCacheMap(
+		//	//self.list[0].DateTime(),
+		//	l.b.DateTime(),
+		//	self.getLastElement().DateTime(),
+		//	node.Diff(),
+		//	sumdif,
+		//))
+		//self.pool.Add(l.sample)
+		//fmt.Println(l.sample)
+
+		go func(e *cluster.Sample){
+			e.Wait()
+
+			if e.GetCheck() {
+				self.Cshow[5]++
+				n := (e.GetTag() &^ 2) *2
+				if e.Long {
+					self.Cshow[4]++
+					self.Cshow[n]++
+				}else{
+					self.Cshow[n+1]++
+				}
+			}
+		}(l.sample)
+	}else{
+		//self.Cshow[6]++
+	}
 	l.sample = ea
 
 }

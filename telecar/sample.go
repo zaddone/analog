@@ -17,6 +17,8 @@ type Sample struct {
 	dis float64
 
 	setMap *sync.Map
+	Long bool
+	check bool
 }
 
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -54,6 +56,18 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	}()
 	return
 
+}
+func (self *Sample) GetLastElement() config.Element {
+	return self.eleLast
+}
+func (self *Sample) Wait(){
+	<-self.stop
+}
+func (self *Sample) GetCheck() bool {
+	return self.check
+}
+func (self *Sample) GetTag() byte {
+	return self.tag
 }
 
 func (self *Sample) XMax () int64 {

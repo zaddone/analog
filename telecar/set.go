@@ -14,6 +14,7 @@ type set struct {
 	tag byte
 	dar *dar
 	sync.Mutex
+	active int
 }
 
 func NewSet(sa *Sample) (S *set) {
@@ -24,6 +25,7 @@ func NewSet(sa *Sample) (S *set) {
 			LengthX:float64(sa.XMax()-sa.XMin()),
 			LengthY:sa.YMax - sa.YMin,
 		},
+		active:1,
 	}
 	X := make([]float64,0,len(sa.X))
 	Y := make([]float64,0,len(sa.X))
@@ -84,6 +86,7 @@ func (S *set) update(sa []*Sample) {
 		fmt.Println(X,Y)
 		panic("w")
 	}
+	S.active++
 
 }
 
@@ -159,10 +162,11 @@ func (self *set) check (d float64) bool {
 	val := self.dar.getVal()
 	if val == 0 {
 		fmt.Println(self.samp)
+		return true
 		//for _,e := range self.samp {
 		//	time.Unix(e.XMax(),0)
 		//}
-		panic(0)
+		//panic(0)
 	}
 	sum := self.dar.sum + d
 	psum := self.dar.psum + (d * d)
