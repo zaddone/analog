@@ -3,8 +3,11 @@ import(
 	"github.com/zaddone/analog/config"
 	"sync"
 	//"fmt"
-	"time"
+	//"time"
 
+)
+const(
+	TimeOut int64 = 302400
 )
 type tmpSet struct {
 	s *set
@@ -17,7 +20,8 @@ type Pool struct {
 	sets [2][]*set
 	chanSam [2]chan *Sample
 	count [4]int
-	weekDay int
+	//weekDay int
+	//sync.RWMutex
 }
 func NewPool(ins string) (po *Pool){
 
@@ -55,14 +59,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 }
 
 func (sp *Pool) Add(e *Sample) {
-	n := int(e.tag >> 1)
-	//fmt.Println(n)
-	w := int(time.Unix(e.XMax(),0).Weekday())
-	if sp.weekDay > w {
-		sp.setsUpdate()
-	}
-	sp.weekDay = w
-	sp.chanSam[n]<- e
+	sp.chanSam[int(e.GetTag()>>1)]<- e
 }
 
 func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
@@ -128,7 +125,7 @@ func (self *Pool) addAndCheck(e *Sample,n int) {
 		t.s = NewSet(e)
 		self.sets[n] = append(self.sets[n],t.s)
 	}
-	self.Dressing(map[*set]bool{t.s:true},n)
+	self.Dressing(map[*set]bool{t.s:true},n,e.XMax())
 
 }
 func (self *Pool) add(e *Sample,n int) {
@@ -147,15 +144,15 @@ func (self *Pool) add(e *Sample,n int) {
 		t.s = NewSet(e)
 		self.sets[n] = append(self.sets[n],t.s)
 	}
-	self.Dressing(map[*set]bool{t.s:true},n)
+	self.Dressing(map[*set]bool{t.s:true},n,e.XMax())
 
 }
 
-func (self *Pool)Dressing(tmp map[*set]bool,n int){
+func (self *Pool)Dressing(tmp map[*set]bool,n int,d int64){
 
 	_tmp := make(map[*set]bool)
 	mu := new(sync.Mutex)
-	//NewS := make([]*set,0,10)
+	NewS := make([]*set,0,10)
 	var w sync.WaitGroup
 	for _,s_ := range self.sets[n] {
 		if tmp[s_] {
@@ -172,9 +169,9 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 				_tmpSet := &tmpSet{s:s,dis:e.dis}
 				var diff float64
 				for _s,_ := range tmp {
-					if e.CheckSetMap(_s){
-						continue
-					}
+					//if e.CheckSetMap(_s){
+					//	continue
+					//}
 					diff = _s.distance(e)
 					if _tmpSet.dis > diff {
 						_tmpSet.dis = diff
@@ -184,16 +181,15 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 				if _tmpSet.s != s {
 					mu.Lock()
 					_tmp[s] = true
-					//if e.CheckSetMap(_tmpSet.s){
-					//	_ns := NewSet(e)
-					//	NewS = append(NewS,_ns)
-					//	_tmp[_ns] = true
-					//	mu.Unlock()
-					//	w.Done()
-					//	return
-					//}else{
-						_tmp[_tmpSet.s] = true
-					//}
+					if e.CheckSetMap(_tmpSet.s){
+						_ns := NewSet(e)
+						NewS = append(NewS,_ns)
+						_tmp[_ns] = true
+						mu.Unlock()
+						w.Done()
+						return
+					}
+					_tmp[_tmpSet.s] = true
 					mu.Unlock()
 				}
 				_tmpSet.s.Lock()
@@ -204,12 +200,12 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 		}
 	}
 	w.Wait()
-	//if len(NewS)>0 {
-	//	self.sets[n] = append(self.sets[n],NewS...)
-	//}
+	if len(NewS)>0 {
+		self.sets[n] = append(self.sets[n],NewS...)
+	}
 	le := len(_tmp)
 	if le == 0 {
-		self.clearSet(n)
+		self.clearSet(n,d)
 		return
 	}
 	w.Add(le)
@@ -223,6 +219,7 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 				return
 			}
 			s.update(s.tmpSamp)
+			s.active = d
 			w.Done()
 		}(_s)
 	}
@@ -232,7 +229,7 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int){
 		delete(_tmp,_s)
 	}
 
-	self.Dressing(_tmp,n)
+	self.Dressing(_tmp,n,d)
 
 }
 func (self *Pool) setsUpdate(){
@@ -248,12 +245,26 @@ func (self *Pool) setsUpdate(){
 	}
 }
 
-func (self *Pool) clearSet(n int){
+func (self *Pool) clearSet(n int,d int64){
+
+	var sort func([]*set,int)
+	sort = func(_s []*set,i int){
+		if i == 0 {
+			return
+		}
+		I := i -1
+		if (_s[I].active <= _s[i].active) {
+			return
+		}
+		_s[I],_s[i] = _s[i],_s[I]
+		sort(_s,I)
+	}
 
 	sets := make([]*set,0,len(self.sets[n]))
 	var w sync.WaitGroup
+	var i int
 	for _,s := range self.sets[n] {
-		if len(s.samp) == 0 {
+		if (len(s.samp) == 0){
 			continue
 		}
 		w.Add(1)
@@ -263,6 +274,11 @@ func (self *Pool) clearSet(n int){
 			w.Done()
 		}(s)
 		sets = append(sets,s)
+		sort(sets,i)
+		i++
+	}
+	if (d - sets[0].active) > TimeOut{
+		sets = sets[1:]
 	}
 	self.sets[n] = sets
 	w.Wait()

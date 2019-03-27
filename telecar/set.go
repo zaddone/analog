@@ -14,7 +14,7 @@ type set struct {
 	tag byte
 	dar *dar
 	sync.Mutex
-	active int
+	active int64
 }
 
 func NewSet(sa *Sample) (S *set) {
@@ -25,7 +25,7 @@ func NewSet(sa *Sample) (S *set) {
 			LengthX:float64(sa.XMax()-sa.XMin()),
 			LengthY:sa.YMax - sa.YMin,
 		},
-		active:1,
+		active:sa.XMax(),
 	}
 	X := make([]float64,0,len(sa.X))
 	Y := make([]float64,0,len(sa.X))

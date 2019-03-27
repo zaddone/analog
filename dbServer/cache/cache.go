@@ -169,8 +169,11 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	if (l.sample != nil) {
 		pli := l.par.list[len(l.par.list)-1]
 		if (l.sample.GetLastElement() == pli ){
-			l.sample.Long = math.Abs(node.Diff()) > math.Abs(pli.Diff())
-
+			//diff := self.getLastElement().Middle() - l.b.Middle()
+			//l.sample.Long =  ((diff >0) == (node.Diff()>0)) && (math.Abs(diff) > sumdif)
+			//l.sample.Long =  ((diff >0) == (node.Diff()>0)
+			//if ((pli.Diff()>0) == (node.Diff()>0))
+			l.sample.Long = ((pli.Diff()>0) != (node.Diff()>0)) && (math.Abs(node.Diff()) > math.Abs(pli.Diff()))
 			if l.sample.Long {
 				self.Cshow[6]++
 			}
@@ -226,7 +229,7 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 
 	le := self.Cl.Len()
 	sumlen := le/4
-	if le%4 >0 {
+	if le%4 > 0 {
 		sumlen++
 	}
 	caMap = make([]byte,sumlen)

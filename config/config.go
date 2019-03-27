@@ -65,12 +65,16 @@ func Zip(e Element) (k,v []byte){
 	binary.BigEndian.PutUint32(v[4:],uint32(math.Abs(e.Diff())))
 	return
 }
-func GetTime() time.Time {
+
+func GetLoc() *time.Location {
 	loc,err := time.LoadLocation("Etc/GMT-3")
 	if err != nil {
 		panic(err)
 	}
-	return time.Now().In(loc)
+	return loc
+}
+func GetTime() time.Time {
+	return time.Now().In(GetLoc())
 }
 type Gran struct {
 	name string

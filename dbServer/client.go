@@ -89,5 +89,6 @@ func loadCache(){
 }
 func main(){
 	loadCache()
+	//for CL.cas
 	select{}
 }
