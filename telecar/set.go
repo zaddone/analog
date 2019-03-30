@@ -44,6 +44,7 @@ func NewSet(sa *Sample) (S *set) {
 		panic("w1")
 	}
 	sa.setMap.Store(S,true)
+	sa.dis = 0
 	return
 
 }
@@ -57,13 +58,14 @@ func (S *set) update(sa []*Sample) {
 		_s.setMap.Store(S,true)
 		sum += _s.Duration()
 		df += _s.YMax - _s.YMin
+		_s.dis = 0
 		//if df > S.sn.LengthY  {
 		//	S.sn.LengthY = df
 		//}
 	}
 	X := make([]float64,0,int(sum/5))
 	Y := make([]float64,0,int(sum/5))
-	le := len(sa)
+	le := len(S.samp)
 	S.sn.LengthY = df/float64(le)
 	sum /= int64(le)
 	S.sn.LengthX = float64(sum)
@@ -117,11 +119,12 @@ func (self *set) distance(e *Sample) float64 {
 	return longDis/l
 
 }
-func (self *set) Sort(){
 
-	le := len(self.samp)
+func SortSamples(scr []*Sample) []*Sample{
+
+	le := len(scr)
 	if le <= config.Conf.MinSam {
-		return
+		return scr
 	}
 	var sort func(int)
 	sort = func(i int){
@@ -129,17 +132,24 @@ func (self *set) Sort(){
 			return
 		}
 		I := i-1
-		if self.samp[I].XMin() <= self.samp[i].XMin() {
+		if scr[I].XMax() <= scr[i].XMax() {
 			return
 		}
-		self.samp[I],self.samp[i] = self.samp[i],self.samp[I]
+		scr[I],scr[i] = scr[i],scr[I]
 		sort(I)
 	}
-	for i,_ := range self.samp{
+	for i,_ := range scr{
 		sort(i)
 	}
-	self.samp = self.samp[(le - config.Conf.MinSam):]
-	self.update(self.samp)
+	return scr[(le - config.Conf.MinSam):]
+	//self.samp = self.samp[1:]
+	//self.update(self.samp)
+}
+func (self *set) Sort(){
+	self.samp = SortSamples(self.samp)
+}
+func (self *set) GetLastTime() int64 {
+	return self.samp[len(self.samp)-1].XMax()
 }
 
 func (self *set) SetDar() {
@@ -151,6 +161,21 @@ func (self *set) SetDar() {
 		}
 		self.dar.update(e.dis)
 	}
+}
+
+func (self *set) checkSample (e *Sample) bool {
+	for _,_e := range self.samp {
+		if _e.tag == e.tag {
+			if _e.Long != e.Long{
+				return false
+			}
+		}else{
+			if _e.Long == e.Long{
+				return false
+			}
+		}
+	}
+	return true
 }
 func (self *set) check (d float64) bool {
 

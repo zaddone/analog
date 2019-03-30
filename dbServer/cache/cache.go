@@ -142,7 +142,64 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 func (self *Cache) SetCShow(i int) {
 	self.Cshow[i]++
 }
+
 func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
+	if (l.par.par == nil) ||
+	(self.pool == nil) ||
+	(self.Cl == nil) {
+		return
+	}
+
+	ea := cluster.NewSample(append(l.par.list, node))
+
+	//self.Cl.HandMap(self.pool.GetSetMap(ea),func(_ca interface{},t byte){
+	//	//l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
+	//	//self.ca.Cshow[5]++
+	//	//isa = true
+	//})
+	//self.Cshow[((ea.GetTag()>>1) * 2) +1]++
+	self.Cshow[7]++
+	if (l.sample == nil) {
+		l.sample = ea
+		return
+	}
+	pli := l.par.list[len(l.par.list)-1]
+	if (l.sample.GetLastElement() == pli ){
+		l.sample.Long = ((pli.Diff()>0) != (node.Diff()>0)) && (math.Abs(node.Diff()) > math.Abs(pli.Diff()))
+		//if l.sample.Long{
+		//	self.Cshow[(l.sample.GetTag()>>1) * 2]++
+		//}
+	}
+
+	self.Cshow[6]++
+	self.pool.Add(l.sample)
+
+	//l.sample.SetCaMap(
+	//self.GetCacheMap(
+	//	//self.list[0].DateTime(),
+	//	l.b.DateTime(),
+	//	self.getLastElement().DateTime(),
+	//	node.Diff(),
+	//	sumdif,
+	//))
+
+	go func(e *cluster.Sample){
+		e.Wait()
+		if e.GetCheck() {
+			n := ((e.GetTag() &^ 2) * 2)
+			if e.Long {
+				self.Cshow[n]++
+			}else{
+				self.Cshow[n+1]++
+			}
+		}
+	}(l.sample)
+
+	l.sample = ea
+
+
+}
+func (self *Cache) CheckOrder_1(l *level,node config.Element,sumdif float64){
 	if (l.par.par == nil) ||
 	(self.pool == nil) ||
 	(self.Cl == nil) {
@@ -198,10 +255,8 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			e.Wait()
 
 			if e.GetCheck() {
-				self.Cshow[5]++
-				n := (e.GetTag() &^ 2) *2
+				n := 4 + ((e.GetTag() &^ 2) * 2)
 				if e.Long {
-					self.Cshow[4]++
 					self.Cshow[n]++
 				}else{
 					self.Cshow[n+1]++
@@ -354,7 +409,8 @@ func (self *Cache) SaveTestLog(from int64){
 	}
 	f.WriteString(str)
 	f.Close()
-	//self.Cshow[7] = 0
+	self.Cshow[7] = 0
+	self.Cshow[6] = 0
 	//self.Cshow = [8]float64{self.Cshow[0],self.Cshow[1],0,0,0,0,self.Cshow[6],self.Cshow[7]}
 
 }

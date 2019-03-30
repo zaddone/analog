@@ -118,6 +118,8 @@ type Config struct {
 
 	Local string
 
+	DateOut int64
+
 }
 
 func GetGran(t int64) *Gran{
@@ -214,6 +216,7 @@ func NewConfig()  *Config {
 		c.Debug = true
 		c.Year = 2
 		c.Local = "socket.db"
+		c.DateOut = 3600*24*7
 
 		//c.LoadGranularity()
 		c.Save()

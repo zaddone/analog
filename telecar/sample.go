@@ -19,6 +19,8 @@ type Sample struct {
 	setMap *sync.Map
 	Long bool
 	check bool
+	caMap []byte
+	caMapCheck []byte
 }
 
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -56,6 +58,14 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	}()
 	return
 
+}
+
+func (self *Sample) GetCaMapCheck() []byte{
+	return self.caMapCheck
+}
+
+func (self *Sample) SetCaMap( m []byte){
+	self.caMap = m
 }
 func (self *Sample) GetLastElement() config.Element {
 	return self.eleLast
