@@ -16,17 +16,23 @@ type tmpSet struct {
 	//sync.Mutex
 }
 
+type CacheInter interface {
+	SetCShow(int)
+}
+
 type Pool struct {
 	ins string
+	//sets [2][]*set
+	//chanSam [2]chan *Sample
 	sets [2][]*set
 	chanSam [2]chan *Sample
-
-	mu [2]sync.RWMutex
-
+	//mu sync.RWMutex
+	//mu [2]sync.RWMutex
 	count [4]int
+	_ca  CacheInter
 	//weekDay int
 }
-func NewPool(ins string) (po *Pool){
+func NewPool(ins string,c CacheInter) (po *Pool){
 
 	po = &Pool{
 		ins:ins,
@@ -35,14 +41,14 @@ func NewPool(ins string) (po *Pool){
 			make([]*set,0,1000),
 		},
 		chanSam:[2]chan *Sample{
-			make(chan *Sample,5),
-			make(chan *Sample,5)},
+			make(chan *Sample,1),
+			make(chan *Sample,1),
+		},
+		_ca:c,
 	}
-
-	for i,c := range po.chanSam{
-		go po.syncAdd(c,i)
+	for i,sam := range po.chanSam {
+		go po.syncAdd(sam,i)
 	}
-
 	return
 
 }
@@ -61,6 +67,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 
 func (sp *Pool) Add(e *Sample) {
 	sp.chanSam[int(e.GetTag()>>1)]<- e
+	//sp.chanSam <- e
 }
 
 func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
@@ -73,6 +80,7 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 	var diff float64
 	for _,s := range self.sets[n] {
 		//fmt.Println(s.sn)
+		s.tmpSamp = nil
 		diff = s.distance(e)
 		if (diff < t.dis) || (t.dis == 0) {
 			t.dis = diff
@@ -87,24 +95,26 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 		//}(s)
 	}
 	return
+
 }
-func (self *Pool)SetSampleCheck(t *tmpSet,e *Sample) {
-	if len(t.s.samp) < config.Conf.MinSam{
-		return
-	}
-	for _,_e := range t.s.samp{
-		if _e.tag == e.tag {
-			if !_e.Long{
-				return
-			}
-		}else{
-			if _e.Long {
-				return
-			}
-		}
-	}
-	e.check = true
-}
+
+//func (self *Pool)SetSampleCheck(t *tmpSet,e *Sample) {
+//	if len(t.s.samp) < config.Conf.MinSam{
+//		return
+//	}
+//	for _,_e := range t.s.samp{
+//		if _e.tag == e.tag {
+//			if !_e.Long{
+//				return
+//			}
+//		}else{
+//			if _e.Long {
+//				return
+//			}
+//		}
+//	}
+//	e.check = true
+//}
 
 //func (self *Pool) addAndCheck(e *Sample,n int) {
 //	self.mu[n].Lock()
@@ -131,8 +141,8 @@ func (self *Pool) add(e *Sample,n int) {
 
 	//n := int(e.tag >> 1)
 
-	self.mu[n].Lock()
-	defer self.mu[n].Unlock()
+	//self.mu[n].Lock()
+	//defer self.mu[n].Unlock()
 	t := self.FindMinSet(e,n)
 
 	if t == nil {
@@ -142,114 +152,43 @@ func (self *Pool) add(e *Sample,n int) {
 	}
 	//tmpSet := make([]*set,0,1000)
 	if t.s.checkSample(e) {
-	//if t.s.check(t.dis) {
 		e.check = true
+		//t := int(e.tag>>1*4)
+		//if e.Long {
+		//	self._ca.SetCShow(t + int(e.tag &^ 2)*2)
+		//}else{
+		//	self._ca.SetCShow(t + int(e.tag &^ 2)*2+1)
+		//}
+	}
+	if t.s.check(t.dis) {
 		t.s.update(append(t.s.samp,e))
 		t.s.active = e.XMax()
 	}else{
 		t.s = NewSet(e)
 		self.sets[n] = append(self.sets[n],t.s)
 	}
-	self.DressingInit(map[*set]bool{t.s:true},n,e.XMax())
+	var mu sync.Mutex
+	var w sync.WaitGroup
+	self.Dressing(true,&mu,&w,map[*set]bool{t.s:true},n,e.XMax())
 
 }
 
-func (self *Pool)DressingInit(tmp map[*set]bool,n int,d int64){
+func (self *Pool)Dressing(init bool,mu *sync.Mutex,w *sync.WaitGroup,tmp map[*set]bool,n int,d int64){
 
 	_tmp:= make(map[*set]bool)
-	mu := new(sync.Mutex)
-	//NewS := make([]*set,0,10)
-	var w sync.WaitGroup
+	//var NewS []*set
 	for _,s_ := range self.sets[n] {
-		//if tmp[s_] {
-		//	continue
-		//}
-		le := len(s_.samp)
-		s_.tmpSamp = make([]*Sample,0,le)
-		w.Add(le)
-		for _,e_ := range s_.samp{
-			go func(s *set,e *Sample){
-				e.InitSetMap(s)
-				if e.dis == 0 {
-					e.dis = s.distance(e)
-				}
-				_tmpSet := &tmpSet{s:s,dis:e.dis}
-				var diff float64
-				for _s,_ := range tmp {
-					if s == _s {
-						continue
-					}
-					if e.CheckSetMap(_s){
-						continue
-					}
-					diff = _s.distance(e)
-					if _tmpSet.dis > diff {
-						_tmpSet.dis = diff
-						_tmpSet.s = _s
-					}
-				}
-				if _tmpSet.s != s {
-					mu.Lock()
-					_tmp[s] = true
-					//if e.CheckSetMap(_tmpSet.s){
-					//	_ns := NewSet(e)
-					//	NewS = append(NewS,_ns)
-					//	_tmp[_ns] = true
-					//	mu.Unlock()
-					//	w.Done()
-					//	return
-					//}
-					_tmp[_tmpSet.s] = true
-					mu.Unlock()
-				}
-				_tmpSet.s.Lock()
-				_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
-				_tmpSet.s.Unlock()
-				w.Done()
-			}(s_,e_)
+		//le := len(s_.samp)
+		if s_.tmpSamp != nil {
+			//s_.Lock()
+			s_.tmpSamp = nil
+			//s_.Unlock()
 		}
-	}
-	w.Wait()
-	//if len(NewS)>0 {
-	//	self.sets[n] = append(self.sets[n],NewS...)
-	//}
-	le := len(_tmp)
-	if le == 0 {
-		self.clearSet(n,d)
-		return
-	}
-	for _s,_ := range _tmp {
-		if len(_s.tmpSamp) == 0{
-			_s.clear()
-			delete(_tmp,_s)
-			continue
-		}
-		_s.active = d
-		w.Add(1)
-		go func(s *set){
-			s.update(SortSamples(s.tmpSamp))
-			w.Done()
-		}(_s)
-	}
-	w.Wait()
-	self.Dressing(_tmp,n,d)
-
-}
-
-func (self *Pool)Dressing(tmp map[*set]bool,n int,d int64){
-
-	_tmp:= make(map[*set]bool)
-	mu := new(sync.Mutex)
-	//NewS := make([]*set,0,10)
-	var w sync.WaitGroup
-	for _,s_ := range self.sets[n] {
-		//if tmp[s_] {
-		//	continue
-		//}
-		le := len(s_.samp)
-		s_.tmpSamp = make([]*Sample,0,le)
-		w.Add(le)
+		w.Add(len(s_.samp))
 		for _,e_ := range s_.samp{
+			if init {
+				e_.InitSetMap(s_)
+			}
 			go func(s *set,e *Sample){
 				if e.dis == 0 {
 					e.dis = s.distance(e)
@@ -272,14 +211,6 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int,d int64){
 				if _tmpSet.s != s {
 					mu.Lock()
 					_tmp[s] = true
-					//if e.CheckSetMap(_tmpSet.s){
-					//	_ns := NewSet(e)
-					//	NewS = append(NewS,_ns)
-					//	_tmp[_ns] = true
-					//	mu.Unlock()
-					//	w.Done()
-					//	return
-					//}
 					_tmp[_tmpSet.s] = true
 					mu.Unlock()
 				}
@@ -291,12 +222,10 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int,d int64){
 		}
 	}
 	w.Wait()
-	//if len(NewS)>0 {
-	//	self.sets[n] = append(self.sets[n],NewS...)
-	//}
+
 	le := len(_tmp)
 	if le == 0 {
-		self.clearSet(n,d)
+		self.clearSet(d,n)
 		return
 	}
 	for _s,_ := range _tmp {
@@ -313,23 +242,11 @@ func (self *Pool)Dressing(tmp map[*set]bool,n int,d int64){
 		}(_s)
 	}
 	w.Wait()
-	self.Dressing(_tmp,n,d)
+	self.Dressing(false,mu,w,_tmp,n,d)
 
 }
-//func (self *Pool) setsUpdate(){
-//	for i,sets := range self.sets{
-//		_sets := make([]*set,0,len(sets))
-//		for _,s := range sets {
-//			if s.active >0 {
-//				_sets = append(_sets,s)
-//				s.active = 0
-//			}
-//		}
-//		self.sets[i] = _sets
-//	}
-//}
 
-func (self *Pool) clearSet(n int,d int64){
+func (self *Pool) clearSet(d int64,n int){
 
 	var sort func([]*set,int)
 	sort = func(_s []*set,i int){
@@ -343,31 +260,18 @@ func (self *Pool) clearSet(n int,d int64){
 		_s[I],_s[i] = _s[i],_s[I]
 		sort(_s,I)
 	}
-	le := len(self.sets[n])
+	le := len(self.sets)
 	sets := make([]*set,0,le)
-	//var w sync.WaitGroup
 	var i int
 	for _,s := range self.sets[n] {
 		if (len(s.samp) == 0){
 			continue
 		}
-		//w.Add(1)
-		//go func (_s *set){
-		//	_s.Sort()
-		////	_s.update(_s.samp)
-		//	w.Done()
-		//}(s)
 		sets = append(sets,s)
 		sort(sets,i)
 		i++
 	}
-	//w.Wait()
-	//if (le == len(sets)) && ((d - sets[0].active) > config.Conf.DateOut){
-	//if len(sets) > 1000 {
-	//	self.sets[n] = sets[1:]
-	//}else{
-	//	self.sets[n] = sets
-	//}
+
 	if ((d - sets[0].active) > config.Conf.DateOut){
 		sets = sets[1:]
 	}
@@ -381,52 +285,52 @@ func (self *Pool) ShowPoolNum() (count [2]int) {
 	return
 
 }
-func (self *Pool) GetSetMap(e *Sample) (m []byte) {
-
-	//if e.tag &^ 2 == 1 {
-	//	return nil
-	//}
-
-	_n := int(e.tag >> 1)
-	self.mu[_n].RLock()
-	defer self.mu[_n].RUnlock()
-	ts := self.FindMinSet(e,_n)
-	if ts == nil {
-		return nil
-	}
-	if len(ts.s.samp) < config.Conf.MinSam {
-		return nil
-	}
-	for _,_e := range ts.s.samp {
-		//if _e.caMap == nil {
-		//	continue
-		//	//return nil
-		//}
-		if _e.tag == e.tag {
-			if !_e.Long {
-				return nil
-			}
-			if m == nil {
-				m = _e.caMap
-			}else{
-				for i,n := range _e.caMap {
-					m[i] |= n
-				}
-			}
-		}else{
-			if _e.Long {
-				return nil
-			}
-			if m == nil {
-				m = _e.caMap
-			}else{
-				for i,n := range _e.caMap {
-					m[i] |= ^n
-				}
-			}
-		}
-	}
-	e.check = true
-	return m
-
-}
+//func (self *Pool) GetSetMap(e *Sample) (m []byte) {
+//
+//	//if e.tag &^ 2 == 1 {
+//	//	return nil
+//	//}
+//
+//	_n := int(e.tag >> 1)
+//	self.mu[_n].RLock()
+//	defer self.mu[_n].RUnlock()
+//	ts := self.FindMinSet(e,_n)
+//	if ts == nil {
+//		return nil
+//	}
+//	if len(ts.s.samp) < config.Conf.MinSam {
+//		return nil
+//	}
+//	for _,_e := range ts.s.samp {
+//		//if _e.caMap == nil {
+//		//	continue
+//		//	//return nil
+//		//}
+//		if _e.tag == e.tag {
+//			if !_e.Long {
+//				return nil
+//			}
+//			if m == nil {
+//				m = _e.caMap
+//			}else{
+//				for i,n := range _e.caMap {
+//					m[i] |= n
+//				}
+//			}
+//		}else{
+//			if _e.Long {
+//				return nil
+//			}
+//			if m == nil {
+//				m = _e.caMap
+//			}else{
+//				for i,n := range _e.caMap {
+//					m[i] |= ^n
+//				}
+//			}
+//		}
+//	}
+//	e.check = true
+//	return m
+//
+//}

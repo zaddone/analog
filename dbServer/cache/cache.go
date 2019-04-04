@@ -46,7 +46,7 @@ func NewCache(ins *oanda.Instrument) (c *Cache) {
 }
 
 func (self *Cache) SetPool(){
-	self.pool = cluster.NewPool(self.ins.Name)
+	self.pool = cluster.NewPool(self.ins.Name,self)
 }
 
 func (self *Cache) SyncRun(cl CacheList){
@@ -144,6 +144,7 @@ func (self *Cache) SetCShow(i int) {
 }
 
 func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
+
 	if (l.par.par == nil) ||
 	(self.pool == nil) ||
 	(self.Cl == nil) {
@@ -151,14 +152,21 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	}
 
 	ea := cluster.NewSample(append(l.par.list, node))
-
+	//if math.Abs(node.Diff()) < sumdif {
+	//	ea = nil
+	//	//l.sample = ea
+	//	//return
+	//	//self.Cshow[6]++
+	//}
+	//self.Cshow[7]++
 	//self.Cl.HandMap(self.pool.GetSetMap(ea),func(_ca interface{},t byte){
 	//	//l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
 	//	//self.ca.Cshow[5]++
 	//	//isa = true
 	//})
 	//self.Cshow[((ea.GetTag()>>1) * 2) +1]++
-	self.Cshow[7]++
+	//self.Cshow[7]++
+	self.pool.Add(ea)
 	if (l.sample == nil) {
 		l.sample = ea
 		return
@@ -166,109 +174,50 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	pli := l.par.list[len(l.par.list)-1]
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = ((pli.Diff()>0) != (node.Diff()>0)) && (math.Abs(node.Diff()) > math.Abs(pli.Diff()))
+		go func(e *cluster.Sample){
+			e.Wait()
+			if e.GetCheck() {
+				t := int(e.GetTag()>>1*4)
+				if e.Long {
+					self.SetCShow(t + int(e.GetTag() &^ 2)*2)
+				}else{
+					self.SetCShow(t + int(e.GetTag() &^ 2)*2+1)
+				}
+			}
+		}(l.sample)
+		//l.sample.Long = (node.Diff()>0)==((self.getLastElement().Middle()-l.b.Middle())>0)
 		//if l.sample.Long{
-		//	self.Cshow[(l.sample.GetTag()>>1) * 2]++
+		//	self.Cshow[4]++
 		//}
+		//self.Cshow[5]++
 	}
+	//self.Cshow[6]++
 
-	self.Cshow[6]++
-	self.pool.Add(l.sample)
-
-	//l.sample.SetCaMap(
+	//go l.sample.SetCaMap(
 	//self.GetCacheMap(
-	//	//self.list[0].DateTime(),
-	//	l.b.DateTime(),
+	//	self.list[0].DateTime(),
+	//	//l.b.DateTime(),
 	//	self.getLastElement().DateTime(),
 	//	node.Diff(),
 	//	sumdif,
 	//))
 
-	go func(e *cluster.Sample){
-		e.Wait()
-		if e.GetCheck() {
-			n := ((e.GetTag() &^ 2) * 2)
-			if e.Long {
-				self.Cshow[n]++
-			}else{
-				self.Cshow[n+1]++
-			}
-		}
-	}(l.sample)
+	//go func(e *cluster.Sample){
+	//	e.Wait()
+	//	if e.GetCheck() {
+	//		n := ((e.GetTag() &^ 2) * 2)
+	//		if e.Long {
+	//			self.Cshow[n]++
+	//		}else{
+	//			self.Cshow[n+1]++
+	//		}
+	//	}
+	//}(l.sample)
 
 	l.sample = ea
 
-
 }
-func (self *Cache) CheckOrder_1(l *level,node config.Element,sumdif float64){
-	if (l.par.par == nil) ||
-	(self.pool == nil) ||
-	(self.Cl == nil) {
-		return
-	}
-	ea := cluster.NewSample(append(l.par.list, node))
-	//isa := false
-	//self.Cl.HandMap(self.pool.GetSetMap(ea,self),func(_ca interface{},t byte){
-	//	l.post = append(l.post,NewPostDB(_ca.(*Cache),t,self.getLastElement().DateTime()))
-	//	//self.ca.Cshow[5]++
-	//	//isa = true
-	//})
 
-	self.pool.Add(ea)
-	//if isa {
-		//self.Cshow[int(ea.GetTag()>>1 +4)]++
-	//}
-	//self.Cshow[int(ea.GetTag()&^2)+4]++
-	//n:= ea.GetTag()&^2 *2
-	//self.Cshow[n+1]++
-
-	self.Cshow[7]++
-
-	if (l.sample != nil) {
-		pli := l.par.list[len(l.par.list)-1]
-		if (l.sample.GetLastElement() == pli ){
-			//diff := self.getLastElement().Middle() - l.b.Middle()
-			//l.sample.Long =  ((diff >0) == (node.Diff()>0)) && (math.Abs(diff) > sumdif)
-			//l.sample.Long =  ((diff >0) == (node.Diff()>0)
-			//if ((pli.Diff()>0) == (node.Diff()>0))
-			l.sample.Long = ((pli.Diff()>0) != (node.Diff()>0)) && (math.Abs(node.Diff()) > math.Abs(pli.Diff()))
-			if l.sample.Long {
-				self.Cshow[6]++
-			}
-			//if l.sample.Long {
-			//	n:= l.sample.GetTag()&^2 *2
-			//	self.Cshow[n]++
-			//}
-		}
-
-		//l.sample.SetCaMap(
-		//self.GetCacheMap(
-		//	//self.list[0].DateTime(),
-		//	l.b.DateTime(),
-		//	self.getLastElement().DateTime(),
-		//	node.Diff(),
-		//	sumdif,
-		//))
-		//self.pool.Add(l.sample)
-		//fmt.Println(l.sample)
-
-		go func(e *cluster.Sample){
-			e.Wait()
-
-			if e.GetCheck() {
-				n := 4 + ((e.GetTag() &^ 2) * 2)
-				if e.Long {
-					self.Cshow[n]++
-				}else{
-					self.Cshow[n+1]++
-				}
-			}
-		}(l.sample)
-	}else{
-		//self.Cshow[6]++
-	}
-	l.sample = ea
-
-}
 func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte) {
 
 	//return nil
@@ -309,29 +258,20 @@ func (self *Cache) GetCacheMap(begin,end int64,diff,long float64) (caMap []byte)
 	self.Cl.Read(func(i int,_c interface{}){
 		go func(I int,c *Cache){
 			chanTmp <- &tmpdb{
-			t:func()byte{
+			t:func()(n byte){
 				if c == self {
-					return 3
+					return 0
 				}
 				d,l := c.TmpCheck(begin,end)
-				if d == 0 {
-					return 3
+				if d != 0 {
+					if math.Abs(d)/l > dv {
+						n  = 2
+					}
 				}
-				//fmt.Println(d,l)
-				absd := math.Abs(d)
-				if absd < absdiff {
-					return 3
+				if (d>0) == (diff>0) {
+					n ++
 				}
-				if absd/l < dv {
-					return 3
-				}
-				//if (d>0) == (ral>0){
-				//count ++
-				if (d>0) {
-					return 1
-				}else{
-					return 2
-				}
+				return
 			}() << uint(I%8),
 			i:I/8,
 			}
@@ -409,8 +349,8 @@ func (self *Cache) SaveTestLog(from int64){
 	}
 	f.WriteString(str)
 	f.Close()
-	self.Cshow[7] = 0
-	self.Cshow[6] = 0
+	//self.Cshow[7] = 0
+	//self.Cshow[6] = 0
 	//self.Cshow = [8]float64{self.Cshow[0],self.Cshow[1],0,0,0,0,self.Cshow[6],self.Cshow[7]}
 
 }

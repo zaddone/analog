@@ -144,28 +144,27 @@ func (self *level) ClearPostAll(){
 	self.par.ClearPostAll()
 }
 func (self *level) ClearPost(){
-	if len(self.post) == 0 {
-		return
-	}
-	e := self.ca.getLastElement().DateTime()
-	for _,p := range self.post{
-		self.ca.Cshow[p.clear(e)+1]++
-		//if n==0 {
-		//	self.ca.Cshow[4]++
-		//}else{
-		//	self.ca.Cshow[p.t+1]++
-		//}
-		//}else if n == p.t {
-		//}else if n == 2 {
-		//	self.ca.Cshow[2]++
-		//}else{
-		//	self.ca.Cshow[3]++
-		//}
-
-		self.ca.Cshow[0]++
-	}
-	//self.post.clear()
-	self.post = nil
+	//if len(self.post) == 0 {
+	//	return
+	//}
+	//e := self.ca.getLastElement().DateTime()
+	//for _,p := range self.post{
+	//	//self.ca.Cshow[p.clear(e)+1]++
+	//	//if n==0 {
+	//	//	self.ca.Cshow[4]++
+	//	//}else{
+	//	//	self.ca.Cshow[p.t+1]++
+	//	//}
+	//	//}else if n == p.t {
+	//	//}else if n == 2 {
+	//	//	self.ca.Cshow[2]++
+	//	//}else{
+	//	//	self.ca.Cshow[3]++
+	//	//}
+	//	//self.ca.Cshow[0]++
+	//}
+	////self.post.clear()
+	//self.post = nil
 }
 
 func (self *level) add(e config.Element,ins *oanda.Instrument) {

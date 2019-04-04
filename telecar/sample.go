@@ -8,6 +8,8 @@ type Sample struct {
 	//xMax int64
 	YMin float64
 	YMax float64
+	YMinEle config.Element
+	YMaxEle config.Element
 	X []int64
 	Y []float64
 
@@ -20,7 +22,7 @@ type Sample struct {
 	Long bool
 	check bool
 	caMap []byte
-	caMapCheck []byte
+	//caMapCheck []byte
 }
 
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -38,8 +40,10 @@ func NewSample(eles []config.Element) (sa *Sample) {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
 				sa.YMin = y
+				sa.YMinEle = e
 			}else if (sa.YMax < y) {
 				sa.YMax = y
+				sa.YMaxEle = e
 			}
 			sa.Y = append(sa.Y,y)
 			sa.X = append(sa.X,e.DateTime())
@@ -60,9 +64,9 @@ func NewSample(eles []config.Element) (sa *Sample) {
 
 }
 
-func (self *Sample) GetCaMapCheck() []byte{
-	return self.caMapCheck
-}
+//func (self *Sample) GetCaMapCheck() []byte{
+//	return self.caMapCheck
+//}
 
 func (self *Sample) SetCaMap( m []byte){
 	self.caMap = m

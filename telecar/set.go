@@ -11,21 +11,24 @@ type set struct {
 	samp []*Sample
 	tmpSamp []*Sample
 	sn snap
-	tag byte
+	//tag byte
 	dar *dar
 	sync.Mutex
 	active int64
+	maps [][4]int
+	count int
 }
 
 func NewSet(sa *Sample) (S *set) {
 	S = &set{
-		tag:sa.tag>>1,
+		//tag:sa.tag>>1,
 		samp:[]*Sample{sa},
 		sn:snap{
 			LengthX:float64(sa.XMax()-sa.XMin()),
 			LengthY:sa.YMax - sa.YMin,
 		},
 		active:sa.XMax(),
+		//maps:[][]byte{sa.caMap}
 	}
 	X := make([]float64,0,len(sa.X))
 	Y := make([]float64,0,len(sa.X))
@@ -33,7 +36,7 @@ func NewSet(sa *Sample) (S *set) {
 	var x int64
 	for i,x = range sa.X {
 		X = append(X,float64(x-sa.XMin())/S.sn.LengthX)
-		if S.tag == 0 {
+		if sa.tag>>1 == 0 {
 			Y = append(Y,(sa.YMax - sa.Y[i])/S.sn.LengthY)
 		}else{
 			Y = append(Y,(sa.Y[i]-sa.YMin)/S.sn.LengthY)
@@ -47,6 +50,21 @@ func NewSet(sa *Sample) (S *set) {
 	sa.dis = 0
 	return
 
+}
+
+func (self *set)loadMap(m []byte){
+	l := len(m)
+	if self.maps == nil {
+		self.maps = make([][4]int,l*4)
+	}
+	var j,J uint
+	for i,n := range m {
+		for j=0;j<4;j++ {
+			J = j*2
+			self.maps[i*4+int(j)][int((n&^(^(3<<J)))>>J)]++
+		}
+	}
+	self.count++
 }
 
 func (S *set) update(sa []*Sample) {
@@ -71,7 +89,7 @@ func (S *set) update(sa []*Sample) {
 	S.sn.LengthX = float64(sum)
 	for _,e := range S.samp {
 		//s.setMap[S] = true
-		if S.tag == 0 {
+		if e.tag>>1 == 0 {
 			e.GetDBf(sum,func(x,y float64){
 				X = append(X,x/S.sn.LengthX)
 				Y = append(Y,y/S.sn.LengthY)
@@ -93,19 +111,20 @@ func (S *set) update(sa []*Sample) {
 }
 
 func (S *set) clear(){
+	S.Lock()
 	S.sn.Wei = nil
 	S.dar = nil
 	S.samp = nil
 	S.tmpSamp = nil
+	S.Unlock()
 
 }
-
 
 func (self *set) distance(e *Sample) float64 {
 
 	//fmt.Println(len(self.samp))
 	var longDis,l float64
-	if self.tag == 0 {
+	if (e.tag>>1) == 0 {
 		e.GetDBf(int64(self.sn.LengthX),func(x,y float64){
 			longDis += math.Pow(self.sn.GetWeiY(x/self.sn.LengthX)-y/self.sn.LengthY,2)
 			l++
@@ -120,11 +139,12 @@ func (self *set) distance(e *Sample) float64 {
 
 }
 
-func SortSamples(scr []*Sample) []*Sample{
+func SortSamples(src []*Sample) []*Sample{
 
-	le := len(scr)
+	//return scr
+	le := len(src)
 	if le <= config.Conf.MinSam {
-		return scr
+		return src
 	}
 	var sort func(int)
 	sort = func(i int){
@@ -132,16 +152,16 @@ func SortSamples(scr []*Sample) []*Sample{
 			return
 		}
 		I := i-1
-		if scr[I].XMax() <= scr[i].XMax() {
+		if src[I].XMax() <= src[i].XMax() {
 			return
 		}
-		scr[I],scr[i] = scr[i],scr[I]
+		src[I],src[i] = src[i],src[I]
 		sort(I)
 	}
-	for i,_ := range scr{
+	for i,_ := range src {
 		sort(i)
 	}
-	return scr[(le - config.Conf.MinSam):]
+	return src[(le - config.Conf.MinSam):]
 	//self.samp = self.samp[1:]
 	//self.update(self.samp)
 }
@@ -164,8 +184,13 @@ func (self *set) SetDar() {
 }
 
 func (self *set) checkSample (e *Sample) bool {
+	if len(self.samp) < config.Conf.MinSam {
+		return false
+	}
+	t := e.tag &^ 2
 	for _,_e := range self.samp {
-		if _e.tag == e.tag {
+
+		if (_e.tag &^ 2) == t {
 			if _e.Long != e.Long{
 				return false
 			}
