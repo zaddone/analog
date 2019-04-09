@@ -3,13 +3,30 @@ import(
 	"github.com/zaddone/analog/config"
 	"sync"
 )
+type Map struct{
+	End int64
+	Long float64
+	No config.Element
+	//F bool
+}
+func (self *Map) SetNo(no config.Element){
+	self.No = no
+}
+
+func (self *Map) GetF() bool {
+	return (self.Long>0) == (self.No.Diff()>0)
+}
+func (self *Map) Check() bool {
+	return self.End > self.No.Duration()
+}
+
 type Sample struct {
 	//xMin int64
 	//xMax int64
 	YMin float64
 	YMax float64
-	YMinEle config.Element
-	YMaxEle config.Element
+	//YMinEle config.Element
+	//YMaxEle config.Element
 	X []int64
 	Y []float64
 
@@ -21,8 +38,13 @@ type Sample struct {
 	setMap *sync.Map
 	Long bool
 	check bool
-	caMap []byte
+	caMap [2][]byte
+	flag int
+
+	//CaMap []*Map
+	//node config.Element
 	//caMapCheck []byte
+	//s *Set
 }
 
 func NewSample(eles []config.Element) (sa *Sample) {
@@ -40,10 +62,10 @@ func NewSample(eles []config.Element) (sa *Sample) {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
 				sa.YMin = y
-				sa.YMinEle = e
+				//sa.YMinEle = e
 			}else if (sa.YMax < y) {
 				sa.YMax = y
-				sa.YMaxEle = e
+				//sa.YMaxEle = e
 			}
 			sa.Y = append(sa.Y,y)
 			sa.X = append(sa.X,e.DateTime())
@@ -67,9 +89,66 @@ func NewSample(eles []config.Element) (sa *Sample) {
 //func (self *Sample) GetCaMapCheck() []byte{
 //	return self.caMapCheck
 //}
+//func (self *Sample) SetNode(no config.Element ){
+//	self.node = no
+//}
+//func (self *Sample) GetNode() config.Element {
+//	return self.node
+//}
+//
+func (self *Sample)SetFlag(i int){
+	self.flag = i
+}
 
-func (self *Sample) SetCaMap( m []byte){
-	self.caMap = m
+func (self *Sample)GetFlag() int {
+	return self.flag
+}
+func (self *Sample) SetCaMap(mc [2][]byte,c CacheInter){
+	self.Wait()
+	if self.caMap[0] == nil {
+		self.caMap = mc
+		return
+	}
+	var t,j,f byte
+	var k int
+	f = ^byte(3)
+	for _i,cm := range self.caMap{
+		ni := _i*4 + int(self.tag &^ 2)*2
+		for i,n := range cm{
+			if n == 255 {
+				continue
+			}
+			k = 0
+			for j=0;j<8;j+=2{
+			//	t = (n&^(^(3<<j)))>>j
+				t = (n>>j)&^(f)
+				if t == 3 {
+					continue
+				}else{
+					k++
+				}
+			}
+			c.SetCShow(ni+1,k)
+			_n := n | (^mc[_i][i])
+			if _n == n {
+				c.SetCShow(ni,k)
+				continue
+			}
+			k = 0
+			for j=0;j<8;j+=2{
+				//t = (_n&^(^(3<<j)))>>j
+				t = (_n>>j)&^(f)
+				if t == 3 {
+					continue
+				}else{
+					k++
+				}
+			}
+			c.SetCShow(ni,k)
+		}
+	}
+
+	self.caMap = mc
 }
 func (self *Sample) GetLastElement() config.Element {
 	return self.eleLast
@@ -77,9 +156,9 @@ func (self *Sample) GetLastElement() config.Element {
 func (self *Sample) Wait(){
 	<-self.stop
 }
-func (self *Sample) GetCheck() bool {
-	return self.check
-}
+//func (self *Sample) IsCheck() bool {
+//	return self.s != nil
+//}
 func (self *Sample) GetTag() byte {
 	return self.tag
 }
@@ -141,6 +220,14 @@ func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 	return
 
 }
+//func (self *Sample) MapCheck(c CacheInter){
+//	if self.s == nil {
+//		return
+//	}
+//	if self.CaMap == nil {
+//		return
+//	}
+//}
 func (self *Sample)CheckSetMap(s *set) bool {
 	_,ok := self.setMap.Load(s)
 	return ok

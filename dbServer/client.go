@@ -15,16 +15,16 @@ var (
 )
 type cacheList struct {
 	cas []*cache.Cache
-	casMap map[*cache.Cache]bool
+	casMap map[string]*cache.Cache
 }
 func NewCacheList() *cacheList {
 	return &cacheList{
-		casMap:make(map[*cache.Cache]bool),
+		casMap:make(map[string]*cache.Cache),
 	}
 }
 func (self *cacheList) add(c *cache.Cache){
 	self.cas = append(self.cas,c)
-	self.casMap[c] = true
+	self.casMap[c.InsName()] = c
 }
 func (self *cacheList) Show() (n int) {
 	return 0
@@ -97,14 +97,17 @@ func loadCache(){
 }
 func main(){
 	loadCache()
-	i:=0
-	for ca,_ := range  CL.casMap{
-		go ca.SyncRun(CL)
-		i++
-		if i >= 2 {
-			break
+	if config.Conf.Debug {
+		CL.casMap[config.Conf.InsName].SyncRun(CL)
+	}else{
+		tmpChan := make(chan bool,1)
+		for _,_ca := range  CL.casMap {
+			tmpChan<-true
+			go func(ca *cache.Cache){
+				ca.SyncRun(CL)
+				<-tmpChan
+			}(_ca)
 		}
+		select{}
 	}
-	//for CL.cas
-	select{}
 }

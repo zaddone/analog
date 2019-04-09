@@ -115,9 +115,7 @@ type Config struct {
 	FindLevel int
 	MinSam int
 	Year int
-
 	Local string
-
 	DateOut int64
 
 }

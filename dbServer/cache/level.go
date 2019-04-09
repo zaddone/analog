@@ -1,6 +1,6 @@
 package cache
 import(
-	"github.com/zaddone/operate/oanda"
+	//"github.com/zaddone/operate/oanda"
 	"github.com/zaddone/analog/config"
 	//"github.com/zaddone/analog/cluster"
 	cluster "github.com/zaddone/analog/telecar"
@@ -126,7 +126,7 @@ func (self *level) duration () int64 {
 	return last - self.list[0].DateTime()
 }
 func (self *level) readf( h func(e config.Element) bool){
-	for i :=len(self.list)-1;i>= 0;i-- {
+	for i :=len(self.list)-1;i> 0;i-- {
 		if !self.list[i].Readf(h){
 			return
 		}
@@ -167,24 +167,22 @@ func (self *level) ClearPost(){
 	//self.post = nil
 }
 
-func (self *level) add(e config.Element,ins *oanda.Instrument) {
+func (self *level) add(e config.Element) {
 
 	if e.Diff() == 0 {
 		return
 	}
 	//self.update = false
 	le := len(self.list)
+
+	self.list =append(self.list,e)
 	if le == 0 {
-		self.list =append(self.list,e)
 		return
 	}
-
-	self.list = append(self.list,e)
 	var sumdif,absMax,max,diff,absDiff float64
 	var maxid int
-	var _e config.Element
-	for i:=0 ; i<le ; i++ {
-		_e = self.list[i]
+	//var _e config.Element
+	for i,_e := range self.list[:le]{
 		sumdif += math.Abs(_e.Diff())
 		diff = e.Middle() - _e.Middle()
 		if (diff>0) == (self.dis>0) {
@@ -197,15 +195,16 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 			absMax = absDiff
 		}
 	}
-	sumdif = sumdif/float64(le)
-	if (maxid == 0) ||
+	sumdif /= float64(le)
+	if (maxid <= 0) ||
 	(absMax == 0) ||
 	(absMax < sumdif) {
 		return
 	}
 	//self.update = true
 	self.ClearPost()
-	node := NewbNode(self.list[:maxid]...)
+	//node := NewbNode(self.list[:maxid]...)
+	node := NewbNode(self.list[:maxid+1]...)
 	if self.par == nil {
 		tag := self.tag+1
 		self.par = NewLevel(tag,self.ca,self)
@@ -215,12 +214,12 @@ func (self *level) add(e config.Element,ins *oanda.Instrument) {
 		}
 		//self.par.add(node,ins)
 	}
-	self.par.add(node,ins)
-	//self.list = self.list[maxid:]
+	self.par.add(node)
+	self.list = self.list[maxid:]
 
-	li := self.list[maxid:]
-	self.list = make([]config.Element,len(li),len(self.list))
-	copy(self.list,li)
+	//li := self.list[maxid:]
+	//self.list = make([]config.Element,len(li),len(self.list))
+	//copy(self.list,li)
 
 	if self.ca != nil {
 		self.b = self.ca.getLastElement()

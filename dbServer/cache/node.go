@@ -34,7 +34,7 @@ func (self *bNode) Duration() int64 {
 }
 func (self *bNode) Readf(hand func(config.Element) bool ) bool {
 
-	for i:= len(self.li)-1;i>=0;i--{
+	for i:= len(self.li)-1;i>0;i--{
 	//for _,e := range self.li {
 		if !self.li[i].Readf(hand) {
 			return false
@@ -43,7 +43,7 @@ func (self *bNode) Readf(hand func(config.Element) bool ) bool {
 	return true
 }
 func (self *bNode) Read(hand func(config.Element) bool ) bool{
-	for _,e := range self.li {
+	for _,e := range self.li[1:] {
 		if !e.Read(hand){
 			return false
 		}
