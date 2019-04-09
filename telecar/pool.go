@@ -154,14 +154,13 @@ func (self *Pool) add(e *Sample,n int) {
 		return
 	}
 	if t.s.checkSample(e){
-		fn := n^1
-		self.mu[fn].RLock()
-		ft := self.FindMinSet(e,fn)
-
-		self.mu[fn].RUnlock()
-		if !ft.s.checkSample(e){
-			e.caMap = [2][]byte{}
-		}
+		//fn := n^1
+		//self.mu[fn].RLock()
+		//ft := self.FindMinSet(e,fn)
+		//self.mu[fn].RUnlock()
+		//if !ft.s.checkSample(e){
+		//	e.caMap = [2][]byte{}
+		//}
 	}
 	self.mu[n].Lock()
 	if t.s.check(t.dis) {

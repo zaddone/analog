@@ -112,41 +112,73 @@ func (self *Sample) SetCaMap(mc [2][]byte,c CacheInter){
 	var t,j,f byte
 	var k int
 	f = ^byte(3)
-	for _i,cm := range self.caMap{
-		ni := _i*4 + int(self.tag &^ 2)*2
-		for i,n := range cm{
-			if n == 255 {
-				continue
-			}
-			k = 0
-			for j=0;j<8;j+=2{
-			//	t = (n&^(^(3<<j)))>>j
-				t = (n>>j)&^(f)
-				if t == 3 {
-					continue
-				}else{
-					k++
-				}
-			}
-			c.SetCShow(ni+1,k)
-			_n := n | (^mc[_i][i])
-			if _n == n {
-				c.SetCShow(ni,k)
-				continue
-			}
-			k = 0
-			for j=0;j<8;j+=2{
-				//t = (_n&^(^(3<<j)))>>j
-				t = (_n>>j)&^(f)
-				if t == 3 {
-					continue
-				}else{
-					k++
-				}
-			}
-			c.SetCShow(ni,k)
+	ni := int(self.tag &^ 2)*2
+	for i,n := range self.caMap[0]{
+		m:= (^((^n)|(^self.caMap[1][i])))
+		if m == 255 {
+			continue
 		}
+		k = 0
+		for j=0;j<8;j+=2{
+			t = (m>>j)&^(f)
+			if t == 3 {
+				continue
+			}else{
+				k++
+			}
+		}
+		c.SetCShow(ni+1,k)
+		_m := m | (^(mc[0][i]|mc[1][i]))
+		if _m == m {
+			c.SetCShow(ni,k)
+			continue
+		}
+		k = 0
+		for j=0;j<8;j+=2{
+			t = (_m>>j)&^(f)
+			if t == 3 {
+				continue
+			}else{
+				k++
+			}
+		}
+		c.SetCShow(ni,k)
 	}
+	//for _i,cm := range self.caMap{
+	//	ni := _i*4 + int(self.tag &^ 2)*2
+	//	for i,n := range cm{
+	//		if n == 255 {
+	//			continue
+	//		}
+	//		k = 0
+	//		for j=0;j<8;j+=2{
+	//		//	t = (n&^(^(3<<j)))>>j
+	//			t = (n>>j)&^(f)
+	//			if t == 3 {
+	//				continue
+	//			}else{
+	//				k++
+	//			}
+	//		}
+	//		c.SetCShow(ni+1,k)
+	//		_n := n | (^mc[_i][i])
+	//		if _n == n {
+	//			c.SetCShow(ni,k)
+	//			continue
+	//		}
+	//		k = 0
+	//		for j=0;j<8;j+=2{
+	//			//t = (_n&^(^(3<<j)))>>j
+	//			t = (_n>>j)&^(f)
+	//			if t == 3 {
+	//				continue
+	//			}else{
+	//				k++
+	//			}
+	//		}
+	//		c.SetCShow(ni,k)
+	//	}
+	//}
 
 	self.caMap = mc
 }
