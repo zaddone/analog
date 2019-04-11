@@ -285,6 +285,7 @@ func (self *cacheList) UnixServer(local string){
 		if err != nil {
 			panic(err)
 		}
+		fmt.Println(string(buf[:n]))
 		//p := proto.NewProto(buf[:n])
 		//ca := CL.FindCa(p.Ins)
 		//if ca == nil {
@@ -301,17 +302,17 @@ func (self *cacheList) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAdd
 		return
 	}
 	var err error
-	var n int
+	//var n int
 	self.read(R.Ins,R.B,R.E,func(k,v []byte)bool{
-		n,err = c.WriteToUnix(append(k,v...),addr)
+		_,err = c.WriteToUnix(append(k,v...),addr)
 		if err != nil {
 			log.Println(err)
 			return false
 		}
-		if n  != 12 {
-			log.Println("n =",n)
-			return false
-		}
+		//if n  != 12 {
+		//	log.Println("n =",n)
+		//	return false
+		//}
 		return true
 	})
 	//c.CloseWrite()

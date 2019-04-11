@@ -88,21 +88,27 @@ func (self *Cache) SyncRun(cl CacheList){
 }
 
 func (self *Cache) syncAddPrice(){
-	var begin,da int64
-	var last int64
+	var begin,da,v int64
+	//var last int64
+	p := <-self.eleChan
+	if len(fmt.Sprintf("%d",p.DateTime())) == 19{
+		v = 1000000000
+	}else{
+		v = 1
+	}
+	begin = p.DateTime()/v
+	self.part.add(p)
 	for{
 		select{
-		case p := <-self.eleChan:
+		case p = <-self.eleChan:
 		//p := <-self.eleChan
-			da = p.DateTime()
-			if last > da {
-				fmt.Println(last,da)
-				//panic(0)
-			}
-			last = da
-			if da - begin > 604800 {
+			da = p.DateTime()/v
+			if (da - begin) > 604800 {
 				self.SaveTestLog(da)
 				begin = da
+			}
+			if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
+				self.part = NewLevel(0,self,nil)
 			}
 			self.part.add(p)
 		case <-self.stop:
@@ -142,6 +148,7 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 	}
 	c,err := net.DialUnix("unixgram",lAddr,rAddr)
 	if err != nil {
+		//fmt.Println(lAddr,rAddr)
 		panic(err)
 	}
 	//c.SetReadBuffer(1048576)
@@ -206,6 +213,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			_e.SetCaMap(self.GetCacheMap(_node.DateTime(),e,_node),self)
 			//self.pool.Add(_e)
 		}(l.sample,node,self.getLastElement().DateTime())
+
 		//go func(e *cluster.Sample){
 		//	e.Wait()
 		//	if e.GetCheck() {
@@ -287,6 +295,7 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 	//fmt.Println(diff,long,dv)
 	self.Cl.Read(func(i int,_c interface{}){
 		go func(I int,c *Cache){
+			//fmt.Println(c.InsName())
 			defer w.Done()
 			if c == self {
 				return
