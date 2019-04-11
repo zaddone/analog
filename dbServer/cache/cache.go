@@ -32,7 +32,15 @@ type Cache struct {
 	stop chan bool
 	Cl CacheList
 	Cshow [8]float64
+	//LogDB *bolt.DB
+}
 
+func (self *Cache) Ins() *oanda.Instrument {
+	return self.ins
+}
+
+func (self *Cache) Add(e config.Element){
+	self.eleChan <- e
 }
 
 func NewCache(ins *oanda.Instrument) (c *Cache) {
@@ -51,6 +59,13 @@ func (self *Cache) InsName() string {
 
 func (self *Cache) SetPool(){
 	self.pool = cluster.NewPool(self.ins.Name,self)
+}
+
+func (self *Cache) SyncInit(cl CacheList){
+	self.Cl = cl
+	self.SetPool()
+	go self.syncAddPrice()
+
 }
 
 func (self *Cache) SyncRun(cl CacheList){
@@ -73,14 +88,16 @@ func (self *Cache) SyncRun(cl CacheList){
 }
 
 func (self *Cache) syncAddPrice(){
-	var begin,last,da int64
+	var begin,da int64
+	var last int64
 	for{
 		select{
 		case p := <-self.eleChan:
 		//p := <-self.eleChan
 			da = p.DateTime()
-			if last >= da {
-				panic(0)
+			if last > da {
+				fmt.Println(last,da)
+				//panic(0)
 			}
 			last = da
 			if da - begin > 604800 {

@@ -81,8 +81,9 @@ func (S *set) update(sa []*Sample) {
 		//	S.sn.LengthY = df
 		//}
 	}
-	X := make([]float64,0,int(sum/5))
-	Y := make([]float64,0,int(sum/5))
+	var X,Y []float64
+	//X := make([]float64,0,int(sum/5))
+	//Y := make([]float64,0,int(sum/5))
 	le := len(S.samp)
 	S.sn.LengthY = df/float64(le)
 	sum /= int64(le)
