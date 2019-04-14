@@ -117,6 +117,7 @@ type Config struct {
 	Year int
 	Local string
 	DateOut int64
+	DateUnixV int64
 
 }
 
@@ -213,8 +214,11 @@ func NewConfig()  *Config {
 		c.MinSam = 3
 		c.Debug = true
 		c.Year = 2
-		c.Local = "socket.db"
+		c.Local = "/tmp/socket.db"
 		c.DateOut = 3600*24*7
+		//c.DateUnixV = 1000000000
+		c.DateUnixV = 1
+
 
 		//c.LoadGranularity()
 		c.Save()

@@ -72,10 +72,32 @@ func (self *EasyPrice) Duration() int64 {
 var (
 	CL *cacheList = NewCacheList()
 )
+type _cache struct {
+	ca *cache.Cache
+}
+func NewCache(ins *oanda.Instrument) *_cache {
+	return &_cache{ca:cache.NewCache(ins)}
+}
+func (self *_cache) Ins() *oanda.Instrument {
+	return self.ca.Ins()
+}
+func (self *_cache)Add(e config.Element){
+	self.ca.Add(e)
+}
+func (self *_cache) InsName() string {
+	return self.ca.InsName()
+}
+func (self *_cache) SyncInit(cl cache.CacheList){
+	self.SyncInit(cl)
+}
+
+func (self *_cache)TmpCheck(b,e int64)(max,min config.Element){
+	return self.ca.CheckVal(e - b)
+}
 
 type cacheList struct {
-	cas []*cache.Cache
-	casMap map[string]*cache.Cache
+	cas []*_cache
+	casMap map[string]*_cache
 	LogDB *bolt.DB
 	//sync.RWMutex
 }
@@ -86,7 +108,7 @@ func (self *cacheList) Show() (n int) {
 func (self *cacheList) Len() int {
 	return len(self.cas)
 }
-func (self *cacheList) GetCache(ins string) *cache.Cache {
+func (self *cacheList) GetCache(ins string) *_cache {
 	return self.casMap[ins]
 }
 func (self *cacheList) Handle(ins string,d *oanda.Price){
@@ -144,7 +166,7 @@ func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 }
 func NewCacheList() (cl *cacheList) {
 	cl = &cacheList{
-		casMap:make(map[string]*cache.Cache),
+		casMap:make(map[string]*_cache),
 	}
 
 	if config.Conf.Server {
@@ -166,7 +188,7 @@ func NewCacheList() (cl *cacheList) {
 }
 
 func (self *cacheList) add(ins *oanda.Instrument){
-	c :=cache.NewCache(ins)
+	c :=NewCache(ins)
 	self.cas = append(self.cas,c)
 	self.casMap[c.InsName()] = c
 	c.SyncInit(self)
@@ -285,7 +307,7 @@ func (self *cacheList) UnixServer(local string){
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println(string(buf[:n]))
+		//fmt.Println(string(buf[:n]))
 		//p := proto.NewProto(buf[:n])
 		//ca := CL.FindCa(p.Ins)
 		//if ca == nil {

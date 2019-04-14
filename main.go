@@ -2,7 +2,8 @@ package main
 import (
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/request"
-	"github.com/zaddone/analog/cache"
+	//"github.com/zaddone/analog/cache"
+	"github.com/zaddone/analog/dbServer/cache"
 	"github.com/zaddone/operate/oanda"
 	"github.com/boltdb/bolt"
 	"encoding/json"
@@ -10,15 +11,15 @@ import (
 	"log"
 	"time"
 	//"math/rand"
-	//"sync"
+	"sync"
 )
 
 type cacheList struct {
 	//sync.Mutex
-	//sync.Mutex
+	sync.Mutex
 	cas []*_cache
 	Date int64
-	//w sync.WaitGroup
+	w sync.WaitGroup
 	topTree *tree
 	count int
 	//countl int
@@ -43,18 +44,27 @@ func (self *cacheList) Show() (n int) {
 }
 func (self *cacheList) addTree(c *tree){
 
+	self.Lock()
 	if self.topTree == nil {
 		self.topTree = c
 	}else{
 		self.topTree.Add(c)
 	}
+	self.Unlock()
+	//self.w.Done()
 
 }
 func (self *cacheList) UpdateTree(t *tree){
 	self.topTree = t
 }
-func (self *cacheList) PopTree() *_cache {
-	return self.topTree.PopSmall(self).(*_cache)
+func (self *cacheList) PopTree() (c *_cache) {
+
+	self.Lock()
+	if self.topTree != nil{
+		c = self.topTree.PopSmall(self).(*_cache)
+	}
+	self.Unlock()
+	return
 }
 
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
@@ -90,9 +100,21 @@ func (self *cacheList) Read(h func(int,interface{})){
 }
 
 func (self *cacheList) findMin() {
-	for{
-		self.PopTree().Read()
-	}
+	//for{
+		self.w.Wait()
+		c := self.PopTree()
+		c.wait<-true
+		//if c == nil {
+		//	time.Sleep(time.Second)
+		//	log.Println("Wait")
+		//	self.findMin()
+		//}else{
+		//	c.wait<-true
+		//	//self.w.Add(1)
+		//	//c.Read()
+		//}
+		//self.PopTree().Read()
+	//}
 }
 type _cache struct {
 	cas *cacheList
@@ -100,7 +122,7 @@ type _cache struct {
 	ca *cache.Cache
 	//index int
 	//wait chan int64
-	//wait chan bool
+	wait chan bool
 	val int64
 	begin int64
 	//w *sync.WaitGroup
@@ -115,18 +137,19 @@ func (self *_cache) GetVal() int64 {
 func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	c = &_cache{
 		ca:cache.NewCache(ins),
-		//wait:make(chan bool,1),
+		wait:make(chan bool),
 		cas:cali,
 		//w:&(cali.w),
 		//wait:make(chan int64),
 	}
 	c.noinfo = NewTree(c)
-	c.ca.Cl = cali
 	cali.cas= append(cali.cas, c)
-
-	c.ca.SetPool()
+	//ca.SyncRun(CL)
+	//c.ca.SetPool()
+	//c.ca.Cl = cali
+	c.ca.Init(cali)
 	//go c.ca.RunDown()
-	c.Read()
+	go c.Read()
 	//fmt.Println(c.ca.Ins.Name)
 
 	return c
@@ -134,7 +157,9 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 
 
 func (self *_cache) Read() {
+
 	self.ca.ReadAll(func(t_ int64){
+		//log.Println(self.ca.InsName(),time.Unix(t_,0))
 		if t_ - self.begin > 604800 {
 			self.ca.SaveTestLog(t_)
 			self.begin = t_
@@ -144,8 +169,13 @@ func (self *_cache) Read() {
 		}
 		self.val = t_
 		self.cas.addTree(self.noinfo)
-		//go self.cas.findMin()
+		self.cas.w.Done()
+		<-self.wait
+		self.cas.w.Add(1)
+		//fmt.Printf("%s\r",time.Unix(t_,0))
+		go self.cas.findMin()
 	})
+
 }
 
 //func (self *_cache) run() {
@@ -162,15 +192,13 @@ func main() {
 
 	loadCache()
 	//go InsList.run()
-
-
-
-	log.Println("wait")
-	InsList.findMin()
-	t := time.Tick(time.Second * 3600)
-	for e := range t {
-		log.Println(e)
-	}
+	//log.Println("wait")
+	go InsList.findMin()
+	select{}
+	//t := time.Tick(time.Second * 3600)
+	//for e := range t {
+	//	log.Println(e)
+	//}
 	//for{
 	//	time.Tick(
 	//}
@@ -188,6 +216,7 @@ func loadCache(){
 				if err != nil {
 					panic(err)
 				}
+				InsList.w.Add(1)
 				NewCache(_ins,InsList)
 				return nil
 			})

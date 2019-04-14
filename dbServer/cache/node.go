@@ -3,8 +3,6 @@ import(
 	//"fmt"
 	"github.com/zaddone/analog/config"
 )
-
-
 type bNode struct {
 	li []config.Element
 	middle float64
@@ -51,10 +49,10 @@ func (self *bNode) Read(hand func(config.Element) bool ) bool{
 	return true
 }
 func (self *bNode) DateTime() int64{
-	le := len(self.li)
-	if le == 0 {
-		return 0
-	}
+	//le := len(self.li)
+	//if le == 0 {
+	//	return 0
+	//}
 	return self.li[0].DateTime()
 }
 func (self *bNode) Middle() float64{

@@ -82,17 +82,17 @@ func (self *Data) read(b,e int64, h func([]byte,[]byte)bool) {
 
 func (self *Data) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAddr){
 	var err error
-	var n int
+	//var n int
 	self.read(R.B,R.E,func(k,v []byte)bool{
-		n,err = c.WriteToUnix(append(k,v...),addr)
+		_,err = c.WriteToUnix(append(k,v...),addr)
 		if err != nil {
 			log.Println(err)
 			return false
 		}
-		if n  != 12 {
-			log.Println("n =",n)
-			return false
-		}
+		//if n  != 12 {
+		//	log.Println("n =",n)
+		//	return false
+		//}
 		return true
 	})
 	//c.CloseWrite()

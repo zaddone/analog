@@ -41,6 +41,8 @@ func NewDataList() (cl *dataList) {
 					panic(err)
 				}
 				cl.cas[_ins.Name] = data.NewData(_ins)
+
+				go UnixServer(fmt.Sprintf("%s_%s",config.Conf.Local,_ins.Name))
 				return nil
 			})
 		})
@@ -72,7 +74,7 @@ func init(){
 }
 
 func main(){
-	go UnixServer(fmt.Sprintf("%s_main",config.Conf.Local))
+	//go UnixServer(fmt.Sprintf("%s_main",config.Conf.Local))
 	go UnixServer(config.Conf.Local)
 	select{}
 }

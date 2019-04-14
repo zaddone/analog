@@ -23,6 +23,13 @@ type CacheList interface{
 	HandMap([]byte,func(interface{},byte))
 	Show() int
 }
+type CacheInterface interface {
+	TmpCheck(int64,int64) (config.Element,config.Element)
+	//CheckVal(int64,int64) (config.Element)
+	//Ins() *oanda.Instrument
+	//InsName() string
+	//Add(config.Element)
+}
 type Cache struct {
 	ins *oanda.Instrument
 	part *level
@@ -61,11 +68,53 @@ func (self *Cache) SetPool(){
 	self.pool = cluster.NewPool(self.ins.Name,self)
 }
 
-func (self *Cache) SyncInit(cl CacheList){
-	self.Cl = cl
-	self.SetPool()
-	go self.syncAddPrice()
 
+func (self *Cache) ReadLevel(h func(*level)bool){
+
+	l := self.part
+	for{
+		if l == nil {
+			return
+		}
+		if !h(l){
+			return
+		}
+		l = l.par
+	}
+
+}
+func (self *Cache) CheckVal(b int64) (max config.Element,min config.Element){
+
+	//var li config.Element
+	var minL *level = nil
+	var diff,_diff int64
+	self.ReadLevel(func(l *level)bool{
+		diff  = l.duration() - b
+		if diff > 0 {
+			if diff < _diff {
+				minL = l
+			}
+			return false
+		}
+		minL = l
+		_diff = -diff
+		return true
+	})
+	if minL == nil {
+		return nil,nil
+	}
+	max = minL.list[0]
+	min = max
+	for _,e := range minL.list[1:] {
+		d := e.Middle()
+		if d > max.Middle() {
+			max = e
+		}
+		if d < min.Middle() {
+			min = e
+		}
+	}
+	return
 }
 
 func (self *Cache) SyncRun(cl CacheList){
@@ -78,13 +127,47 @@ func (self *Cache) SyncRun(cl CacheList){
 		begin = config.GetFromTime()
 	}
 	fmt.Println(self.ins.Name,time.Unix(begin,0))
-	self.read(fmt.Sprintf("%s_main",config.Conf.Local),begin,time.Now().Unix(),func(e config.Element){
+	self.read(fmt.Sprintf("%s_%s",config.Conf.Local,self.ins.Name),begin,time.Now().Unix(),func(e config.Element){
 		self.eleChan <- e
 	})
 	fmt.Println(self.ins.Name,"over")
 	close(self.stop)
 
 
+}
+
+func (self *Cache) SyncInit(cl CacheList){
+	self.Cl = cl
+	self.SetPool()
+	go self.syncAddPrice()
+
+}
+
+func (self *Cache) Init(cl CacheList){
+	self.Cl = cl
+	self.SetPool()
+}
+func (self *Cache) ReadAll(h func(int64)){
+	begin := self.getLastTime()
+	if begin == 0 {
+		begin = config.GetFromTime()
+	}
+	//fmt.Println(self.ins.Name,time.Unix(begin,0))
+	v := config.Conf.DateUnixV
+	if v == 0 {
+		v =1
+	}
+	self.read(fmt.Sprintf("%s_%s",config.Conf.Local,self.ins.Name),begin,time.Now().Unix(),func(p config.Element){
+		da := p.DateTime()
+		h(da)
+		da /=v
+		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
+			self.part = NewLevel(0,self,nil)
+		}
+		self.part.add(p)
+		//self.eleChan <- e
+	})
+	fmt.Println(self.ins.Name,"over")
 }
 
 func (self *Cache) syncAddPrice(){
@@ -213,7 +296,6 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			_e.SetCaMap(self.GetCacheMap(_node.DateTime(),e,_node),self)
 			//self.pool.Add(_e)
 		}(l.sample,node,self.getLastElement().DateTime())
-
 		//go func(e *cluster.Sample){
 		//	e.Wait()
 		//	if e.GetCheck() {
@@ -278,15 +360,8 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 	chanTmp := make(chan *tmpdb,le)
 	var w,w_ sync.WaitGroup
 	w_.Add(1)
-	//count :=0
 	go func(){
 		for d :=range chanTmp {
-			//fmt.Println(len(caMap),d.i)
-			//if d.n == 0 {
-			//	self.Cshow[6]++
-			//}else{
-			//	self.Cshow[7]++
-			//}
 			caMap[d.n][d.i] |= d.t
 		}
 		w_.Done()
@@ -294,7 +369,7 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 	w.Add(le)
 	//fmt.Println(diff,long,dv)
 	self.Cl.Read(func(i int,_c interface{}){
-		go func(I int,c *Cache){
+		go func(I int,c CacheInterface){
 			//fmt.Println(c.InsName())
 			defer w.Done()
 			if c == self {
@@ -324,7 +399,7 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 			}
 			chanTmp <- t
 
-		}(i*2,_c.(*Cache))
+		}(i*2,_c.(CacheInterface))
 	})
 	w.Wait()
 	close(chanTmp)
