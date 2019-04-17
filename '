@@ -20,7 +20,7 @@ type CacheInter interface {
 	SetCShow(int,int)
 	HandMap([]byte,func(interface{},byte))
 	HandMapBlack([]byte,func(interface{},byte)bool)
-	FindSample(sa *Sample) *Sample
+	SameSample(sa *Sample) bool
 	InsName()string
 }
 
@@ -110,13 +110,10 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 
 func (self *Pool) CheckSample(e *Sample) bool{
 	n := int(e.GetTag()>>1)
-	self.mu[n].RLock()
-	defer self.mu[n].RUnlock()
+	//self.mu[n].RLock()
 	t := self.FindMinSet(e,n)
-	if t == nil {
-		return false
-	}
-	return t.s.checkSample(e)
+	//self.mu[n].RUnlock()
+	return t.checkSample(e)
 	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
 	//	c := _c.(CacheInter)
 	//})
@@ -141,44 +138,38 @@ func (self *Pool) add(e *Sample,n int) {
 
 	if t == nil {
 		//self.SaveSet(NewSet(e))
-		self.mu[n].Lock()
 		self.sets[n] = append(self.sets[n],NewSet(e))
-		self.mu[n].Unlock()
 		return
 	}
 	if t.s.checkSample(e){
+		//self._ca.HandMapBlack(e.caMap[0],func(_c interface{},b byte)bool{
+		//	return _c.(CacheInter).SameSample(e)
+		//})
 		self._ca.HandMapBlack(e.caMap[1],func(_c interface{},b byte)bool{
 			c := _c.(CacheInter)
-			_e := c.FindSample(e)
+			_e := c.SameSample(e)
 			if _e == nil {
 				return false
 			}
 			isO:= false
 			c.HandMap(_e.caMap[0],func(_c_ interface{},b_ byte){
-				if self._ca.InsName() == _c_.(CacheInter).InsName() {
-					//fmt.Println(c.InsName(),_c_.(CacheInter).InsName())
+				if c.InsName() == _c_.(CacheInter).InsName() {
 					//isO = true
 					isO = (b == b_)
 				}
 			})
 			return isO
-		})
-		self._ca.HandMapBlack(e.caMap[0],func(_c interface{},b byte)bool{
-			c := _c.(CacheInter)
-			_e := c.FindSample(e)
-			if _e == nil {
-				return false
-			}
-			isO:= false
-			c.HandMap(_e.caMap[1],func(_c_ interface{},b_ byte){
-				if self._ca.InsName() == _c_.(CacheInter).InsName() {
-					isO = (b == b_)
-				}
-			})
-			return isO
-		})
-	}
 
+
+		})
+	//	//fn := n^1
+	//	//self.mu[fn].RLock()
+	//	//ft := self.FindMinSet(e,fn)
+	//	//self.mu[fn].RUnlock()
+	//	//if !ft.s.checkSample(e){
+	//	//	e.caMap = [2][]byte{}
+	//	//}
+	}
 	self.mu[n].Lock()
 	if t.s.check(t.dis) {
 		t.s.update(append(t.s.samp,e))
@@ -187,6 +178,9 @@ func (self *Pool) add(e *Sample,n int) {
 		t.s = NewSet(e)
 		self.sets[n] = append(self.sets[n],t.s)
 	}
+	//var mu sync.Mutex
+	//var w sync.WaitGroup
+	//self.Dressing(true,&mu,&w,map[*set]bool{t.s:true},n,e.XMax())
 	self.Dressing_only(true,map[*set]bool{t.s:true},n,e.XMax())
 	self.mu[n].Unlock()
 
@@ -287,8 +281,10 @@ func (self *Pool)Dressing(init bool,mu *sync.Mutex,w *sync.WaitGroup,tmp map[*se
 					}
 				}
 				if _tmpSet.s != s {
+					mu.Lock()
 					_tmp[s] = true
 					_tmp[_tmpSet.s] = true
+					mu.Unlock()
 				}
 				_tmpSet.s.Lock()
 				_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)

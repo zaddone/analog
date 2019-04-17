@@ -8,8 +8,8 @@ import (
 	"github.com/boltdb/bolt"
 	"encoding/json"
 	//"fmt"
-	"log"
-	"time"
+	//"log"
+	//"time"
 	//"math/rand"
 	"sync"
 )
@@ -67,6 +67,32 @@ func (self *cacheList) PopTree() (c *_cache) {
 	return
 }
 
+func (self *cacheList) HandMapBlack(m []byte,hand func(interface{},byte) bool){
+
+	if m == nil {
+		return
+	}
+	var t byte
+	var j,J uint
+	for i,n := range m {
+		if n == 255 {
+			continue
+		}
+		for j=0;j<4;j++{
+			J = j*2
+			t = (n&^(^(3<<J)))>>J
+			if t == 3 || t == 0 {
+				continue
+			}
+			if !hand(self.cas[i*4+int(j)].ca,t){
+				t = 3
+				m[i] |= t<<J
+			}
+		}
+	}
+
+}
+
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 
 	if m == nil {
@@ -117,8 +143,8 @@ func (self *cacheList) findMin() {
 	//}
 }
 type _cache struct {
-	cas *cacheList
 
+	cas *cacheList
 	ca *cache.Cache
 	//index int
 	//wait chan int64
@@ -155,6 +181,10 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	return c
 }
 
+
+//func (self *_cache) TmpCheck(b int64,e int64)(config.Element,config.Element) {
+//
+//}
 
 func (self *_cache) Read() {
 

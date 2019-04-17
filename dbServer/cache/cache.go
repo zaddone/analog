@@ -21,15 +21,19 @@ type CacheList interface{
 	Read(func(int,interface{}))
 	Len() int
 	HandMap([]byte,func(interface{},byte))
+	HandMapBlack([]byte,func(interface{},byte)bool)
 	Show() int
 }
 type CacheInterface interface {
 	TmpCheck(int64,int64) (config.Element,config.Element)
-	//CheckVal(int64,int64) (config.Element)
+	CheckVal(int64,byte) (config.Element,config.Element)
 	//Ins() *oanda.Instrument
-	//InsName() string
+	InsName() string
 	//Add(config.Element)
 }
+
+
+
 type Cache struct {
 	ins *oanda.Instrument
 	part *level
@@ -40,6 +44,15 @@ type Cache struct {
 	Cl CacheList
 	Cshow [8]float64
 	//LogDB *bolt.DB
+	sync.Mutex
+}
+
+
+func (self *Cache) HandMapBlack(m []byte,hand func(interface{},byte)bool){
+	self.Cl.HandMapBlack(m,hand)
+}
+func (self *Cache) HandMap(m []byte,hand func(interface{},byte)){
+	self.Cl.HandMap(m,hand)
 }
 
 func (self *Cache) Ins() *oanda.Instrument {
@@ -65,7 +78,7 @@ func (self *Cache) InsName() string {
 }
 
 func (self *Cache) SetPool(){
-	self.pool = cluster.NewPool(self.ins.Name,self)
+	self.pool = cluster.NewPool(self.InsName(),self)
 }
 
 
@@ -83,38 +96,55 @@ func (self *Cache) ReadLevel(h func(*level)bool){
 	}
 
 }
-func (self *Cache) CheckVal(b int64) (max config.Element,min config.Element){
+
+//func (self *Cache) CheckValBak(b int64,tag byte) (max config.Element,min config.Element){
+	//self.ReadLevel(func(l *level)bool{
+	//	l.sample
+	//})
+//}
+func (self *Cache) CheckVal(b int64,tag byte) (max config.Element,min config.Element){
 
 	//var li config.Element
+	self.Lock()
+	defer self.Unlock()
 	var minL *level = nil
-	var diff,_diff int64
+	var I int
 	self.ReadLevel(func(l *level)bool{
-		diff  = l.duration() - b
-		if diff > 0 {
-			if diff < _diff {
+		for i:= len(l.list)-1;i>=0;i-- {
+			if l.list[i].DateTime()<=b{
 				minL = l
+				max = l.list[i]
+				min = max
+				I = i
+				return false
 			}
-			return false
 		}
-		minL = l
-		_diff = -diff
 		return true
 	})
 	if minL == nil {
 		return nil,nil
 	}
-	max = minL.list[0]
-	min = max
-	for _,e := range minL.list[1:] {
-		d := e.Middle()
-		if d > max.Middle() {
-			max = e
+	for{
+		for _,l := range minL.list[I:]{
+			l.Read(func(e config.Element)bool{
+				d := e.Middle()
+				if (d > max.Middle()) {
+					max = e
+				}
+				if (d < min.Middle()) {
+					min = e
+				}
+				return true
+			})
 		}
-		if d < min.Middle() {
-			min = e
+		if minL.child==nil {
+			return
 		}
+		minL = minL.child
+		I = 0
 	}
 	return
+
 }
 
 func (self *Cache) SyncRun(cl CacheList){
@@ -132,7 +162,6 @@ func (self *Cache) SyncRun(cl CacheList){
 	})
 	fmt.Println(self.ins.Name,"over")
 	close(self.stop)
-
 
 }
 
@@ -164,7 +193,9 @@ func (self *Cache) ReadAll(h func(int64)){
 		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
 			self.part = NewLevel(0,self,nil)
 		}
+		self.Lock()
 		self.part.add(p)
+		self.Unlock()
 		//self.eleChan <- e
 	})
 	fmt.Println(self.ins.Name,"over")
@@ -200,6 +231,7 @@ func (self *Cache) syncAddPrice(){
 		}
 	}
 }
+
 func (self *Cache) getLastElement() config.Element {
 	if self.part == nil {
 		return nil
@@ -210,6 +242,7 @@ func (self *Cache) getLastElement() config.Element {
 	}
 	return self.part.list[le-1]
 }
+
 func (self *Cache) getLastTime() int64 {
 
 	//if self.pool != nil {
@@ -257,8 +290,45 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 	c.Close()
 	os.Remove(p.GetTmpPath())
 }
+
 func (self *Cache) SetCShow(i int,n int) {
 	self.Cshow[i] += float64(n)
+}
+func (self *Cache) FindSample(sa *cluster.Sample) *cluster.Sample {
+	dur := sa.Duration()
+	var diff,d int64
+	var minL *level
+	self.Lock()
+	defer self.Unlock()
+	self.ReadLevel(func(l *level)bool{
+		le := len(l.list)
+		if le == 0 {
+			return false
+		}
+		d = dur - (l.list[le-1].DateTime() - l.list[0].DateTime())
+		if d <0 {
+			d = -d
+		}
+		if (d<diff) || (diff==0){
+			minL = l
+			diff = d
+		}
+		return true
+	})
+	if minL == nil {
+		return nil
+	}
+	if (minL.child == nil) || (minL.child.sample ==nil) {
+		return nil
+	}
+
+	ea := cluster.NewSample(append(minL.list, NewbNode(minL.child.list...)))
+	if !self.pool.CheckSample(ea){
+		return nil
+	}
+	return ea
+	//return ((minL.dis>0) == ((minL.child.list[len(minL.child.list)-1].Middle() - minL.child.list[0].Middle())>0)) == (sa.GetTag()&^2 == 1)
+
 }
 
 func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
@@ -285,6 +355,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	//self.Cshow[((ea.GetTag()>>1) * 2) +1]++
 	//self.Cshow[7]++
 	self.pool.Add(ea)
+
 	if (l.sample == nil) {
 		l.sample = ea
 		return
@@ -293,7 +364,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = math.Abs(node.Diff())>math.Abs(pli.Diff())
 		func (_e *cluster.Sample,_node config.Element,e int64){
-			_e.SetCaMap(self.GetCacheMap(_node.DateTime(),e,_node),self)
+			_e.SetCaMap(self.GetCacheMap(_node.DateTime(),e,_node, _e.GetTag()&^2 ),self)
 			//self.pool.Add(_e)
 		}(l.sample,node,self.getLastElement().DateTime())
 		//go func(e *cluster.Sample){
@@ -339,7 +410,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 
 }
 
-func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]byte) {
+func (self *Cache) GetCacheMap(begin,end int64,node config.Element,t byte) (caMap [2][]byte) {
 
 	//return nil
 	if self.Cl == nil {
@@ -368,14 +439,16 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 	}()
 	w.Add(le)
 	//fmt.Println(diff,long,dv)
+	//dur := end-begin
 	self.Cl.Read(func(i int,_c interface{}){
 		go func(I int,c CacheInterface){
 			//fmt.Println(c.InsName())
 			defer w.Done()
-			if c == self {
+			if c.InsName() == self.InsName() {
 				return
 			}
-			max,min := c.TmpCheck(begin,end)
+			//max,min := c.TmpCheck(begin,end)
+			max,min := c.CheckVal(begin,t)
 			if max == min {
 				return
 			}
@@ -398,7 +471,6 @@ func (self *Cache) GetCacheMap(begin,end int64,node config.Element) (caMap [2][]
 				t.t = 2 << uint(I%8)
 			}
 			chanTmp <- t
-
 		}(i*2,_c.(CacheInterface))
 	})
 	w.Wait()

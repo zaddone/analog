@@ -193,12 +193,12 @@ func (self *set) checkSample (e *Sample) bool {
 			return false
 		}
 	}
-	if e.caMap[0] == nil {
-		le := len(self.samp[0].caMap[0])
-		e.caMap=[2][]byte{
-			make([]byte,le),
-			make([]byte,le)}
-	}
+	//if e.caMap[0] == nil {
+	le := len(self.samp[0].caMap[0])
+	e.caMap=[2][]byte{
+		make([]byte,le),
+		make([]byte,le)}
+	//}
 
 	for _,_e := range self.samp {
 		for i,m := range  _e.caMap[0] {
@@ -206,6 +206,7 @@ func (self *set) checkSample (e *Sample) bool {
 			e.caMap[1][i] |= ^(_e.caMap[1][i])
 		}
 	}
+
 	return true
 	//var t,_t,f,j byte
 	//f = 252
