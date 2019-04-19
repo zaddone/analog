@@ -131,52 +131,24 @@ func (self *Pool) CheckSample(e *Sample) bool{
 
 func (self *Pool) add(e *Sample,n int) {
 
-	//n := int(e.tag >> 1)
-
-	//self.mu[n].Lock()
-	//defer self.mu[n].Unlock()
 	self.mu[n].RLock()
 	t := self.FindMinSet(e,n)
 	self.mu[n].RUnlock()
 
+
 	if t == nil {
 		//self.SaveSet(NewSet(e))
+		e.SetTestMap(e.caMap[2])
 		self.mu[n].Lock()
 		self.sets[n] = append(self.sets[n],NewSet(e))
 		self.mu[n].Unlock()
 		return
 	}
+
 	if t.s.checkSample(e){
-		self._ca.HandMapBlack(e.caMap[1],func(_c interface{},b byte)bool{
-			c := _c.(CacheInter)
-			_e := c.FindSample(e)
-			if _e == nil {
-				return false
-			}
-			isO:= false
-			c.HandMap(_e.caMap[0],func(_c_ interface{},b_ byte){
-				if self._ca.InsName() == _c_.(CacheInter).InsName() {
-					//fmt.Println(c.InsName(),_c_.(CacheInter).InsName())
-					//isO = true
-					isO = (b == b_)
-				}
-			})
-			return isO
-		})
-		self._ca.HandMapBlack(e.caMap[0],func(_c interface{},b byte)bool{
-			c := _c.(CacheInter)
-			_e := c.FindSample(e)
-			if _e == nil {
-				return false
-			}
-			isO:= false
-			c.HandMap(_e.caMap[1],func(_c_ interface{},b_ byte){
-				if self._ca.InsName() == _c_.(CacheInter).InsName() {
-					isO = (b == b_)
-				}
-			})
-			return isO
-		})
+		t.s.SetTMap(e)
+	}else{
+		e.SetTestMap(e.caMap[2])
 	}
 
 	self.mu[n].Lock()

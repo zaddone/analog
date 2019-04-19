@@ -165,9 +165,8 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 		ca:cache.NewCache(ins),
 		wait:make(chan bool),
 		cas:cali,
-		//w:&(cali.w),
-		//wait:make(chan int64),
 	}
+	c.ca.SetI(len(cali.cas))
 	c.noinfo = NewTree(c)
 	cali.cas= append(cali.cas, c)
 	//ca.SyncRun(CL)
@@ -181,13 +180,12 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	return c
 }
 
-
-//func (self *_cache) TmpCheck(b int64,e int64)(config.Element,config.Element) {
-//
-//}
+func (self *_cache) GetI() int {
+	return self.ca.GetI()
+}
+//func (self *_cache) FindSample(e *)
 
 func (self *_cache) Read() {
-
 	self.ca.ReadAll(func(t_ int64){
 		//log.Println(self.ca.InsName(),time.Unix(t_,0))
 		if t_ - self.begin > 604800 {

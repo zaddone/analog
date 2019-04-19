@@ -38,8 +38,12 @@ type Sample struct {
 	setMap *sync.Map
 	Long bool
 	check bool
-	caMap [2][]byte
+	caMap [3][]byte
 	flag int
+	//toSa map[*Sample]bool
+	//fromSa map[*Sample]bool
+
+	//End bool
 
 	//CaMap []*Map
 	//node config.Element
@@ -47,7 +51,7 @@ type Sample struct {
 	//s *Set
 }
 
-func NewSample(eles []config.Element) (sa *Sample) {
+func NewSample(eles []config.Element,le int) (sa *Sample) {
 
 	sa = &Sample{
 		eleLast:eles[len(eles)-1],
@@ -55,6 +59,13 @@ func NewSample(eles []config.Element) (sa *Sample) {
 		X:make([]int64,0,2000),
 		stop:make(chan bool,1),
 		setMap:new(sync.Map),
+	}
+	if le !=0 {
+		sa.caMap = [3][]byte{
+			make([]byte,le),
+			make([]byte,le),
+			make([]byte,le),
+		}
 	}
 	var y float64
 	for _,ele := range eles {
@@ -85,8 +96,13 @@ func NewSample(eles []config.Element) (sa *Sample) {
 	return
 
 }
+func (self *Sample) SetTestMap(n []byte){
+	for i,m:= range n {
+		self.caMap[2][i] |= ^m
+	}
+}
 
-func (self *Sample) GetCaMap() [2][]byte{
+func (self *Sample) GetCaMap() [3][]byte{
 	return self.caMap
 }
 //func (self *Sample) SetNode(no config.Element ){
@@ -103,84 +119,7 @@ func (self *Sample)SetFlag(i int){
 func (self *Sample)GetFlag() int {
 	return self.flag
 }
-func (self *Sample) SetCaMap(mc [2][]byte,c CacheInter){
-	self.Wait()
-	if self.caMap[0] == nil {
-		self.caMap = mc
-		return
-	}
-	var t,j,f byte
-	var k int
-	f = ^byte(3)
-	ni := int(self.tag &^ 2)*2
-	for s,cm := range self.caMap{
-		ni += s*4
-		for i,m := range cm {
-			if m == 255 {
-				continue
-			}
-			k = 0
-			for j=0;j<8;j+=2{
-				t = (m>>j)&^(f)
-				if t == 3 {
-					continue
-				}else{
-					k++
-				}
-			}
-			c.SetCShow(ni+1,k)
-			_m := ^(mc[s][i]) | m
-			if _m == m {
-				c.SetCShow(ni,k)
-				continue
-			}
-			k = 0
-			for j=0;j<8;j+=2{
-				t = (_m>>j)&^(f)
-				if t == 3 {
-					continue
-				}else{
-					k++
-				}
-			}
-			c.SetCShow(ni,k)
-		}
-	}
 
-	//for i,n := range self.caMap[0]{
-	//	m:= (^((^n)|(^self.caMap[1][i])))
-	//	if m == 255 {
-	//		continue
-	//	}
-	//	k = 0
-	//	for j=0;j<8;j+=2{
-	//		t = (m>>j)&^(f)
-	//		if t == 3 {
-	//			continue
-	//		}else{
-	//			k++
-	//		}
-	//	}
-	//	c.SetCShow(ni+1,k)
-	//	_m := m | (^(mc[0][i]|mc[1][i]))
-	//	if _m == m {
-	//		c.SetCShow(ni,k)
-	//		continue
-	//	}
-	//	k = 0
-	//	for j=0;j<8;j+=2{
-	//		t = (_m>>j)&^(f)
-	//		if t == 3 {
-	//			continue
-	//		}else{
-	//			k++
-	//		}
-	//	}
-	//	c.SetCShow(ni,k)
-	//}
-	self.caMap = mc
-
-}
 func (self *Sample) GetLastElement() config.Element {
 	return self.eleLast
 }

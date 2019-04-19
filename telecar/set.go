@@ -185,53 +185,15 @@ func (self *set) SetDar() {
 }
 
 func (self *set) checkSample (e *Sample) bool {
-	if len(self.samp) < config.Conf.MinSam {
-		return false
-	}
-	for _,_e := range self.samp {
-		if _e.caMap[0] == nil {
-			return false
+	return len(self.samp) >= config.Conf.MinSam
+}
+
+func (self *set) SetTMap(e *Sample) {
+	for _,e_ := range self.samp {
+		for i,m := range e_.caMap[1]{
+			e.caMap[2][i] |= ^m
 		}
 	}
-	//if e.caMap[0] == nil {
-	le := len(self.samp[0].caMap[0])
-	e.caMap=[2][]byte{
-		make([]byte,le),
-		make([]byte,le)}
-	//}
-
-	for _,_e := range self.samp {
-		for i,m := range  _e.caMap[0] {
-			e.caMap[0][i] |= ^m
-			e.caMap[1][i] |= ^(_e.caMap[1][i])
-		}
-	}
-
-	return true
-	//var t,_t,f,j byte
-	//f = 252
-	//for i,n := range e.caMap[0]{
-	//	if n == 255 {
-	//		continue
-	//	}
-	//	_n := e.caMap[1][i]
-	//	if _n == 255 {
-	//		continue
-	//	}
-	//	for j=0;j<8;j+=2{
-	//		t  = (n>>j)&^(f)
-	//		_t = (_n>>j)&^(f)
-	//		if (t != 3) && (_t !=3) {
-	//			panic(0)
-	//		}
-	//		if t != 3 {
-	//			fmt.Println(0,i*4+int(j/2))
-	//		}
-	//		if _t != 3 {
-	//			fmt.Println(1,i*4+int(j/2))
-	//		}
-	//	}
-	//}
 }
 func (self *set) check (d float64) bool {
 
