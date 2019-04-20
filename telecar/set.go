@@ -190,9 +190,7 @@ func (self *set) checkSample (e *Sample) bool {
 
 func (self *set) SetTMap(e *Sample) {
 	for _,e_ := range self.samp {
-		for i,m := range e_.caMap[1]{
-			e.caMap[2][i] |= ^m
-		}
+		e.SetTestMap(e_.caMap[1])
 	}
 }
 func (self *set) check (d float64) bool {

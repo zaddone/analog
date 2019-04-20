@@ -26,6 +26,8 @@ type CacheList interface{
 }
 type CacheInterface interface {
 	FindSample(*cluster.Sample)*cluster.Sample
+	FindSampleTmp(*cluster.Sample)*cluster.Sample
+	Pool() *cluster.Pool
 	InsName() string
 	GetI() int
 
@@ -210,6 +212,9 @@ func (self *Cache) ReadAll(h func(int64)){
 	})
 	fmt.Println(self.ins.Name,"over")
 }
+func (self *Cache) Pool() *cluster.Pool {
+	return self.pool
+}
 
 func (self *Cache) syncAddPrice(){
 	var begin,da,v int64
@@ -305,6 +310,37 @@ func (self *Cache) SetCShow(i int,n int) {
 	self.Cshow[i] += float64(n)
 }
 
+func (self *Cache) FindSampleTmp(se *cluster.Sample) *cluster.Sample {
+
+	dur := se.Duration()
+	var diff,minDiff int64
+	var minl *level
+	self.ReadLevel(func(l *level)bool{
+		if l.sample == nil {
+			return true
+		}
+		//_e := cluster.NewSample(append(l.par.list,NewbNode(l.list...)),self.GetSumLen())
+		el:= l.list[len(l.list)-1]
+		d := el.DateTime()+el.Duration() - l.par.list[0].DateTime()
+		diff = d - dur
+		if diff<0 {
+			diff = -diff
+		}
+		if (diff < minDiff) || (minDiff==0){
+			minDiff = diff
+			minl = l
+			//minSa = l.sample
+		}
+
+		return true
+	})
+	if minl == nil {
+		return nil
+	}
+	return cluster.NewSample(append(minl.par.list,NewbNode(minl.list...)),self.GetSumLen())
+
+}
+
 func (self *Cache) FindSample(se *cluster.Sample) (minSa *cluster.Sample) {
 	dur := se.Duration()
 	var diff,minDiff int64
@@ -329,6 +365,7 @@ func (self *Cache) FindSample(se *cluster.Sample) (minSa *cluster.Sample) {
 	}
 	return
 }
+
 func (self *Cache) GetSumLen() (n int) {
 	if self.Cl == nil {
 		return 0
@@ -351,7 +388,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	ea := cluster.NewSample(append(l.par.list, node),self.GetSumLen())
 	self.pool.Add(ea)
 	if (l.sample == nil) {
-		ea.SetTestMap(ea.GetCaMap()[2])
+		ea.SetTestMap(ea.GetCaMap()[0])
 		l.sample = ea
 		return
 	}
@@ -362,6 +399,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	}
 	self.SetCacheMapSync(l.sample)
 	ea.SetTestMap(l.sample.GetCaMap()[1])
+	self.CheckCaMap(ea)
 	go func(_e *cluster.Sample){
 		_e.Wait()
 		c1,c2 := self.SetDifShow(_e.GetCaMap()[1],_e.GetCaMap()[2])
@@ -369,6 +407,28 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		self.Cshow[1]+=float64(c1)
 	}(l.sample)
 	l.sample = ea
+
+}
+
+func (self *Cache) CheckCaMap(se *cluster.Sample){
+
+	T := ^byte(3)
+	self.HandMapBlack(se.GetCaMap()[2],func(_c interface{},t byte)bool{
+		c:= _c.(CacheInterface)
+		_e := c.FindSampleTmp(se)
+		if _e == nil {
+			return false
+		}
+		if !c.Pool().CheckSample(_e){
+			return false
+		}
+		I := self.GetI()*2
+		t_1 :=  (_e.GetCaMap()[2][I/8] >> uint(I%8)) &^ T
+		if t_1 == 3 {
+			return false
+		}
+		return true
+	})
 
 }
 
@@ -393,7 +453,9 @@ func (self *Cache) SetDifShow(src []byte,dis []byte)(c_1,c_2 int){
 
 		}
 		c_1+=c
-		_m := m | src[i]
+		//fmt.Println(m,src[i])
+		_m := m | (^src[i])
+		//fmt.Println(m,_m)
 		if _m == m {
 			c_2 += c
 			continue
@@ -418,7 +480,7 @@ func (self *Cache) SetCacheMapSync(se *cluster.Sample) {
 		return
 	}
 	self.Cl.Read(func(i int,_c interface{}){
-		go func(c CacheInterface){
+		func(c CacheInterface){
 			_e := c.FindSample(se)
 			if _e == nil {
 				return

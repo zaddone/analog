@@ -116,7 +116,11 @@ func (self *Pool) CheckSample(e *Sample) bool{
 	if t == nil {
 		return false
 	}
-	return t.s.checkSample(e)
+	if !t.s.checkSample(e){
+		return false
+	}
+	t.s.SetTMap(e)
+	return true
 	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
 	//	c := _c.(CacheInter)
 	//})
