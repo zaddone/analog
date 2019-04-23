@@ -39,7 +39,10 @@ type Sample struct {
 	Long bool
 	check bool
 	caMap [3][]byte
-	flag int
+	m sync.Mutex
+	//t bool
+	//par *Sample
+	//flag int
 	//toSa map[*Sample]bool
 	//fromSa map[*Sample]bool
 
@@ -50,6 +53,13 @@ type Sample struct {
 	//caMapCheck []byte
 	//s *Set
 }
+
+//func (self *Sample) Par() *Sample {
+//	return self.par
+//}
+//func (self *Sample) SetPar(s *Sample){
+//	self.par = s
+//}
 
 func NewSample(eles []config.Element,le int) (sa *Sample) {
 
@@ -97,9 +107,11 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 
 }
 func (self *Sample) SetTestMap(n []byte){
+	self.m.Lock()
 	for i,m:= range n {
 		self.caMap[2][i] |= ^m
 	}
+	self.m.Unlock()
 }
 
 func (self *Sample) GetCaMap() [3][]byte{
@@ -112,12 +124,25 @@ func (self *Sample) GetCaMap() [3][]byte{
 //	return self.node
 //}
 //
-func (self *Sample)SetFlag(i int){
-	self.flag = i
-}
+//func (self *Sample)SetFlag(i int){
+//	self.flag = i
+//}
+//
+//func (self *Sample)GetFlag() int {
+//	return self.flag
+//}
+func (self *Sample) DisU() (bool) {
 
-func (self *Sample)GetFlag() int {
-	return self.flag
+	t := self.tag>>1
+	if ((self.tag &^ 2)  == 1) {
+		t ^= 1
+	}
+	if t ==1 {
+		return true
+	}else{
+		return false
+	}
+
 }
 
 func (self *Sample) GetLastElement() config.Element {

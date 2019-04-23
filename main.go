@@ -1,17 +1,17 @@
 package main
 import (
+	"sync"
+	"encoding/json"
+	"github.com/boltdb/bolt"
 	"github.com/zaddone/analog/config"
 	"github.com/zaddone/analog/request"
-	//"github.com/zaddone/analog/cache"
 	"github.com/zaddone/analog/dbServer/cache"
 	"github.com/zaddone/operate/oanda"
-	"github.com/boltdb/bolt"
-	"encoding/json"
+	//_ "github.com/zaddone/analog/server"
 	//"fmt"
 	//"log"
 	//"time"
 	//"math/rand"
-	"sync"
 )
 
 type cacheList struct {
@@ -22,6 +22,7 @@ type cacheList struct {
 	w sync.WaitGroup
 	topTree *tree
 	count int
+	Cshow [8]float64
 	//countl int
 	//lastC *_cache
 	//minC chan *_cache
@@ -34,8 +35,24 @@ func NewCacheList() *cacheList {
 		//minC:make(chan *_cache,1),
 	}
 }
-func (self *cacheList) Show() (n int) {
-	return self.count
+func (self *cacheList) SetCShow(i int,n float64){
+	self.Lock()
+	self.Cshow[i] += n
+	self.Unlock()
+}
+func (self *cacheList) GetCShow() [8]float64{
+	return self.Cshow
+}
+func (self *cacheList) ReadCa(i int) interface{} {
+	return self.cas[i].ca
+}
+func (self *cacheList) Show() (interface{}) {
+	db := make([][8]float64,self.Len())
+	self.Read(func(i int, _c interface{}){
+		db[i] = _c.(*cache.Cache).Cshow
+	})
+	return db
+	//return self.count
 	//n =  self.count -self.countl
 	//self.countl = self.count
 	//return
@@ -99,18 +116,19 @@ func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 		return
 	}
 	var t byte
-	var j,J uint
+	T := ^ byte(3)
+	var j uint
 	for i,n := range m {
 		if n == 255 {
 			continue
 		}
-		for j=0;j<4;j++{
-			J = j*2
-			t = (n&^(^(3<<J)))>>J
+		for j=0;j<8;j+=2{
+			t = n>>j &^ T
+			//t = (n&^(^(3<<J)))>>J
 			if t == 3 || t == 0 {
 				continue
 			}
-			hand(self.cas[i*4+int(j)].ca,t)
+			hand(self.cas[(i*8+int(j))/2].ca,t)
 		}
 	}
 

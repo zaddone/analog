@@ -1,7 +1,8 @@
 package server
 import(
 	"github.com/gin-gonic/gin"
-	"github.com/zaddone/operate/config"
+	//"github.com/zaddone/operate/config"
+	"github.com/zaddone/analog/config"
 	"path/filepath"
 	//"time"
 	"io/ioutil"
@@ -9,7 +10,7 @@ import(
 	"net/http"
 	"strings"
 	"bufio"
-	"strconv"
+	//"strconv"
 	"fmt"
 )
 var (
@@ -37,6 +38,9 @@ func readFile(path string,hand func(string)) error {
 	return nil
 }
 func init(){
+	//if !config.Conf.Server {
+	//	return
+	//}
 	Router = gin.Default()
 	Router.Static("/static","./static")
 	Router.LoadHTMLGlob(config.Conf.Templates)
@@ -49,7 +53,7 @@ func init(){
 	Router.GET("/log",func(c *gin.Context){
 		//strings.Split(c.DefaultQuery("p",""),",")
 		var finfo []interface{}
-		err := ListDir(filepath.Join(config.Conf.LogPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...)),func(path string,f os.FileInfo){
+		err := ListDir(filepath.Join(filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...)),func(path string,f os.FileInfo){
 			finfo = append(finfo,map[string]interface{}{"p":f.Name(),"f":f.IsDir(),"t":f.ModTime()})
 		})
 		if err != nil {
@@ -58,168 +62,17 @@ func init(){
 		}
 		c.JSON(http.StatusOK,gin.H{"dir":finfo})
 	})
-	Router.GET("/openfile",func(c *gin.Context){
-		var db [][2]float64
-		pa :=filepath.Join(config.Conf.LogPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
-		err := readFile(pa,func(_db string){
-			_s := strings.Split(_db," ")
-			v,er := strconv.ParseFloat(_s[0],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			t,er := strconv.ParseFloat(_s[2],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			db = append(db,[2]float64{v,t})
-		})
-		if err != nil {
-			c.JSON(http.StatusNotFound,err.Error())
-			return
-		}
-		c.JSON(http.StatusOK,gin.H{
-			"db1":db,
-		})
-	})
-	Router.GET("/open_test",func(c *gin.Context){
-		var db [][2]float64
-		var maxV,minV,maxT,minT float64
-		pa :=filepath.Join(config.Conf.LogPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
-		err := readFile(pa,func(_db string){
-			_s := strings.Split(_db," ")
-			v,er := strconv.ParseFloat(_s[0],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			if minV == 0 || minV >v {
-				minV = v
-			}
-			if maxV < v {
-				maxV = v
-			}
-			t,er := strconv.ParseFloat(_s[2],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			if minT == 0 || minT >t {
-				minT = t
-			}
-			if maxT < t {
-				maxT = t
-			}
-			db = append(db,[2]float64{t,v})
-		})
-		if err != nil {
-			c.JSON(http.StatusNotFound,err.Error())
-			return
-		}
-		tdiff := maxT - minT
-		vdiff := maxV - minV
-		for i,d := range db {
-			t_ := d[0] - minT
-			if t_ == 0 {
-				d[0] = 0
-			}else{
-				d[0] = t_/tdiff
-			}
-			v_ := d[1] - minV
-			if v_ == 0 {
-				d[1] = 0
-			}else{
-				d[1] = v_/vdiff
-			}
-			db[i] = d
-		}
-		c.JSON(http.StatusOK,gin.H{
-			"db1":db,
-		})
-
-	})
 	Router.GET("/open",func(c *gin.Context){
-
-		var db [][2]float64
-		var maxV,minV,maxT,minT float64
-		var endid int
-		pa :=filepath.Join(config.Conf.LogPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
+		var db []string
+		pa :=filepath.Join(filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
 		err := readFile(pa,func(_db string){
-			if _db ==  "end" {
-				endid = len(db)
-				return
-			}
-			_s := strings.Split(_db," ")
-			v,er := strconv.ParseFloat(_s[0],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			if minV == 0 || minV >v {
-				minV = v
-			}
-			if maxV < v {
-				maxV = v
-			}
-			t,er := strconv.ParseFloat(_s[2],64)
-			if er != nil {
-				fmt.Println(er)
-				return
-			}
-			if minT == 0 || minT >t {
-				minT = t
-			}
-			if maxT < t {
-				maxT = t
-			}
-			db = append(db,[2]float64{t,v})
+			db = append(db,_db)
 		})
 		if err != nil {
 			c.JSON(http.StatusNotFound,err.Error())
 			return
 		}
-		tdiff := maxT - minT
-		vdiff := maxV - minV
-		for i,d := range db {
-			t_ := d[0] - minT
-			if t_ == 0 {
-				d[0] = 0
-			}else{
-				d[0] = t_/tdiff
-			}
-			v_ := d[1] - minV
-			if v_ == 0 {
-				d[1] = 0
-			}else{
-				d[1] = v_/vdiff
-			}
-			db[i] = d
-		}
-		_,file := filepath.Split(pa)
-		fil := strings.Split(file,"_")
-		tp,err := strconv.ParseFloat( fil[1],64)
-		if err != nil {
-			panic(err)
-		}
-		tp = (tp-minV)/vdiff
-		sl,err := strconv.ParseFloat( fil[2],64)
-		if err != nil {
-			panic(err)
-		}
-		sl = (sl-minV)/vdiff
-		c.JSON(http.StatusOK,gin.H{
-			"db1":db[:endid],
-			"db2":db[endid:],
-			"tp":[][2]float64{
-				[2]float64{db[0][0],tp},
-				[2]float64{db[len(db)-1][0],tp},
-			},
-			"sl":[][2]float64{
-				[2]float64{db[0][0],sl},
-				[2]float64{db[len(db)-1][0],sl},
-			},
-		})
+		c.JSON(http.StatusOK,db)
 	})
 }
 func ListDir(dirPth string, hand func(string,os.FileInfo)) (err error) {

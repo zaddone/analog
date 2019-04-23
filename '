@@ -23,7 +23,7 @@ type CacheList interface{
 	Len() int
 	HandMap([]byte,func(interface{},byte))
 	HandMapBlack([]byte,func(interface{},byte)bool)
-	Show() interface{}
+	Show() int
 	SetCShow(int,float64)
 }
 type CacheInterface interface {
@@ -136,7 +136,7 @@ func (self *Cache) Add(e config.Element){
 func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
 		ins:ins,
-		eleChan:make(chan config.Element,1),
+		eleChan:make(chan config.Element,1000),
 		stop:make(chan bool),
 		//Order:new(sync.Map),
 	}
@@ -173,50 +173,50 @@ func (self *Cache) ReadLevel(h func(*level)bool){
 	//	l.sample
 	//})
 //}
-//func (self *Cache) CheckVal(b int64,tag byte) (max config.Element,min config.Element){
-//
-//	//var li config.Element
-//	self.Lock()
-//	defer self.Unlock()
-//	var minL *level = nil
-//	var I int
-//	self.ReadLevel(func(l *level)bool{
-//		for i:= len(l.list)-1;i>=0;i-- {
-//			if l.list[i].DateTime()<=b{
-//				minL = l
-//				max = l.list[i]
-//				min = max
-//				I = i
-//				return false
-//			}
-//		}
-//		return true
-//	})
-//	if minL == nil {
-//		return nil,nil
-//	}
-//	for{
-//		for _,l := range minL.list[I:]{
-//			l.Read(func(e config.Element)bool{
-//				d := e.Middle()
-//				if (d > max.Middle()) {
-//					max = e
-//				}
-//				if (d < min.Middle()) {
-//					min = e
-//				}
-//				return true
-//			})
-//		}
-//		if minL.child==nil {
-//			return
-//		}
-//		minL = minL.child
-//		I = 0
-//	}
-//	return
-//
-//}
+func (self *Cache) CheckVal(b int64,tag byte) (max config.Element,min config.Element){
+
+	//var li config.Element
+	self.Lock()
+	defer self.Unlock()
+	var minL *level = nil
+	var I int
+	self.ReadLevel(func(l *level)bool{
+		for i:= len(l.list)-1;i>=0;i-- {
+			if l.list[i].DateTime()<=b{
+				minL = l
+				max = l.list[i]
+				min = max
+				I = i
+				return false
+			}
+		}
+		return true
+	})
+	if minL == nil {
+		return nil,nil
+	}
+	for{
+		for _,l := range minL.list[I:]{
+			l.Read(func(e config.Element)bool{
+				d := e.Middle()
+				if (d > max.Middle()) {
+					max = e
+				}
+				if (d < min.Middle()) {
+					min = e
+				}
+				return true
+			})
+		}
+		if minL.child==nil {
+			return
+		}
+		minL = minL.child
+		I = 0
+	}
+	return
+
+}
 
 func (self *Cache) SyncRun(cl CacheList){
 
@@ -260,14 +260,13 @@ func (self *Cache) ReadAll(h func(int64)){
 	self.read(fmt.Sprintf("%s_%s",config.Conf.Local,self.ins.Name),begin,time.Now().Unix(),func(p config.Element){
 		da := p.DateTime()
 		h(da)
+		self.last = p
 		da /=v
 		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
 			self.ClearOrderAll()
 			self.part = NewLevel(0,self,nil)
 		}
-		self.last = p
 		self.Lock()
-		//self.Add(p)
 		self.part.add(p)
 		self.Unlock()
 		//self.eleChan <- e
@@ -397,6 +396,9 @@ func (self *Cache) FindSampleTmp(se *cluster.Sample) *cluster.Sample {
 		if l.sample == nil {
 			return true
 		}
+		//if l.sample.Par() == nil {
+		//	return true
+		//}
 		//if l.AbsMax !=0 {
 		//	return true
 		//}
@@ -485,57 +487,45 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		l.sample.Long = math.Abs(node.Diff())>math.Abs(pli.Diff())
 	}
 
-	//l.sample = ea
-	//return
+	var sas  []*cluster.Sample
 
-
-	//if self.Pool().CheckSample(ea) {
-	//if ((ea.GetTag() &^ 2) == 1) || self.Pool().CheckSample(ea) {
-	if ((ea.GetTag() &^ 2) == 1) {
-		self.SetCacheMapSync(l.sample,nil)
-		ea.SetTestMap(l.sample.GetCaMap()[1])
-		l.sample = ea
-		return
-	}
 	vote := make([]int,self.Cl.Len())
-	voteDB := make([]*cluster.Sample,0,self.Cl.Len())
-	self.SetCacheMapSync(l.sample,func(_i int,_e *cluster.Sample){
-		voteDB=append(voteDB,_e)
-	})
+	//voteDB := make([]*cluster.Sample,self.Cl.Len())
+	//fmt.Println(len(vote))
+
 	var j uint
 	t := ^ byte(3)
 	cm := l.sample.GetCaMap()
-	cms := make([]byte,len(cm[0]))
-	for i,m := range cm[1] {
-		cms[i]= ((^m) | cm[2][i])
-	}
-	var _m byte
-	for _,_e := range voteDB {
-		for i,m := range _e.GetCaMap()[2]{
-			_m = cms[i] | m
-			if _m == 255 {
+	self.SetCacheMapSync(l.sample,func(_i int,_e *cluster.Sample){
+		if ((cm[1][_i/8] >> uint(_i%8)) &^ t) == 0 {
+			return
+		}
+		//sas[_i/2] = _e
+
+		for i,m := range _e.GetCaMap()[2] {
+			if m ==0 || m == 255 {
 				continue
 			}
+			_m := cm[2][i] | m | (^cm[1][i])
 			for j=0;j<8;j+=2 {
+				//v := (m>>j &^ t)
 				if (_m>>j &^ t) != 3 {
+					//I := (i*4 + int(j/2))
+					//fmt.Println(I)
 					vote[(i*4 + int(j/2))]++
 				}
 			}
 		}
-	}
-	var Maxv int
-	var I []int
+	})
+	var Maxv,I int
 	for i,v := range vote {
 		if v> Maxv {
 			Maxv = v
-			I = []int{i}
-		}else if (v!=0) && (v == Maxv) {
-			I = append(I,i)
+			I = i
 		}
 	}
-	//fmt.Println(I,Maxv)
-	for _,_i := range I {
-		c := self.Cl.ReadCa(_i).(CacheInterface)
+	if Maxv > 0 {
+		c := self.Cl.ReadCa(I).(CacheInterface)
 		_e := c.FindSampleTmp(ea)
 		if _e != nil {
 			if c.Pool().CheckSample(_e) {
@@ -683,9 +673,7 @@ func (self *Cache) SetCacheMapSync(se *cluster.Sample,h func(int,*cluster.Sample
 				//w.Done()
 				return
 			}
-			if h != nil {
-				h(_i,_e)
-			}
+			h(_i,_e)
 			//ses = append(ses,_e)
 			n := byte(1)
 			if tn == (_e.GetTag()>>1) {

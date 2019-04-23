@@ -6,7 +6,7 @@ import(
 	cluster "github.com/zaddone/analog/telecar"
 	"math"
 	//"log"
-	//"sync"
+	"sync"
 	//"bytes"
 	//"fmt"
 	//"time"
@@ -17,62 +17,62 @@ const(
 	//TimeOut = 14400
 )
 
-type postDB struct {
-	ca *Cache
-	b int64
-	t  byte
-}
-func NewPostDB(c *Cache,t byte,b int64 ) *postDB {
-	po := &postDB {
-		ca:c,
-		t:t,
-		b:b,
-	}
-	//fmt.Println(c.Ins.Name,s.GetDiff())
-	//c.Cshow[5]++
-	//c.tmpSample.Store(po.key,s)
-	return po
-}
-func (self *postDB) clear(e int64) byte {
-
-	var eEle,bEle config.Element
-	self.ca.read(config.Conf.Local,self.b,e,func(_e config.Element){
-		if bEle == nil {
-			bEle = _e
-		}
-		eEle = _e
-	})
-	//self.ca.FindDB(self.b,e,func(e config.Element){
-	//	if bEle == nil {
-	//		bEle = e
-	//	}
-	//	eEle = e
-	//	//elist = append(elist,e)
-	//})
-	if eEle == nil || bEle == nil {
-		return 0
-	}
-	if (eEle.Middle() == bEle.Middle()) {
-		return 0
-	}
-
-	d := (eEle.Middle() - bEle.Middle())
-	//if d > 0 {
-	//	return 1
-	//}else{
-	//	return 2
-	//}
-	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
-
-	if (d>0) == (self.t==1) {
-		return 1
-		//self.ca.Cshow[0]++
-	}else{
-		return 2
-		//self.ca.Cshow[1]++
-	}
-
-}
+//type postDB struct {
+//	ca *Cache
+//	b int64
+//	t  byte
+//}
+//func NewPostDB(c *Cache,t byte,b int64 ) *postDB {
+//	po := &postDB {
+//		ca:c,
+//		t:t,
+//		b:b,
+//	}
+//	//fmt.Println(c.Ins.Name,s.GetDiff())
+//	//c.Cshow[5]++
+//	//c.tmpSample.Store(po.key,s)
+//	return po
+//}
+//func (self *postDB) clear(e int64) byte {
+//
+//	var eEle,bEle config.Element
+//	self.ca.read(config.Conf.Local,self.b,e,func(_e config.Element){
+//		if bEle == nil {
+//			bEle = _e
+//		}
+//		eEle = _e
+//	})
+//	//self.ca.FindDB(self.b,e,func(e config.Element){
+//	//	if bEle == nil {
+//	//		bEle = e
+//	//	}
+//	//	eEle = e
+//	//	//elist = append(elist,e)
+//	//})
+//	if eEle == nil || bEle == nil {
+//		return 0
+//	}
+//	if (eEle.Middle() == bEle.Middle()) {
+//		return 0
+//	}
+//
+//	d := (eEle.Middle() - bEle.Middle())
+//	//if d > 0 {
+//	//	return 1
+//	//}else{
+//	//	return 2
+//	//}
+//	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
+//
+//	if (d>0) == (self.t==1) {
+//		return 1
+//		//self.ca.Cshow[0]++
+//	}else{
+//		return 2
+//		//self.ca.Cshow[1]++
+//	}
+//
+//}
 
 type level struct {
 
@@ -83,6 +83,7 @@ type level struct {
 	child *level
 	tag int
 
+	AbsMax float64
 	//max float64
 	//maxid int
 	//update bool
@@ -92,9 +93,13 @@ type level struct {
 
 	//lastOrder *order
 	ca *Cache
-	post []*postDB
+	//post []*postDB
 	sample *cluster.Sample
+	Order *sync.Map
 
+}
+func (self *level)AddOrder(o *OrderInfo){
+	self.Order.Store(o,true)
 }
 
 func NewLevel(tag int,c *Cache,le *level) *level {
@@ -103,8 +108,16 @@ func NewLevel(tag int,c *Cache,le *level) *level {
 		ca:c,
 		child:le,
 		list:make([]config.Element,0,1000),
+		Order:new(sync.Map),
 		//post:make([]*postDB,0,100),
 	}
+}
+func (self *level) ClearOrder(){
+	go self.Order.Range(func(k,v interface{})bool{
+		k.(*OrderInfo).Clear()
+		self.Order.Delete(k)
+		return true
+	})
 }
 
 
@@ -136,36 +149,36 @@ func (self *level) readf( h func(e config.Element) bool){
 	}
 	//self.par
 }
-func (self *level) ClearPostAll(){
-	self.ClearPost()
-	if self.par == nil {
-		return
-	}
-	self.par.ClearPostAll()
-}
-func (self *level) ClearPost(){
-	//if len(self.post) == 0 {
-	//	return
-	//}
-	//e := self.ca.getLastElement().DateTime()
-	//for _,p := range self.post{
-	//	//self.ca.Cshow[p.clear(e)+1]++
-	//	//if n==0 {
-	//	//	self.ca.Cshow[4]++
-	//	//}else{
-	//	//	self.ca.Cshow[p.t+1]++
-	//	//}
-	//	//}else if n == p.t {
-	//	//}else if n == 2 {
-	//	//	self.ca.Cshow[2]++
-	//	//}else{
-	//	//	self.ca.Cshow[3]++
-	//	//}
-	//	//self.ca.Cshow[0]++
-	//}
-	////self.post.clear()
-	//self.post = nil
-}
+//func (self *level) ClearPostAll(){
+//	self.ClearPost()
+//	if self.par == nil {
+//		return
+//	}
+//	self.par.ClearPostAll()
+//}
+//func (self *level) ClearPost(){
+//	//if len(self.post) == 0 {
+//	//	return
+//	//}
+//	//e := self.ca.getLastElement().DateTime()
+//	//for _,p := range self.post{
+//	//	//self.ca.Cshow[p.clear(e)+1]++
+//	//	//if n==0 {
+//	//	//	self.ca.Cshow[4]++
+//	//	//}else{
+//	//	//	self.ca.Cshow[p.t+1]++
+//	//	//}
+//	//	//}else if n == p.t {
+//	//	//}else if n == 2 {
+//	//	//	self.ca.Cshow[2]++
+//	//	//}else{
+//	//	//	self.ca.Cshow[3]++
+//	//	//}
+//	//	//self.ca.Cshow[0]++
+//	//}
+//	////self.post.clear()
+//	//self.post = nil
+//}
 
 func (self *level) add(e config.Element) {
 
@@ -179,8 +192,9 @@ func (self *level) add(e config.Element) {
 	if le == 0 {
 		return
 	}
-	var sumdif,absMax,max,diff,absDiff float64
+	var sumdif,max,diff,absDiff float64
 	var maxid int
+	self.AbsMax = 0
 	//var _e config.Element
 	for i,_e := range self.list[:le]{
 		sumdif += math.Abs(_e.Diff())
@@ -189,20 +203,20 @@ func (self *level) add(e config.Element) {
 			continue
 		}
 		absDiff = math.Abs(diff)
-		if absDiff > absMax {
+		if absDiff > self.AbsMax {
 			maxid = i
 			max = diff
-			absMax = absDiff
+			self.AbsMax = absDiff
 		}
 	}
 	sumdif /= float64(le)
 	if (maxid <= 0) ||
-	(absMax == 0) ||
-	(absMax < sumdif) {
+	(self.AbsMax == 0) ||
+	(self.AbsMax < sumdif) {
 		return
 	}
 	//self.update = true
-	self.ClearPost()
+	self.ClearOrder()
 	//node := NewbNode(self.list[:maxid]...)
 	node := NewbNode(self.list[:maxid+1]...)
 	if self.par == nil {

@@ -119,7 +119,10 @@ func (self *Pool) CheckSample(e *Sample) bool{
 	if !t.s.checkSample(e){
 		return false
 	}
-	t.s.SetTMap(e)
+	for _,sa := range t.s.samp{
+		e.SetTestMap(sa.GetCaMap()[0])
+	}
+	//t.s.SetTMap(e)
 	return true
 	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
 	//	c := _c.(CacheInter)
@@ -138,8 +141,6 @@ func (self *Pool) add(e *Sample,n int) {
 	self.mu[n].RLock()
 	t := self.FindMinSet(e,n)
 	self.mu[n].RUnlock()
-
-
 	if t == nil {
 		//self.SaveSet(NewSet(e))
 		e.SetTestMap(e.caMap[2])
@@ -149,11 +150,11 @@ func (self *Pool) add(e *Sample,n int) {
 		return
 	}
 
-	if t.s.checkSample(e){
-		t.s.SetTMap(e)
-	}else{
-		e.SetTestMap(e.caMap[2])
-	}
+	//if t.s.checkSample(e){
+	//	t.s.SetTMap(e)
+	//}else{
+	//	e.SetTestMap(e.caMap[2])
+	//}
 
 	self.mu[n].Lock()
 	if t.s.check(t.dis) {

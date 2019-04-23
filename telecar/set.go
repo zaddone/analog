@@ -185,7 +185,21 @@ func (self *set) SetDar() {
 }
 
 func (self *set) checkSample (e *Sample) bool {
-	return len(self.samp) >= config.Conf.MinSam
+	if len(self.samp) < config.Conf.MinSam {
+		return false
+	}
+	for _,sa := range self.samp {
+		if sa.GetTag() ==  e.GetTag() {
+			if !sa.Long {
+				return false
+			}
+		}else{
+			if sa.Long {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func (self *set) SetTMap(e *Sample) {
@@ -203,7 +217,7 @@ func (self *set) check (d float64) bool {
 	if val == 0 {
 		fmt.Println(self.samp)
 		for i,e := range self.samp {
-			fmt.Println(i,e.GetFlag(),e.XMin(),e.XMax(),e.dis)
+			fmt.Println(i,e.XMin(),e.XMax(),e.dis)
 		}
 		return true
 		//panic(0)
