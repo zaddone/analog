@@ -54,9 +54,9 @@ type Sample struct {
 	//s *Set
 }
 
-//func (self *Sample) Par() *Sample {
-//	return self.par
-//}
+func (self *Sample) Check() bool {
+	return self.check
+}
 //func (self *Sample) SetPar(s *Sample){
 //	self.par = s
 //}

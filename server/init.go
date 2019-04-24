@@ -47,13 +47,16 @@ func init(){
 	Router.GET("/",func(c *gin.Context){
 		c.HTML(http.StatusOK,"index.tmpl",nil)
 	})
+	Router.GET("/show",func(c *gin.Context){
+		c.HTML(http.StatusOK,"show.tmpl",nil)
+	})
 	Router.GET("/view",func(c *gin.Context){
 		c.HTML(http.StatusOK,"view.tmpl",nil)
 	})
 	Router.GET("/log",func(c *gin.Context){
 		//strings.Split(c.DefaultQuery("p",""),",")
 		var finfo []interface{}
-		err := ListDir(filepath.Join(filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...)),func(path string,f os.FileInfo){
+		err := ListDir(filepath.Join(config.Conf.ClusterPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...)),func(path string,f os.FileInfo){
 			finfo = append(finfo,map[string]interface{}{"p":f.Name(),"f":f.IsDir(),"t":f.ModTime()})
 		})
 		if err != nil {
@@ -64,7 +67,7 @@ func init(){
 	})
 	Router.GET("/open",func(c *gin.Context){
 		var db []string
-		pa :=filepath.Join(filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
+		pa :=filepath.Join(config.Conf.ClusterPath,filepath.Join(strings.Split(c.DefaultQuery("p",""),",")...))
 		err := readFile(pa,func(_db string){
 			db = append(db,_db)
 		})

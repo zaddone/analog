@@ -383,9 +383,9 @@ func (self *Cache) SetCShowF(i int,n float64) {
 	self.m.Unlock()
 }
 func (self *Cache) SetCShow(i int,n int) {
-//	self.m.Lock()
+	self.m.Lock()
 	self.Cshow[i] += float64(n)
-//	self.m.Unlock()
+	self.m.Unlock()
 }
 
 func (self *Cache) FindSampleTmp(se *cluster.Sample) *cluster.Sample {
@@ -473,17 +473,34 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	//l.ClearOrder()
 	ea := cluster.NewSample(append(l.par.list, node),self.GetSumLen())
 	self.pool.Add(ea)
+
+	//self.SetCShowF(7,1)
 	if (l.sample == nil) {
-		//ea.SetTestMap(ea.GetCaMap()[1])
+		ea.SetTestMap(ea.GetCaMap()[1])
 		l.sample = ea
 		return
 	}
 
-	//ea.SetT(true)
+	//d := self.getLastElement().Middle() - l.b.Middle()
+	//if (d>0) == l.sample.DisU() {
+	//	l.sample.Long = true
+	//	self.SetCShowF(6,1)
+	//}
+
 	pli := l.par.list[len(l.par.list)-1]
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = math.Abs(node.Diff())>math.Abs(pli.Diff())
+		//if l.sample.Long {
+		//	self.SetCShowF(6,1)
+		//}
 	}
+	//go func(_e *cluster.Sample){
+	//	_e.Wait()
+	//	if _e.Check() && _e.Long{
+	//		//self.SetCShowF(int(_e.GetTag()>>1)*2,1)
+	//		self.SetCShowF(0,1)
+	//	}
+	//}(l.sample)
 
 	//l.sample = ea
 	//return
@@ -491,19 +508,22 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 
 	//if self.Pool().CheckSample(ea) {
 	//if ((ea.GetTag() &^ 2) == 1) || self.Pool().CheckSample(ea) {
-	if ((ea.GetTag() &^ 2) == 1) {
-		self.SetCacheMapSync(l.sample,nil)
-		ea.SetTestMap(l.sample.GetCaMap()[1])
-		l.sample = ea
-		return
-	}
+	//if ((ea.GetTag() &^ 2) == 1) {
+	//	self.SetCacheMapSync(l.sample,nil)
+	//	ea.SetTestMap(l.sample.GetCaMap()[1])
+	//	l.sample = ea
+	//	return
+	//}
+	//I_1 := self.GetI()*2/8
+	//I_2 := uint(self.GetI()*2%8)
+	t := ^ byte(3)
 	vote := make([]int,self.Cl.Len())
 	voteDB := make([]*cluster.Sample,0,self.Cl.Len())
 	self.SetCacheMapSync(l.sample,func(_i int,_e *cluster.Sample){
+		//if ((_e.GetCaMap()[2][I_1]>>I_2) &^ t)
 		voteDB=append(voteDB,_e)
 	})
 	var j uint
-	t := ^ byte(3)
 	cm := l.sample.GetCaMap()
 	cms := make([]byte,len(cm[0]))
 	for i,m := range cm[1] {
@@ -538,24 +558,13 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 		c := self.Cl.ReadCa(_i).(CacheInterface)
 		_e := c.FindSampleTmp(ea)
 		if _e != nil {
-			if c.Pool().CheckSample(_e) {
+			if c.Pool().CheckSampleP(_e,self.GetI()*2) {
 				l.AddOrder(NewOrderInfo(c,_e))
 			}
 		}
 	}
-	ea.SetTestMap(l.sample.GetCaMap()[1])
-	//if self.InsName() == config.Conf.InsName {
-	//	self.CheckCaMap(l,ea)
-	//}
 
-	//go func(_e *cluster.Sample){
-	//	_e.Wait()
-	//	cam := _e.GetCaMap()
-	//	c1,c2 := self.SetDifShow(cam[1],cam[2])
-	//	self.SetCShowF(0,float64(c2))
-	//	self.SetCShowF(1,float64(c1))
-	//}(l.sample)
-	//ea.SetPar(l.sample)
+	ea.SetTestMap(l.sample.GetCaMap()[1])
 	l.sample = ea
 
 }

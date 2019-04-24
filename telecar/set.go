@@ -188,6 +188,14 @@ func (self *set) checkSample (e *Sample) bool {
 	if len(self.samp) < config.Conf.MinSam {
 		return false
 	}
+	//for _,sa := range self.samp {
+	//	if sa.GetTag() !=  e.GetTag() {
+	//		return false
+	//	}
+	//	if !sa.Long {
+	//		return false
+	//	}
+	//}
 	for _,sa := range self.samp {
 		if sa.GetTag() ==  e.GetTag() {
 			if !sa.Long {
@@ -200,6 +208,7 @@ func (self *set) checkSample (e *Sample) bool {
 		}
 	}
 	return true
+
 }
 
 func (self *set) SetTMap(e *Sample) {

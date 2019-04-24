@@ -71,6 +71,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 		//self.mu[i].Unlock()
 		//self.addAndCheck(e,i)
 		//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
+
 		e.stop<-true
 	}
 }
@@ -105,6 +106,29 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 		//}(s)
 	}
 	return
+
+}
+
+func (self *Pool) CheckSampleP(e *Sample,I int) bool{
+
+	n := int(e.GetTag()>>1)
+	self.mu[n].RLock()
+	defer self.mu[n].RUnlock()
+	t := self.FindMinSet(e,n)
+	if t == nil {
+		return false
+	}
+	if len(t.s.samp) < config.Conf.MinSam {
+		return false
+	}
+	//if !t.s.checkSample(e){
+	//	return false
+	//}
+	for _,sa := range t.s.samp{
+		e.SetTestMap(sa.GetCaMap()[0])
+	}
+	return (e.GetCaMap()[2][I/8]>>uint(I%8)) &^ (^byte(3)) != 3
+	//return true
 
 }
 
@@ -143,14 +167,20 @@ func (self *Pool) add(e *Sample,n int) {
 	self.mu[n].RUnlock()
 	if t == nil {
 		//self.SaveSet(NewSet(e))
-		e.SetTestMap(e.caMap[2])
+		//e.SetTestMap(e.caMap[2])
 		self.mu[n].Lock()
 		self.sets[n] = append(self.sets[n],NewSet(e))
 		self.mu[n].Unlock()
 		return
 	}
 
+	//self.mu[n].RLock()
 	//if t.s.checkSample(e){
+	//	//self._ca.SetCShow(int(e.GetTag()>>1)*2+1,1)
+	//	self._ca.SetCShow(1,1)
+	//	e.check = true
+	//}
+	//self.mu[n].RUnlock()
 	//	t.s.SetTMap(e)
 	//}else{
 	//	e.SetTestMap(e.caMap[2])

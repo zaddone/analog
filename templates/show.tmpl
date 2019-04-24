@@ -1,0 +1,75 @@
+{{define "show.tmpl"}}
+<!doctype html>
+<html lang="en">
+<head>
+{{template "head" .}}
+</head>
+<body>
+{{template "top" .}}
+<!-- Begin page content -->
+ 
+<main role="main" class="container">
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb" id="mu">
+    <li class="breadcrumb-item" aria-current="page"><a href="/" >Home</a></li>
+	<li class="breadcrumb-item" aria-current="page" id="t1"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t2"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t3"></li>
+	<li class="breadcrumb-item" aria-current="page" id="t4"></li>
+  </ol>
+</nav>
+<div class="container">
+  <div class="row" id="con">
+
+  </div>
+</div>
+
+</main>
+{{template "footer" .}} 
+
+<script>
+c1 = 0.0 
+c2 = 0.0 
+function openfile(url){
+	$.getJSON('/open','p='+url,function(data) {	
+		var enddb;
+		data.forEach(function(db){
+			enddb = db
+		})
+		arrstr = enddb.split(" ")
+		//if (arrstr[3] !="NaN"){
+			console.log(arrstr,url);
+		//}
+	})
+}
+function readPath(url){
+	$.getJSON('/log','p='+url,function(data) {	
+		data.dir.forEach(function(db){
+			url= url+','+db.p;
+			if (db.f) {
+				readPath(url);
+			}else{
+				openfile(url);
+			}
+			
+		})
+	})
+	
+}
+
+function showdb(){
+	$.getJSON('/log',function(data) {	
+		data.dir.forEach(function(db){
+			readPath(db.p)
+			//$('#con').append('<div class="col-md-2">'+db.p+'</a></div>'); 
+		})
+	})
+}
+
+$(function(){
+	showdb();
+});
+</script>
+</body>
+</html>
+{{end}}
