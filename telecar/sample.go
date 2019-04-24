@@ -16,6 +16,7 @@ func (self *Map) SetNo(no config.Element){
 func (self *Map) GetF() bool {
 	return (self.Long>0) == (self.No.Diff()>0)
 }
+
 func (self *Map) Check() bool {
 	return self.End > self.No.Duration()
 }

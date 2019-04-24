@@ -37,9 +37,15 @@ function openfile(url){
 			enddb = db
 		})
 		arrstr = enddb.split(" ")
-		//if (arrstr[3] !="NaN"){
-			console.log(arrstr,url);
-		//}
+		if (arrstr[3] !="NaN"){
+			t1 = parseFloat(arrstr[13])
+			c1+=1;
+			if (t1>0){
+				c2+=1	
+			}
+
+			console.log(t1,arrstr[3],c2,c1,c2/c1,url);
+		}
 	})
 }
 function readPath(url){

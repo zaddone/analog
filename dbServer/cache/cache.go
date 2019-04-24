@@ -34,7 +34,7 @@ type CacheInterface interface {
 	Pool() *cluster.Pool
 	InsName() string
 	GetI() int
-	//AddOrder(*OrderInfo)
+	AddOrder(*OrderInfo)
 	//ClearOrder(*OrderInfo)
 	SetCShowF(i int,n float64)
 
@@ -54,18 +54,35 @@ func NewOrderInfo(c CacheInterface,sa *cluster.Sample) (o *OrderInfo) {
 	}
 	o.e = c.GetLastElement()
 	//l.Order = o
-	//c.AddOrder(o)
+	c.AddOrder(o)
 	return
 }
 
 func (self *OrderInfo) GetDiff() float64 {
 	d := self.c.GetLastElement().Middle() - self.e.Middle()
+	var dif float64 = 0
+	//dif := (math.Abs(self.e.Diff()) + math.Abs(self.c.GetLastElement().Diff()))/2
 	if self.sa.DisU() == (d>0) {
-		return math.Abs(d)
+		return math.Abs(d)-dif
 	}
-	return -(math.Abs(d))
+	return -(math.Abs(d)) - dif
 }
 
+func (self *OrderInfo) Marge(old *OrderInfo){
+
+	if old.End {
+		return
+	}
+	if self.sa.DisU() != old.sa.DisU() {
+		old.Clear()
+		self.End = true
+		return
+	}
+	self.e = old.e
+	fmt.Println(self.c.InsName(),self.e.DateTime() - old.e.DateTime())
+	old.End = true
+
+}
 func (self *OrderInfo) Clear(){
 	if !self.End{
 		d := self.GetDiff()
@@ -95,7 +112,7 @@ type Cache struct {
 	I int
 	m sync.Mutex
 	last config.Element
-	//Order  *sync.Map
+	Order  *OrderInfo
 
 }
 
@@ -107,7 +124,14 @@ func (self *Cache) ClearOrderAll(){
 	})
 }
 
-
+func (self *Cache) AddOrder(o *OrderInfo) {
+	if self.Order == nil {
+		self.Order = o
+		return
+	}
+	o.Marge(self.Order)
+	self.Order = o
+}
 
 func (self *Cache) SetI(i int) {
 	self.I = i
@@ -382,6 +406,7 @@ func (self *Cache) SetCShowF(i int,n float64) {
 	self.Cshow[i] += n
 	self.m.Unlock()
 }
+
 func (self *Cache) SetCShow(i int,n int) {
 	self.m.Lock()
 	self.Cshow[i] += float64(n)
@@ -402,7 +427,7 @@ func (self *Cache) FindSampleTmp(se *cluster.Sample) *cluster.Sample {
 		//}
 		//_e := cluster.NewSample(append(l.par.list,NewbNode(l.list...)),self.GetSumLen())
 		el:= l.list[len(l.list)-1]
-		d := el.DateTime()+el.Duration() - l.par.list[0].DateTime()
+		d := el.DateTime()+el.Duration()-l.par.list[0].DateTime()
 		diff = d - dur
 		if diff<0 {
 			diff = -diff
@@ -417,7 +442,11 @@ func (self *Cache) FindSampleTmp(se *cluster.Sample) *cluster.Sample {
 	if minl == nil {
 		return nil
 	}
-	e := cluster.NewSample(append(minl.par.list,NewbNode(minl.list...)),self.GetSumLen())
+	no := NewbNode(minl.list...)
+	//if math.Abs(self.GetLastElement().Middle() - minl.b.Middle()) < math.Abs(no.Diff()) {
+	//	return nil
+	//}
+	e := cluster.NewSample(append(minl.par.list,no),self.GetSumLen())
 	if (e.GetTag() &^ 2) != (se.GetTag() &^2) {
 		return nil
 	}
@@ -473,7 +502,6 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	//l.ClearOrder()
 	ea := cluster.NewSample(append(l.par.list, node),self.GetSumLen())
 	self.pool.Add(ea)
-
 	//self.SetCShowF(7,1)
 	if (l.sample == nil) {
 		ea.SetTestMap(ea.GetCaMap()[1])
@@ -504,7 +532,6 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 
 	//l.sample = ea
 	//return
-
 
 	//if self.Pool().CheckSample(ea) {
 	//if ((ea.GetTag() &^ 2) == 1) || self.Pool().CheckSample(ea) {
