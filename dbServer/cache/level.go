@@ -90,7 +90,6 @@ type level struct {
 	//next *part
 	//tp config.Element
 	//sl config.Element
-
 	//lastOrder *order
 	ca *Cache
 	//post []*postDB

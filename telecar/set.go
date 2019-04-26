@@ -188,6 +188,7 @@ func (self *set) checkSample (e *Sample) bool {
 	if len(self.samp) < config.Conf.MinSam {
 		return false
 	}
+
 	//for _,sa := range self.samp {
 	//	if sa.GetTag() !=  e.GetTag() {
 	//		return false
@@ -196,26 +197,28 @@ func (self *set) checkSample (e *Sample) bool {
 	//		return false
 	//	}
 	//}
-	for _,sa := range self.samp {
-		if sa.GetTag() ==  e.GetTag() {
-			if !sa.Long {
-				return false
-			}
-		}else{
-			if sa.Long {
-				return false
-			}
-		}
-	}
+
+	//for _,sa := range self.samp {
+	//	if sa.GetTag() ==  e.GetTag() {
+	//		if !sa.Long {
+	//			return false
+	//		}
+	//	}else{
+	//		if sa.Long {
+	//			return false
+	//		}
+	//	}
+	//}
+
 	return true
 
 }
 
-func (self *set) SetTMap(e *Sample) {
-	for _,e_ := range self.samp {
-		e.SetTestMap(e_.caMap[1])
-	}
-}
+//func (self *set) SetTMap(e *Sample) {
+//	for _,e_ := range self.samp {
+//		e.SetTestMap(e_.caMap[1])
+//	}
+//}
 func (self *set) check (d float64) bool {
 
 	if len(self.samp) == 1 {

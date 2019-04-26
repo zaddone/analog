@@ -34,7 +34,7 @@ type Pool struct {
 	//sets [2][]*set
 	//chanSam [2]chan *Sample
 	sets [2][]*set
-	chanSam [2]chan *Sample
+	//chanSam [2]chan *Sample
 	//mu sync.RWMutex
 	mu [2]sync.RWMutex
 	count [4]int
@@ -48,15 +48,15 @@ func NewPool(ins string,c CacheInter) (po *Pool){
 			make([]*set,0,1000),
 			make([]*set,0,1000),
 		},
-		chanSam:[2]chan *Sample{
-			make(chan *Sample,1),
-			make(chan *Sample,1),
-		},
+		//chanSam:[2]chan *Sample{
+		//	make(chan *Sample,1),
+		//	make(chan *Sample,1),
+		//},
 		_ca:c,
 	}
-	for i,sam := range po.chanSam {
-		go po.syncAdd(sam,i)
-	}
+	//for i,sam := range po.chanSam {
+	//	go po.syncAdd(sam,i)
+	//}
 	return
 
 }
@@ -72,12 +72,13 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 		//self.addAndCheck(e,i)
 		//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
 
-		e.stop<-true
+		//e.stop<-true
 	}
 }
 
 func (sp *Pool) Add(e *Sample) {
-	sp.chanSam[int(e.GetTag()>>1)]<- e
+	sp.add(e,int(e.GetTag()>>1))
+	//sp.chanSam[int(e.GetTag()>>1)]<- e
 	//sp.chanSam <- e
 }
 
@@ -109,55 +110,56 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 
 }
 
-func (self *Pool) CheckSampleP(e *Sample,I int) bool{
-
-	n := int(e.GetTag()>>1)
-	self.mu[n].RLock()
-	defer self.mu[n].RUnlock()
-	t := self.FindMinSet(e,n)
-	if t == nil {
-		return false
-	}
-	if len(t.s.samp) < config.Conf.MinSam {
-		return false
-	}
-	//if !t.s.checkSample(e){
-	//	return false
-	//}
-	for _,sa := range t.s.samp{
-		e.SetTestMap(sa.GetCaMap()[0])
-	}
-	return (e.GetCaMap()[2][I/8]>>uint(I%8)) &^ (^byte(3)) != 3
-	//return true
-
-}
-
-func (self *Pool) CheckSample(e *Sample) bool{
-	n := int(e.GetTag()>>1)
-	self.mu[n].RLock()
-	defer self.mu[n].RUnlock()
-	t := self.FindMinSet(e,n)
-	if t == nil {
-		return false
-	}
-	if !t.s.checkSample(e){
-		return false
-	}
-	for _,sa := range t.s.samp{
-		e.SetTestMap(sa.GetCaMap()[0])
-	}
-	//t.s.SetTMap(e)
-	return true
-	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
-	//	c := _c.(CacheInter)
-	//})
-	//for _,cm := range e.caMap{
-	//	self._ca.
-	//}
-
-
-
-}
+//func (self *Pool) CheckSampleP(e *Sample,I int) bool{
+//
+//	n := int(e.GetTag()>>1)
+//	self.mu[n].RLock()
+//	defer self.mu[n].RUnlock()
+//	t := self.FindMinSet(e,n)
+//	if t == nil {
+//		return false
+//	}
+//	if len(t.s.samp) < config.Conf.MinSam {
+//		return false
+//	}
+//	//if !t.s.checkSample(e){
+//	//	return false
+//	//}
+//	for _,sa := range t.s.samp{
+//
+//		e.SetTestMap(sa.GetCaMap()[0])
+//	}
+//	return (e.GetCaMap()[2][I/8]>>uint(I%8)) &^ (^byte(3)) != 3
+//	//return true
+//
+//}
+//
+//func (self *Pool) CheckSample(e *Sample) bool{
+//	n := int(e.GetTag()>>1)
+//	self.mu[n].RLock()
+//	defer self.mu[n].RUnlock()
+//	t := self.FindMinSet(e,n)
+//	if t == nil {
+//		return false
+//	}
+//	if !t.s.checkSample(e){
+//		return false
+//	}
+//	for _,sa := range t.s.samp{
+//		e.SetTestMap(sa.GetCaMap()[0])
+//	}
+//	//t.s.SetTMap(e)
+//	return true
+//	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
+//	//	c := _c.(CacheInter)
+//	//})
+//	//for _,cm := range e.caMap{
+//	//	self._ca.
+//	//}
+//
+//
+//
+//}
 
 
 func (self *Pool) add(e *Sample,n int) {
@@ -171,20 +173,33 @@ func (self *Pool) add(e *Sample,n int) {
 		self.mu[n].Lock()
 		self.sets[n] = append(self.sets[n],NewSet(e))
 		self.mu[n].Unlock()
+		//e.stop<-true
 		return
 	}
 
-	//self.mu[n].RLock()
+	self.mu[n].RLock()
 	//if t.s.checkSample(e){
-	//	//self._ca.SetCShow(int(e.GetTag()>>1)*2+1,1)
-	//	self._ca.SetCShow(1,1)
-	//	e.check = true
-	//}
-	//self.mu[n].RUnlock()
-	//	t.s.SetTMap(e)
+		//self._ca.SetCShow(int(e.GetTag()>>1)*2+1,1)
+		//self._ca.SetCShow(1,1)
+		sa_ := t.s.samp[len(t.s.samp)-1]
+		sa_.GetCaMap(1,func(b []byte){
+			e.SetCaMapF(0,b)
+		})
+		sa_.GetCaMap(2,func(b []byte){
+			e.SetCaMapF(0,b)
+		})
+		//for _,sa := range t.s.samp {
+		//	sa.GetCaMap(1,func(b []byte){
+		//		e.SetCaMapF(0,b)
+		//	})
+		//}
+		//e.SetCaMapF(0,nil)
+		e.check = true
 	//}else{
-	//	e.SetTestMap(e.caMap[2])
+	//	e.SetCaMapF(0,nil)
 	//}
+	self.mu[n].RUnlock()
+	//e.stop<-true
 
 	self.mu[n].Lock()
 	if t.s.check(t.dis) {

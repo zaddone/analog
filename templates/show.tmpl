@@ -37,14 +37,14 @@ function openfile(url){
 			enddb = db
 		})
 		arrstr = enddb.split(" ")
-		if (arrstr[3] !="NaN"){
-			t1 = parseFloat(arrstr[13])
-			c1+=1;
-			if (t1>0){
-				c2+=1	
+		if (arrstr[2] !="NaN"){
+			c1+=1
+			t1 = parseFloat(arrstr[2])
+			//t2 = parseFloat(arrstr[3])
+			if (t1>0.5) {
+				c2+=1
 			}
-
-			console.log(t1,arrstr[3],c2,c1,c2/c1,url);
+			console.log(arrstr[2],arrstr[3],arrstr[5],url,c2,c1,c2/c1);
 		}
 	})
 }

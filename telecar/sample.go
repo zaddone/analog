@@ -31,7 +31,7 @@ type Sample struct {
 	X []int64
 	Y []float64
 
-	stop chan bool
+	//stop chan bool
 	eleLast config.Element
 	tag byte
 	dis float64
@@ -40,7 +40,7 @@ type Sample struct {
 	Long bool
 	check bool
 	caMap [3][]byte
-	m sync.Mutex
+	m sync.RWMutex
 	//t bool
 	//par *Sample
 	//flag int
@@ -53,6 +53,36 @@ type Sample struct {
 	//node config.Element
 	//caMapCheck []byte
 	//s *Set
+}
+func (self *Sample) SetCheck(c bool) {
+	self.check = c
+}
+
+func (self *Sample) SetCaMapF(i int,m []byte){
+
+	if m == nil {
+		m = make([]byte,len(self.caMap[i]))
+	}
+	self.m.Lock()
+	for j,n := range m{
+		self.caMap[i][j] |= (^n)
+	}
+	self.m.Unlock()
+}
+func (self *Sample) SetCaMap(i int,m []byte){
+	if m == nil {
+		return
+	}
+	self.m.Lock()
+	for j,n := range m{
+		self.caMap[i][j] |= n
+	}
+	self.m.Unlock()
+}
+func (self *Sample) SetCaMapV(i,j int,m byte){
+	self.m.Lock()
+	self.caMap[i][j/8] |= m<<uint(j%8)
+	self.m.Unlock()
 }
 
 func (self *Sample) Check() bool {
@@ -68,7 +98,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 		eleLast:eles[len(eles)-1],
 		Y:make([]float64,0,2000),
 		X:make([]int64,0,2000),
-		stop:make(chan bool,1),
+		//stop:make(chan bool,1),
 		setMap:new(sync.Map),
 	}
 	if le !=0 {
@@ -107,17 +137,22 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	return
 
 }
-func (self *Sample) SetTestMap(n []byte){
-	self.m.Lock()
-	for i,m:= range n {
-		self.caMap[2][i] |= ^m
-	}
-	self.m.Unlock()
-}
+//func (self *Sample) SetTestMap(n []byte){
+//	self.m.Lock()
+//	for i,m:= range n {
+//		self.caMap[2][i] |= ^m
+//	}
+//	self.m.Unlock()
+//}
 
-func (self *Sample) GetCaMap() [3][]byte{
-	return self.caMap
+func (self *Sample) GetCaMap(i int,h func([]byte)){
+	self.m.RLock()
+	h(self.caMap[i])
+	self.m.RUnlock()
 }
+//func (self *Sample) GetCaMap() [3][]byte{
+//	return self.caMap
+//}
 //func (self *Sample) SetNode(no config.Element ){
 //	self.node = no
 //}
@@ -150,7 +185,7 @@ func (self *Sample) GetLastElement() config.Element {
 	return self.eleLast
 }
 func (self *Sample) Wait(){
-	<-self.stop
+	//<-self.stop
 }
 //func (self *Sample) IsCheck() bool {
 //	return self.s != nil

@@ -541,7 +541,7 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	self.pool.Add(ea)
 	if (l.sample == nil) {
 		//ea.SetTestMap(ea.GetCaMap()[1])
-		//ea.SetCaMapF(2,nil)
+		ea.SetCaMapF(2,nil)
 		l.sample = ea
 		return
 	}
@@ -549,58 +549,23 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = math.Abs(node.Diff())>math.Abs(pli.Diff())
 	}
-	l.sample.GetCaMap(2,func(b []byte){
-		ea.SetCaMapF(0,b)
-	})
+	self.SetCacheMapSync(l.sample,nil)
 
-	I_ := self.GetI()*2
-	tn := l.sample.GetTag()>>1
 	var nb []byte
-	//nb = make([]byte,self.GetSumLen())
-	//I_1 := I_/8
-	//I_2 := uint(I_%8)
-	self.Cl.Read(func(i int,_c interface{}){
-		if i == self.GetI() {
-			return
-		}
-		func(_i int,c CacheInterface){
-			_e := c.FindSample(l.sample)
-			if _e == nil {
-				return
-			}
-			n := byte(1)
-			if tn == (_e.GetTag()>>1) {
-				n = 2
-			}
-			_e.SetCaMapV(1,I_,n)
-			l.sample.SetCaMapV(1,_i,n)
-			//ea.SetCaMapV(2,_i,n)
-
-			//_e.GetCaMap(2,func(b []byte){
-			//	//fmt.Println(b)
-			//	k := ((b[I_1] >> I_2) &^ t)
-			//	if (k==0) || (k==3) {
-			//	}else{
-			//		nb[_i/8] |= n<< uint(_i%8)
-			//	}
-			//})
-			//nb[_i/8] |= n<< uint(_i%8)
-
-		}(i*2,_c.(CacheInterface))
-	})
 	l.sample.GetCaMap(1,func(b []byte){
-		ea.SetCaMap(2,b)
-		ea.SetCaMapF(0,b)
+		ea.SetCaMapF(2,b)
+		//ea.SetCaMapF(0,b)
 		nb = b
 	})
-
-
+	l.sample.GetCaMap(2,func(b []byte){
+		ea.SetCaMap(0,b)
+	})
 	func(_nb []byte,e_ *cluster.Sample){
 		//e_.Wait()
 		var j uint
 		t := ^byte(3)
 		e_.GetCaMap(0,func(b []byte){
-			//fmt.Println(b)
+			fmt.Println(b)
 			for i,m := range b{
 				if (m == 255) || (m ==0){
 					continue
@@ -866,13 +831,13 @@ func (self *Cache) SetCacheMapSync(se *cluster.Sample,h func(int,*cluster.Sample
 	if self.Cl == nil {
 		return
 	}
-	//I_ := self.GetI()*2
+	I_ := self.GetI()*2
 
-	//I_1 := I_/8
-	//I_2 := uint(I_%8)
-	//t := ^ byte(3)
+	I_1 := I_/8
+	I_2 := uint(I_%8)
+	t := ^ byte(3)
 
-	//tn := se.GetTag()>>1
+	tn := se.GetTag()>>1
 	//var ses []*cluster.Sample
 	self.Cl.Read(func(i int,_c interface{}){
 		if i == self.GetI() {
@@ -884,30 +849,29 @@ func (self *Cache) SetCacheMapSync(se *cluster.Sample,h func(int,*cluster.Sample
 				//w.Done()
 				return
 			}
-			//isS := true
-			//_e.GetCaMap(2,func(b []byte){
-			//	//fmt.Println(b)
-			//	k := ((b[I_1] >> I_2) &^ t)
-			//	if (k==0) || (k==3) {
-			//		isS = false
-			//	}
-			//})
-			//if !isS{
-			//	return
-			//}
-			//if h != nil {
-			h(_i,_e)
-			//}
+			isS := true
+			_e.GetCaMap(0,func(b []byte){
+				//fmt.Println(b)
+				k := ((b[I_1] >> I_2) &^ t)
+				if (k==0) || (k==3) {
+					isS = false
+					return
+				}
+			})
+			if !isS{
+				return
+			}
+			if h != nil {
+				h(_i,_e)
+			}
 			//ses = append(ses,_e)
+			n := byte(1)
+			if tn == (_e.GetTag()>>1) {
+				n = 2
+			}
 
-			//n := byte(1)
-			//if tn == (_e.GetTag()>>1) {
-			//	n = 2
-			//}
-
-			//se.SetCaMapV(1,_i,n)
-			//_e.SetCaMapV(1,I_,n)
-
+			se.SetCaMapV(1,_i,n)
+			_e.SetCaMapV(1,I_,n)
 			//se.GetCaMap()[1][_i/8] |= n<< uint(_i%8)
 			//_e.GetCaMap()[1][I_1] |= n<< I_2
 			//chanDB <- &tmpDB{i:_i,e:_e,n:n}

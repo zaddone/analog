@@ -190,7 +190,7 @@ func NewCache(ins *oanda.Instrument,cali *cacheList) (c *_cache) {
 	//ca.SyncRun(CL)
 	//c.ca.SetPool()
 	//c.ca.Cl = cali
-	c.ca.Init(cali)
+	c.ca.SyncInit(cali)
 	//go c.ca.RunDown()
 	go c.Read()
 	//fmt.Println(c.ca.Ins.Name)
@@ -206,13 +206,13 @@ func (self *_cache) GetI() int {
 func (self *_cache) Read() {
 	self.ca.ReadAll(func(t_ int64){
 		//log.Println(self.ca.InsName(),time.Unix(t_,0))
-		if t_ - self.begin > 604800 {
-			self.ca.SaveTestLog(t_)
-			self.begin = t_
-		}
-		if t_ < self.val {
-			panic(0)
-		}
+		//if t_ - self.begin > 604800 {
+		//	self.ca.SaveTestLog(t_)
+		//	self.begin = t_
+		//}
+		//if t_ < self.val {
+		//	panic(0)
+		//}
 		self.val = t_
 		self.cas.addTree(self.noinfo)
 		self.cas.w.Done()
