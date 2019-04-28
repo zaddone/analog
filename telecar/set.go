@@ -238,6 +238,7 @@ func (self *set) check (d float64) bool {
 	psum := self.dar.psum + (d * d)
 	n := self.dar.n+1
 	v1 := (psum/n) - ((sum*sum)/(n*n))
+	//fmt.Println(val,v1,val > v1)
 	return val > v1
 
 }

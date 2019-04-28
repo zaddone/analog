@@ -18,9 +18,9 @@ type tmpSet struct {
 
 type CacheInter interface {
 	SetCShow(int,int)
-	HandMap([]byte,func(interface{},byte))
-	HandMapBlack([]byte,func(interface{},byte)bool)
-	FindSample(sa *Sample) *Sample
+	//HandMap([]byte,func(interface{},byte))
+	//HandMapBlack([]byte,func(interface{},byte)bool)
+	//FindSample(sa *Sample) *Sample
 	InsName()string
 }
 
@@ -208,6 +208,7 @@ func (self *Pool) add(e *Sample,n int) {
 	}else{
 		t.s = NewSet(e)
 		self.sets[n] = append(self.sets[n],t.s)
+		//fmt.Println(len(self.sets[n]))
 	}
 	self.Dressing_only(true,map[*set]bool{t.s:true},n,e.XMax())
 	self.mu[n].Unlock()
@@ -370,7 +371,7 @@ func (self *Pool) clearSet(d int64,n int){
 		i++
 	}
 
-	if ((d - sets[0].active) > config.Conf.DateOut){
+	if ((d - sets[0].active)/config.Conf.DateUnixV > config.Conf.DateOut){
 		sets = sets[1:]
 	}
 	self.sets[n] = sets

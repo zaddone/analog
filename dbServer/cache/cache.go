@@ -21,15 +21,15 @@ type CacheList interface{
 	ReadCa(int) interface{}
 	Read(func(int,interface{}))
 	Len() int
-	HandMap([]byte,func(interface{},byte))
-	HandMapBlack([]byte,func(interface{},byte)bool)
-	Show() interface{}
-	SetCShow(int,float64)
+	//HandMap([]byte,func(interface{},byte))
+	//HandMapBlack([]byte,func(interface{},byte)bool)
+	//Show() interface{}
+	//SetCShow(int,float64)
 }
 type CacheInterface interface {
 
 	GetLastElement() config.Element
-	FindSample(*cluster.Sample)*cluster.Sample
+	FindSample(*cluster.Sample)(*Level,*cluster.Sample)
 	//FindSampleTmp(*cluster.Sample)*cluster.Sample
 	Pool() *cluster.Pool
 	InsName() string
@@ -41,9 +41,11 @@ type CacheInterface interface {
 }
 type OrderInfo struct {
 	c CacheInterface
+	//c_ []CacheInterface
 	sa *cluster.Sample
 	e config.Element
 	End bool
+	Start bool
 
 }
 
@@ -115,7 +117,7 @@ func (self *OrderInfo) Clear(){
 type Cache struct {
 
 	ins *oanda.Instrument
-	part *level
+	part *Level
 	eleChan chan config.Element
 	pool *cluster.Pool
 	//lastDateTime int64
@@ -132,9 +134,8 @@ type Cache struct {
 }
 
 func (self *Cache) ClearOrderAll(){
-
 	//self.Lock()
-	self.ReadLevel(func(l *level)bool{
+	self.ReadLevel(func(l *Level)bool{
 		l.ClearOrder()
 		return true
 	})
@@ -162,12 +163,12 @@ func (self *Cache) GetI () int {
 }
 
 
-func (self *Cache) HandMapBlack(m []byte,hand func(interface{},byte)bool){
-	self.Cl.HandMapBlack(m,hand)
-}
-func (self *Cache) HandMap(m []byte,hand func(interface{},byte)){
-	self.Cl.HandMap(m,hand)
-}
+//func (self *Cache) HandMapBlack(m []byte,hand func(interface{},byte)bool){
+//	self.Cl.HandMapBlack(m,hand)
+//}
+//func (self *Cache) HandMap(m []byte,hand func(interface{},byte)){
+//	self.Cl.HandMap(m,hand)
+//}
 
 func (self *Cache) Ins() *oanda.Instrument {
 	return self.ins
@@ -197,7 +198,7 @@ func (self *Cache) SetPool(){
 }
 
 
-func (self *Cache) ReadLevel(h func(*level)bool){
+func (self *Cache) ReadLevel(h func(*Level)bool){
 
 	self.Lock()
 	defer self.Unlock()
@@ -298,12 +299,17 @@ func (self *Cache) ReadAll(h func(int64)){
 	if begin == 0 {
 		begin = config.GetFromTime()
 	}
+	var end int64
 	//fmt.Println(self.ins.Name,time.Unix(begin,0))
 	v := config.Conf.DateUnixV
 	if v == 0 {
 		v =1
+		end = time.Now().Unix()
+	}else{
+		end = time.Now().UnixNano()
+		begin = time.Unix(begin,0).UnixNano()
 	}
-	self.read(fmt.Sprintf("%s_%s",config.Conf.Local,self.ins.Name),begin,time.Now().Unix(),func(p config.Element){
+	self.read(fmt.Sprintf("%s_%s",config.Conf.Local,self.ins.Name),begin,end,func(p config.Element){
 		da := p.DateTime()
 		h(da)
 		da /=v
@@ -402,17 +408,28 @@ func (self *Cache) read(local string,begin,end int64,hand func(e config.Element)
 	if err != nil {
 		panic(err)
 	}
-	var db [12]byte
+	var db [16]byte
 	var n int
+	G:
 	for{
 		n,err = c.Read(db[:])
 		if err != nil {
 			panic(err)
 		}
-		if n == 0 {
-			break
+		//if n == 0 {
+		//	break
+		//}
+		switch n {
+		case 0:
+			break G
+		case 12 :
+			hand(proto.NewCandlesMin(db[:4],db[4:n]))
+		case 16:
+			hand(proto.NewEasyPriceDB(db[:n]))
+		default:
+			panic(n)
 		}
-		hand(proto.NewCandlesMin(db[:4],db[4:]))
+
 	}
 	//fmt.Println(lAddr.String())
 	c.Close()
@@ -478,12 +495,12 @@ func (self *Cache) SetCShow(i int,n int) {
 //
 //}
 //
-func (self *Cache) FindSample(se *cluster.Sample) (minSa *cluster.Sample) {
+func (self *Cache) FindSample(se *cluster.Sample) (minL *Level,minSa *cluster.Sample) {
 
 	dur := se.Duration()
 	var diff,minDiff int64
-	var minL *level
-	self.ReadLevel(func(l *level)bool{
+	//var minL *Level
+	self.ReadLevel(func(l *Level)bool{
 		if l.sample == nil {
 			return true
 		}
@@ -505,7 +522,7 @@ func (self *Cache) FindSample(se *cluster.Sample) (minSa *cluster.Sample) {
 	//	return nil
 	//}
 	if (minSa.GetTag() &^ 2) != (se.GetTag() &^2) {
-		return nil
+		return nil, nil
 	}
 	//d := (self.GetLastElement().Middle() - minL.b.Middle())
 	//if (d >0) != minSa.DisU() {
@@ -531,7 +548,8 @@ func (self *Cache) GetSumLen() (n int) {
 	return
 }
 
-func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
+func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
+
 	if (l.par.par == nil) ||
 	(self.pool == nil) ||
 	(self.Cl == nil) {
@@ -540,7 +558,6 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	ea := cluster.NewSample(append(l.par.list, node),self.GetSumLen())
 	self.pool.Add(ea)
 	if (l.sample == nil) {
-		//ea.SetTestMap(ea.GetCaMap()[1])
 		//ea.SetCaMapF(2,nil)
 		l.sample = ea
 		return
@@ -552,19 +569,27 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 	l.sample.GetCaMap(2,func(b []byte){
 		ea.SetCaMapF(0,b)
 	})
+	l.sample.GetCaMap(1,func(b []byte){
+		ea.SetCaMapF(0,b)
+	})
+
+	//ea.GetCaMap(0,func(b []byte){
+	//	for i,m := range b {
+	//		if m ==0 || m == 255 {
+	//			continue
+	//		}
+	//	}
+	//})
 
 	I_ := self.GetI()*2
 	tn := l.sample.GetTag()>>1
-	var nb []byte
-	//nb = make([]byte,self.GetSumLen())
-	//I_1 := I_/8
-	//I_2 := uint(I_%8)
+
 	self.Cl.Read(func(i int,_c interface{}){
 		if i == self.GetI() {
 			return
 		}
 		func(_i int,c CacheInterface){
-			_e := c.FindSample(l.sample)
+			_,_e := c.FindSample(l.sample)
 			if _e == nil {
 				return
 			}
@@ -572,29 +597,21 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			if tn == (_e.GetTag()>>1) {
 				n = 2
 			}
+			//_l.AddOtherLevel(self.GetI(),NewLevelInfo(l,n))
+			//l.AddOrderLevel(_i,NewLevelInfo(_l,n))
 			_e.SetCaMapV(1,I_,n)
 			l.sample.SetCaMapV(1,_i,n)
-			//ea.SetCaMapV(2,_i,n)
-
-			//_e.GetCaMap(2,func(b []byte){
-			//	//fmt.Println(b)
-			//	k := ((b[I_1] >> I_2) &^ t)
-			//	if (k==0) || (k==3) {
-			//	}else{
-			//		nb[_i/8] |= n<< uint(_i%8)
-			//	}
-			//})
-			//nb[_i/8] |= n<< uint(_i%8)
 
 		}(i*2,_c.(CacheInterface))
 	})
+
+	//ea.SetCaMapF(0,nb)
+	var nb []byte
 	l.sample.GetCaMap(1,func(b []byte){
 		ea.SetCaMap(2,b)
-		ea.SetCaMapF(0,b)
+		//ea.SetCaMapF(0,b)
 		nb = b
 	})
-
-
 	func(_nb []byte,e_ *cluster.Sample){
 		//e_.Wait()
 		var j uint
@@ -619,18 +636,6 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 			}
 		})
 	}(nb,l.sample)
-
-	//var j uint
-	//t:=^byte(3)
-	//ea.GetCaMap(0,func(b []byte){
-	//	for _,m := range b{
-	//		for j=0;j<8;j+=2 {
-	//			if ((m>>j) &^ t) != 3 {
-	//				self.SetCShowF(1,1)
-	//			}
-	//		}
-	//	}
-	//})
 
 	l.sample = ea
 
@@ -862,64 +867,64 @@ func (self *Cache) CheckOrder(l *level,node config.Element,sumdif float64){
 //
 //}
 
-func (self *Cache) SetCacheMapSync(se *cluster.Sample,h func(int,*cluster.Sample)) {
-	if self.Cl == nil {
-		return
-	}
-	//I_ := self.GetI()*2
-
-	//I_1 := I_/8
-	//I_2 := uint(I_%8)
-	//t := ^ byte(3)
-
-	//tn := se.GetTag()>>1
-	//var ses []*cluster.Sample
-	self.Cl.Read(func(i int,_c interface{}){
-		if i == self.GetI() {
-			return
-		}
-		func(_i int,c CacheInterface){
-			_e := c.FindSample(se)
-			if _e == nil {
-				//w.Done()
-				return
-			}
-			//isS := true
-			//_e.GetCaMap(2,func(b []byte){
-			//	//fmt.Println(b)
-			//	k := ((b[I_1] >> I_2) &^ t)
-			//	if (k==0) || (k==3) {
-			//		isS = false
-			//	}
-			//})
-			//if !isS{
-			//	return
-			//}
-			//if h != nil {
-			h(_i,_e)
-			//}
-			//ses = append(ses,_e)
-
-			//n := byte(1)
-			//if tn == (_e.GetTag()>>1) {
-			//	n = 2
-			//}
-
-			//se.SetCaMapV(1,_i,n)
-			//_e.SetCaMapV(1,I_,n)
-
-			//se.GetCaMap()[1][_i/8] |= n<< uint(_i%8)
-			//_e.GetCaMap()[1][I_1] |= n<< I_2
-			//chanDB <- &tmpDB{i:_i,e:_e,n:n}
-			//w.Done()
-			//I := c.GetI()*2
-			//se.GetCaMap()[1][I/8] |= n<< uint(I%8)
-			//_e.GetCaMap()[0][I_1] |= n<< I_2
-
-		}(i*2,_c.(CacheInterface))
-	})
-
-}
+//func (self *Cache) SetCacheMapSync(se *cluster.Sample,h func(int,*cluster.Sample)) {
+//	if self.Cl == nil {
+//		return
+//	}
+//	//I_ := self.GetI()*2
+//
+//	//I_1 := I_/8
+//	//I_2 := uint(I_%8)
+//	//t := ^ byte(3)
+//
+//	//tn := se.GetTag()>>1
+//	//var ses []*cluster.Sample
+//	self.Cl.Read(func(i int,_c interface{}){
+//		if i == self.GetI() {
+//			return
+//		}
+//		func(_i int,c CacheInterface){
+//			_e := c.FindSample(se)
+//			if _e == nil {
+//				//w.Done()
+//				return
+//			}
+//			//isS := true
+//			//_e.GetCaMap(2,func(b []byte){
+//			//	//fmt.Println(b)
+//			//	k := ((b[I_1] >> I_2) &^ t)
+//			//	if (k==0) || (k==3) {
+//			//		isS = false
+//			//	}
+//			//})
+//			//if !isS{
+//			//	return
+//			//}
+//			//if h != nil {
+//			h(_i,_e)
+//			//}
+//			//ses = append(ses,_e)
+//
+//			//n := byte(1)
+//			//if tn == (_e.GetTag()>>1) {
+//			//	n = 2
+//			//}
+//
+//			//se.SetCaMapV(1,_i,n)
+//			//_e.SetCaMapV(1,I_,n)
+//
+//			//se.GetCaMap()[1][_i/8] |= n<< uint(_i%8)
+//			//_e.GetCaMap()[1][I_1] |= n<< I_2
+//			//chanDB <- &tmpDB{i:_i,e:_e,n:n}
+//			//w.Done()
+//			//I := c.GetI()*2
+//			//se.GetCaMap()[1][I/8] |= n<< uint(I%8)
+//			//_e.GetCaMap()[0][I_1] |= n<< I_2
+//
+//		}(i*2,_c.(CacheInterface))
+//	})
+//
+//}
 //func (self *Cache) SetCacheMapSyncB(se *cluster.Sample) {
 //	if self.Cl == nil {
 //		return

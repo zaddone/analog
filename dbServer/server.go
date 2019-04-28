@@ -68,14 +68,15 @@ func (self *dataList) FindCa(name string) *data.Data {
 
 	return self.cas[name]
 }
-func init(){
-	CL = NewDataList()
-	fmt.Println(CL.Len())
-}
+//func init(){
+//	CL = NewDataList()
+//	fmt.Println(CL.Len())
+//}
 
 func main(){
 	//go UnixServer(fmt.Sprintf("%s_main",config.Conf.Local))
-	go UnixServer(config.Conf.Local)
+	//go UnixServer(config.Conf.Local)
+	CL = NewDataList()
 	select{}
 }
 

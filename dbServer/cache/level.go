@@ -16,71 +16,24 @@ const(
 	MaxTag = 6
 	//TimeOut = 14400
 )
+type LevelInfo struct {
+	l *Level
+	n byte
+}
+func NewLevelInfo(l *Level,n byte) *LevelInfo {
+	return &LevelInfo{
+		l:l,
+		n:n,
+	}
+}
 
-//type postDB struct {
-//	ca *Cache
-//	b int64
-//	t  byte
-//}
-//func NewPostDB(c *Cache,t byte,b int64 ) *postDB {
-//	po := &postDB {
-//		ca:c,
-//		t:t,
-//		b:b,
-//	}
-//	//fmt.Println(c.Ins.Name,s.GetDiff())
-//	//c.Cshow[5]++
-//	//c.tmpSample.Store(po.key,s)
-//	return po
-//}
-//func (self *postDB) clear(e int64) byte {
-//
-//	var eEle,bEle config.Element
-//	self.ca.read(config.Conf.Local,self.b,e,func(_e config.Element){
-//		if bEle == nil {
-//			bEle = _e
-//		}
-//		eEle = _e
-//	})
-//	//self.ca.FindDB(self.b,e,func(e config.Element){
-//	//	if bEle == nil {
-//	//		bEle = e
-//	//	}
-//	//	eEle = e
-//	//	//elist = append(elist,e)
-//	//})
-//	if eEle == nil || bEle == nil {
-//		return 0
-//	}
-//	if (eEle.Middle() == bEle.Middle()) {
-//		return 0
-//	}
-//
-//	d := (eEle.Middle() - bEle.Middle())
-//	//if d > 0 {
-//	//	return 1
-//	//}else{
-//	//	return 2
-//	//}
-//	//d := self.ca.GetLastElement().Middle() - self.e.Middle()
-//
-//	if (d>0) == (self.t==1) {
-//		return 1
-//		//self.ca.Cshow[0]++
-//	}else{
-//		return 2
-//		//self.ca.Cshow[1]++
-//	}
-//
-//}
-
-type level struct {
+type Level struct {
 
 	list []config.Element
 	dis float64
-	par *level
+	par *Level
 	b config.Element
-	child *level
+	child *Level
 	tag int
 
 	AbsMax float64
@@ -93,16 +46,66 @@ type level struct {
 	//lastOrder *order
 	ca *Cache
 	//post []*postDB
-	sample *cluster.Sample
 	Order *sync.Map
+	//Or *OrderInfo
+
+	sample *cluster.Sample
+	//OtherLevel []*LevelInfo
 
 }
-func (self *level)AddOrder(o *OrderInfo){
+//func (self *Level) NewOr(sumdif float64){
+//	if self.Or != nil {
+//		return
+//	}
+//	if self.sample == nil {
+//		return
+//	}
+//	nb := make([]byte,self.ca.GetSumLen())
+//	self.sample.GetCaMap(1,func(b []byte){
+//		for i,m := range b {
+//			nb |= ^m
+//		}
+//	})
+//	isOut := true
+//	for i,m := range nb {
+//		if m != 255{
+//			isOut = false
+//			break
+//		}
+//	}
+//	if isOut {
+//		return
+//	}
+//	self.sample.GetCaMap(2,func(b []byte){
+//		for i,m := range b {
+//			nb |= ^m
+//		}
+//	})
+//	isOut = true
+//	for i,m := range nb {
+//		if m != 255{
+//			isOut = false
+//			break
+//		}
+//	}
+//	if isOut {
+//		return
+//	}
+//	node := NewbNode(self.list...)
+//	if math.Abs(node.Diff()) < sumdif {
+//		return
+//	}
+//}
+
+func (self *Level)AddOrder(o *OrderInfo){
 	self.Order.Store(o,true)
 }
+func (self *Level) GetCache() CacheInterface {
+	return self.ca
+}
 
-func NewLevel(tag int,c *Cache,le *level) *level {
-	return &level{
+func NewLevel(tag int,c *Cache,le *Level) (l *Level) {
+	l =  &Level{
 		tag:tag,
 		ca:c,
 		child:le,
@@ -110,8 +113,21 @@ func NewLevel(tag int,c *Cache,le *level) *level {
 		Order:new(sync.Map),
 		//post:make([]*postDB,0,100),
 	}
+	//if c.Cl != nil {
+	//	l.OtherLevel  = make([]*LevelInfo,c.Cl.Len())
+	//}
+	return
 }
-func (self *level) ClearOrder(){
+//func (self *Level) AddOtherLevel(i int,l *LevelInfo) {
+//	self.OtherLevel[i] = l
+//}
+//func (self *Level) ClearOtherLevel(){
+//	for i,_:= range  self.OtherLevel{
+//		self.OtherLevel[i] = nil
+//	}
+//}
+
+func (self *Level) ClearOrder(){
 	go self.Order.Range(func(k,v interface{})bool{
 		k.(*OrderInfo).Clear()
 		self.Order.Delete(k)
@@ -120,7 +136,7 @@ func (self *level) ClearOrder(){
 }
 
 
-func (self *level) LastTime() int64 {
+func (self *Level) LastTime() int64 {
 	le := len(self.list)
 	if le == 0 {
 		return 0
@@ -130,14 +146,14 @@ func (self *level) LastTime() int64 {
 
 }
 
-func (self *level) duration () int64 {
+func (self *Level) duration () int64 {
 	last :=self.LastTime()
 	if last <= 0 {
 		return 0
 	}
 	return last - self.list[0].DateTime()
 }
-func (self *level) readf( h func(e config.Element) bool){
+func (self *Level) readf( h func(e config.Element) bool){
 	for i :=len(self.list)-1;i> 0;i-- {
 		if !self.list[i].Readf(h){
 			return
@@ -179,7 +195,7 @@ func (self *level) readf( h func(e config.Element) bool){
 //	//self.post = nil
 //}
 
-func (self *level) add(e config.Element) {
+func (self *Level) add(e config.Element) {
 
 	if e.Diff() == 0 {
 		return
@@ -208,7 +224,11 @@ func (self *level) add(e config.Element) {
 			self.AbsMax = absDiff
 		}
 	}
+
+	//PostOrder
+
 	sumdif /= float64(le)
+
 	if (maxid <= 0) ||
 	(self.AbsMax == 0) ||
 	(self.AbsMax < sumdif) {
@@ -218,6 +238,7 @@ func (self *level) add(e config.Element) {
 	self.ClearOrder()
 	//node := NewbNode(self.list[:maxid]...)
 	node := NewbNode(self.list[:maxid+1]...)
+	//fmt.Println(time.Unix(node.duration/config.Conf.DateUnixV,0),node.Diff(),node.Middle())
 	if self.par == nil {
 		tag := self.tag+1
 		self.par = NewLevel(tag,self.ca,self)

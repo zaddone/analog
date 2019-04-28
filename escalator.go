@@ -15,60 +15,14 @@ import(
 	"bufio"
 	"io"
 	"strings"
-	"time"
+	//"time"
 	"os"
 	"net"
 	"log"
 	//"sync"
 )
 
-type EasyPrice struct {
-	dateTime int64
-	//dateTimeMin int64
-	bid int32
-	ask int32
-}
 
-func NewEasyPrice(p *oanda.Price,integer float64)*EasyPrice{
-	return &EasyPrice{
-		//dateTimeMin:p.DateTimeMin(),
-		dateTime:time.Unix(p.DateTime(),p.DateTimeMin()).UnixNano(),
-		bid:int32(p.Bid()*integer),
-		ask:int32(p.Ask()*integer),
-	}
-}
-func (self *EasyPrice) ToByte()(k []byte,v []byte){
-	k = make([]byte,8)
-	binary.BigEndian.PutUint64(k,uint64(self.dateTime))
-	v = make([]byte,8)
-	binary.BigEndian.PutUint32(v,uint32(self.bid))
-	binary.BigEndian.PutUint32(v[4:],uint32(self.ask))
-	return
-}
-func (self *EasyPrice) Load(k []byte,v []byte){
-	self.dateTime = int64(binary.BigEndian.Uint64(k))
-	self.bid = int32(binary.BigEndian.Uint32(v[:4]))
-	self.ask = int32(binary.BigEndian.Uint32(v[4:]))
-}
-
-func (self *EasyPrice) Readf(hand func(config.Element)bool)bool{
-	return hand(self)
-}
-func (self *EasyPrice) Read(hand func(config.Element)bool)bool{
-	return hand(self)
-}
-func (self *EasyPrice) DateTime() int64 {
-	return self.dateTime
-}
-func (self *EasyPrice) Diff() float64 {
-	return float64(self.ask - self.bid)
-}
-func (self *EasyPrice) Middle() float64 {
-	return float64(self.ask+self.bid)/2
-}
-func (self *EasyPrice) Duration() int64 {
-	return 0
-}
 var (
 	CL *cacheList = NewCacheList()
 )
@@ -88,12 +42,12 @@ func (self *_cache) InsName() string {
 	return self.ca.InsName()
 }
 func (self *_cache) SyncInit(cl cache.CacheList){
-	self.SyncInit(cl)
+	self.ca.SyncInit(cl)
 }
 
-func (self *_cache)TmpCheck(b,e int64)(max,min config.Element){
-	return self.ca.CheckVal(e - b)
-}
+//func (self *_cache)TmpCheck(b,e int64)(max,min config.Element){
+//	return self.ca.CheckVal(e - b)
+//}
 
 type cacheList struct {
 	cas []*_cache
@@ -101,6 +55,7 @@ type cacheList struct {
 	LogDB *bolt.DB
 	//sync.RWMutex
 }
+
 
 func (self *cacheList) Show() (n int) {
 	return 0
@@ -117,7 +72,7 @@ func (self *cacheList) Handle(ins string,d *oanda.Price){
 	if c == nil {
 		panic(0)
 	}
-	ep := NewEasyPrice(d,c.Ins().Integer())
+	ep := proto.NewEasyPrice(d,c.Ins().Integer())
 	if config.Conf.Server {
 		go func(){
 			err := self.LogDB.Batch(func(t *bolt.Tx)error{
@@ -133,7 +88,6 @@ func (self *cacheList) Handle(ins string,d *oanda.Price){
 			}
 		}()
 	}
-
 	c.Add(ep)
 }
 
@@ -141,6 +95,10 @@ func (self *cacheList) Read(h func(int,interface{})){
 	for i,c := range self.cas {
 		h(i,c)
 	}
+}
+
+func (self *cacheList) ReadCa(i int) interface{} {
+	return self.cas[i]
 }
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 
@@ -182,7 +140,7 @@ func NewCacheList() (cl *cacheList) {
 		if err != nil {
 			panic(err)
 		}
-		go cl.UnixServer(config.Conf.Local)
+		//go cl.UnixServer(config.Conf.Local)
 	}
 	return
 }
@@ -192,6 +150,10 @@ func (self *cacheList) add(ins *oanda.Instrument){
 	self.cas = append(self.cas,c)
 	self.casMap[c.InsName()] = c
 	c.SyncInit(self)
+
+	if config.Conf.Server {
+		go self.UnixServer(fmt.Sprintf("%s_%s",config.Conf.Local,ins.Name))
+	}
 }
 func (self *cacheList) PriceVarUrl() string {
 	var Ins []string
@@ -325,6 +287,7 @@ func (self *cacheList) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAdd
 	}
 	var err error
 	//var n int
+	//fmt.Println(R.B.R.E)
 	self.read(R.Ins,R.B,R.E,func(k,v []byte)bool{
 		_,err = c.WriteToUnix(append(k,v...),addr)
 		if err != nil {

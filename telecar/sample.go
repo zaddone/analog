@@ -2,24 +2,12 @@ package telecar
 import(
 	"github.com/zaddone/analog/config"
 	"sync"
+	//"fmt"
 )
-type Map struct{
-	End int64
-	Long float64
-	No config.Element
-	//F bool
-}
-func (self *Map) SetNo(no config.Element){
-	self.No = no
-}
 
-func (self *Map) GetF() bool {
-	return (self.Long>0) == (self.No.Diff()>0)
-}
-
-func (self *Map) Check() bool {
-	return self.End > self.No.Duration()
-}
+//type LevelInterface interface{
+//	GetCache() CacheInterface
+//}
 
 type Sample struct {
 	//xMin int64
@@ -39,8 +27,11 @@ type Sample struct {
 	setMap *sync.Map
 	Long bool
 	check bool
+
+	//leMap [2][]LevelInterface
 	caMap [3][]byte
 	m sync.RWMutex
+
 	//t bool
 	//par *Sample
 	//flag int
@@ -124,6 +115,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 			return true
 		})
 	}
+	//fmt.Println(sa.Y,sa.X)
 	sa.tag = func() (t byte) {
 		f := sa.Y[0] < sa.Y[len(sa.Y)-1]
 		if f {

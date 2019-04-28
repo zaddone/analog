@@ -35,30 +35,30 @@ func NewCacheList() *cacheList {
 		//minC:make(chan *_cache,1),
 	}
 }
-func (self *cacheList) SetCShow(i int,n float64){
-	self.Lock()
-	self.Cshow[i] += n
-	self.Unlock()
-}
-func (self *cacheList) GetCShow() [8]float64{
-	return self.Cshow
-}
+//func (self *cacheList) SetCShow(i int,n float64){
+//	self.Lock()
+//	self.Cshow[i] += n
+//	self.Unlock()
+//}
+//func (self *cacheList) GetCShow() [8]float64{
+//	return self.Cshow
+//}
 func (self *cacheList) ReadCa(i int) interface{} {
 	return self.cas[i].ca
 }
-func (self *cacheList) Show() (interface{}) {
-	db := make([][8]float64,self.Len())
-	self.Read(func(i int, _c interface{}){
-		db[i] = _c.(*cache.Cache).Cshow
-	})
-	return db
-	//return self.count
-	//n =  self.count -self.countl
-	//self.countl = self.count
-	//return
-	//self.count = 0
-	//return
-}
+//func (self *cacheList) Show() (interface{}) {
+//	db := make([][8]float64,self.Len())
+//	self.Read(func(i int, _c interface{}){
+//		db[i] = _c.(*cache.Cache).Cshow
+//	})
+//	return db
+//	//return self.count
+//	//n =  self.count -self.countl
+//	//self.countl = self.count
+//	//return
+//	//self.count = 0
+//	//return
+//}
 func (self *cacheList) addTree(c *tree){
 
 	self.Lock()
