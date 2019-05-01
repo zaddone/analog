@@ -1,89 +1,70 @@
 package main
 import(
+	"github.com/zaddone/analog/request"
+	"github.com/zaddone/analog/config"
+	"github.com/zaddone/operate/oanda"
+	"bufio"
+	"log"
+	//"time"
+	"encoding/json"
+	//"github.com/zaddone/analog/dbServer/proto"
+	"net/url"
 	"fmt"
-	"math/rand"
-	"time"
+	"io"
+	"io/ioutil"
 )
-type no interface{
-	GetVal() int64
-}
 
-type tree struct {
-	node no
-	big *tree
-	small *tree
-	//top *tree
-}
-func NewTree(n no) *tree {
-	return &tree{
-		node:n,
-	}
-}
-func (self *tree) Copy(t *tree) {
-	self.node = t.node
-	self.big = t.big
-	self.small = t.small
-	//if self.big != nil{
-	//	self.big.top = self
-	//}
-	//if self.small != nil {
-	//	self.small.top = self
-	//}
-}
-func (self *tree) Add (n no) {
-	if self.node.GetVal() >= n.GetVal() {
-		if self.small == nil {
-			self.small = NewTree(n)
-			//self.small.top = self
-		}else{
-			self.small.Add(n)
-		}
-	}else{
-		if self.big == nil {
-			self.big = NewTree(n)
-			//self.big.top = self
-		}else{
-			self.big.Add(n)
-		}
-	}
-}
-func (self *tree) PopSmall(top *tree) (n no) {
+func PriceVarUrl() string {
 
-	if self.small != nil {
-		return self.small.PopSmall(self)
-	}
-	n = self.node
-	if top != nil {
-		//if self.big != nil {
-		//	self.big.top = self.top
-		//}
-		top.small = self.big
-	}else{
-
-		self.Copy(self.big)
-	}
-	return
-
-}
-type test struct{
-	val int64
-}
-func (self *test) GetVal()int64 {
-	return self.val
+	return config.Conf.GetStreamAccPath()+"/pricing/stream?"+(&url.Values{"instruments":[]string{"EUR_USD"}}).Encode()
 }
 func main(){
-	rand.Seed(time.Now().UnixNano())
-	n:=rand.Int63n(100)
-	t := NewTree(&test{0})
-	fmt.Println(n)
-	for i:=0;i<10;i++{
-		n:=rand.Int63n(100)
-		t.Add(&test{n})
-		fmt.Println(n)
-	}
-	fmt.Println("out")
-	for i:=0;i<10;i++{
-		n := t.PopSmall(nil)
-		fmt.Println(n.GetVal())
+	var err error
+	var lr,r []byte
+	var p bool
+	for{
+		err = request.ClientHttp(0,
+		"GET",
+		PriceVarUrl(),
+		nil,
+		func(statusCode int,data io.Reader) error {
+			if statusCode != 200 {
+				msg,_ := ioutil.ReadAll(data)
+				return fmt.Errorf("%s",string(msg))
+			}
+			buf := bufio.NewReader(data)
+			for{
+				r,p,err = buf.ReadLine()
+				if p {
+					lr = r
+				}else if len(r)>0 {
+					if lr != nil {
+						r = append(lr,r...)
+						lr = nil
+					}
+
+					var d oanda.Price
+					er := json.Unmarshal(r,&d)
+					if er != nil {
+						log.Println(er,string(r))
+						continue
+					}
+					name := string(d.Instrument)
+					if name != "" {
+						fmt.Println(d)
+						//Handle(name,&d)
+					}
+
+				}
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			//panic(err)
+			log.Println(err)
+		}
 	}
 }

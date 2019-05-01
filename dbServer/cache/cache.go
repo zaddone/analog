@@ -26,6 +26,7 @@ type CacheList interface{
 	//Show() interface{}
 	//SetCShow(int,float64)
 }
+
 type CacheInterface interface {
 
 	GetLastElement() config.Element
@@ -34,83 +35,132 @@ type CacheInterface interface {
 	Pool() *cluster.Pool
 	InsName() string
 	GetI() int
-	AddOrder(*OrderInfo)
+	//AddOrder(*OrderInfo)
 	//ClearOrder(*OrderInfo)
 	SetCShowF(i int,n float64)
 
 }
 type OrderInfo struct {
+
 	c CacheInterface
-	//c_ []CacheInterface
-	sa *cluster.Sample
+	//l *Level
+	//c_ *sync.Map
+	//sa *cluster.Sample
 	e config.Element
+	f float64
 	End bool
-	Start bool
+	//Start bool
 
 }
 
-func NewOrderInfo(c CacheInterface,sa *cluster.Sample) (o *OrderInfo) {
+func NewOrderInfo(c CacheInterface) (o *OrderInfo) {
 	o = &OrderInfo{
 		c:c,
-		sa:sa,
+		//c_:new(sync.Map),
 	}
-	o.e = c.GetLastElement()
-	//l.Order = o
-	c.AddOrder(o)
 	return
+}
+
+func (self *OrderInfo) PostOrder(e config.Element,f bool) bool {
+
+	if self.End || self.e != nil {
+		return false
+	}
+	_e := self.c.GetLastElement()
+	d := e.Middle() - _e.Middle()
+	//fmt.Println(d,f)
+	if (d>0) != f {
+		return false
+	}
+	dif := (math.Abs(_e.Diff()) + math.Abs(e.Diff()))/2
+	//fmt.Println(self.c.InsName(),d,dif)
+	if dif > math.Abs(d) {
+		return false
+	}
+
+	self.c.SetCShowF(3,1)
+	self.e = _e
+	self.f = d
+	return true
+
+}
+//func (self *OrderInfo) SetCs(c CacheInterface){
+//	self.c_.Store(c,true)
+//}
+
+func (self *OrderInfo) ClearCheck(){
+	if self.e == nil {
+		return
+	}
+	if self.End {
+		return
+	}
+	f := self.c.GetLastElement().Middle() - self.e.Middle()
+	absf := math.Abs(f)
+	if absf < math.Abs(self.f) {
+		return
+	}
+
+	if (f>0)==(self.f>0){
+		self.c.SetCShowF(7,absf)
+		self.c.SetCShowF(2,1)
+		self.End = true
+	//}else{
+		//self.c.SetCShowF(7,-absf)
+	}
+
+}
+func (self *OrderInfo) ClearCs(c CacheInterface){
+	//self.Clear()
+	//self.c_.Delete(c)
+	if self.e == nil {
+		self.End = true
+		return
+	}
+	if self.End {
+		return
+	}
+	f := self.c.GetLastElement().Middle() - self.e.Middle()
+	if (f>0) != (self.f>0) {
+		return
+	}
+	var dif float64
+	//dif = (math.Abs(self.c.GetLastElement().Diff()) +math.Abs(self.e.Diff())) /2
+	f = (math.Abs(f) - dif)
+	if f > 0 {
+		self.End = true
+		self.c.SetCShowF(7,f)
+		self.c.SetCShowF(2,1)
+	}
+
 }
 
 func (self *OrderInfo) GetDiff() float64 {
 	d := self.c.GetLastElement().Middle() - self.e.Middle()
-	var dif float64 = 0
-	//dif := (math.Abs(self.e.Diff()) + math.Abs(self.c.GetLastElement().Diff()))/2
-	if self.sa.DisU() == (d>0) {
+	var dif float64
+	//diff = 0
+	//dif = (math.Abs(self.e.Diff()) + math.Abs(self.c.GetLastElement().Diff()))/2
+	if (self.f>0) == (d>0) {
 		return math.Abs(d)-dif
 	}
 	return -(math.Abs(d)) - dif
 }
 
-func (self *OrderInfo) Marge(New *OrderInfo) bool {
-
-	if self.End {
-		return true
-	}
-	if self.sa.DisU() != New.sa.DisU() {
-		self.Clear()
-		New.End = true
-		return false
-	}
-	New.End = true
-	return false
-
-}
-//func (self *OrderInfo) Marge(old *OrderInfo){
-//
-//	if old.End {
-//		return
-//	}
-//	if self.sa.DisU() != old.sa.DisU() {
-//		old.Clear()
-//		self.End = true
-//		return
-//	}
-//	self.e = old.e
-//	//fmt.Println(self.c.InsName(),self.e.DateTime() - old.e.DateTime())
-//	old.End = true
-//
-//}
-
 func (self *OrderInfo) Clear(){
-	if !self.End{
-		d := self.GetDiff()
-		self.c.SetCShowF(7,d)
-		if d >0{
-			self.c.SetCShowF(2,1)
-		}
-		self.c.SetCShowF(3,1)
-		//self.c.ClearOrder(self)
-		self.End = true
+	if self.End{
+		return
 	}
+	if self.e == nil {
+		return
+	}
+	d := self.GetDiff()
+	self.c.SetCShowF(7,d)
+	if d >0{
+		self.c.SetCShowF(2,1)
+	}
+	//self.c.SetCShowF(3,1)
+	//self.c.ClearOrder(self)
+	self.End = true
 }
 
 
@@ -125,7 +175,7 @@ type Cache struct {
 	Cl CacheList
 	Cshow [8]float64
 	//LogDB *bolt.DB
-	sync.Mutex
+	sync.RWMutex
 	I int
 	m sync.Mutex
 	last config.Element
@@ -134,25 +184,24 @@ type Cache struct {
 }
 
 func (self *Cache) ClearOrderAll(){
-	//self.Lock()
 	self.ReadLevel(func(l *Level)bool{
 		l.ClearOrder()
+		l.ClearOrderInfo()
 		return true
 	})
-	//self.Unlock()
 }
 
-func (self *Cache) AddOrder(o *OrderInfo) {
-	if self.Order == nil {
-		self.Order = o
-		return
-	}
-	if self.Order.Marge(o) {
-		self.Order = o
-	}
-	//o.Marge(self.Order)
-	//self.Order = o
-}
+//func (self *Cache) AddOrder(o *OrderInfo) {
+//	if self.Order == nil {
+//		self.Order = o
+//		return
+//	}
+//	if self.Order.Marge(o) {
+//		self.Order = o
+//	}
+//	//o.Marge(self.Order)
+//	//self.Order = o
+//}
 
 func (self *Cache) SetI(i int) {
 	self.I = i
@@ -181,7 +230,7 @@ func (self *Cache) Add(e config.Element){
 func NewCache(ins *oanda.Instrument) (c *Cache) {
 	c = &Cache {
 		ins:ins,
-		eleChan:make(chan config.Element,1),
+		eleChan:make(chan config.Element,10),
 		stop:make(chan bool),
 		//Order:new(sync.Map),
 	}
@@ -200,8 +249,8 @@ func (self *Cache) SetPool(){
 
 func (self *Cache) ReadLevel(h func(*Level)bool){
 
-	self.Lock()
-	defer self.Unlock()
+	self.RLock()
+	defer self.RUnlock()
 	l := self.part
 	for{
 		if l == nil {
@@ -302,8 +351,8 @@ func (self *Cache) ReadAll(h func(int64)){
 	var end int64
 	//fmt.Println(self.ins.Name,time.Unix(begin,0))
 	v := config.Conf.DateUnixV
-	if v == 0 {
-		v =1
+	if v == 1 {
+		//v =1
 		end = time.Now().Unix()
 	}else{
 		end = time.Now().UnixNano()
@@ -315,16 +364,21 @@ func (self *Cache) ReadAll(h func(int64)){
 		da /=v
 		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
 			self.ClearOrderAll()
+			//fmt.Println(time.Unix(e.DateTime()/v,0),"new")
 			self.part = NewLevel(0,self,nil)
 		}
 		self.last = p
-		self.Lock()
+		//self.Lock()
 		self.Add(p)
 		//self.part.add(p)
-		self.Unlock()
+		//self.Unlock()
 		//self.eleChan <- e
 	})
-	fmt.Println(self.ins.Name,"over")
+	if self.GetLastElement() == nil{
+		fmt.Println(self.ins.Name,"over")
+	}else{
+		fmt.Println(self.ins.Name,"over",time.Unix(self.getLastElement().DateTime()/v,0))
+	}
 }
 func (self *Cache) Pool() *cluster.Pool {
 	return self.pool
@@ -340,20 +394,26 @@ func (self *Cache) syncAddPrice(){
 	//var last int64
 	p := <-self.eleChan
 	begin = p.DateTime()/v
+
+	self.Lock()
 	self.part.add(p)
+	self.Unlock()
 	for{
 		select{
 		case p = <-self.eleChan:
 		//p := <-self.eleChan
 			da = p.DateTime()/v
-			if (da - begin) > 604800 {
+			if (da - begin) > 3600*24*7 {
 				self.SaveTestLog(da)
 				begin = da
 			}
+			self.Lock()
 			if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
 				self.part = NewLevel(0,self,nil)
 			}
+			//self.SetCShowF(2,1)
 			self.part.add(p)
+			self.Unlock()
 		case <-self.stop:
 			return
 
@@ -556,7 +616,8 @@ func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
 		return
 	}
 	ea := cluster.NewSample(append(l.par.list, node),self.GetSumLen())
-	self.pool.Add(ea)
+	//self.pool.Add(ea)
+	//self.SetCShowF(7,1)
 	if (l.sample == nil) {
 		//ea.SetCaMapF(2,nil)
 		l.sample = ea
@@ -565,6 +626,7 @@ func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
 	pli := l.par.list[len(l.par.list)-1]
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = math.Abs(node.Diff())>math.Abs(pli.Diff())
+		//self.SetCShowF(6,1)
 	}
 	l.sample.GetCaMap(2,func(b []byte){
 		ea.SetCaMapF(0,b)
@@ -572,24 +634,19 @@ func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
 	l.sample.GetCaMap(1,func(b []byte){
 		ea.SetCaMapF(0,b)
 	})
-
-	//ea.GetCaMap(0,func(b []byte){
-	//	for i,m := range b {
-	//		if m ==0 || m == 255 {
-	//			continue
-	//		}
-	//	}
-	//})
-
+	//ea.SetCaMapF(0,nil)
 	I_ := self.GetI()*2
+	//I_1 := I_/8
+	//I_2 := uint(I_%8)
+	t := ^byte(3)
 	tn := l.sample.GetTag()>>1
-
+	//levelList := make([]*Level,self.Cl.Len())
 	self.Cl.Read(func(i int,_c interface{}){
 		if i == self.GetI() {
 			return
 		}
 		func(_i int,c CacheInterface){
-			_,_e := c.FindSample(l.sample)
+			_l,_e := c.FindSample(l.sample)
 			if _e == nil {
 				return
 			}
@@ -597,8 +654,26 @@ func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
 			if tn == (_e.GetTag()>>1) {
 				n = 2
 			}
-			//_l.AddOtherLevel(self.GetI(),NewLevelInfo(l,n))
-			//l.AddOrderLevel(_i,NewLevelInfo(_l,n))
+			//if !l.sample.Long {
+				//levelList[_i/2]= _l
+			n_ := n ^ 3
+			ea.GetCaMap(0,func(b []byte){
+				vl := (b[_i/8]>>uint(_i%8)) &^ t
+				//fmt.Println(vl,n_)
+				if vl != n_ {
+					return
+				}
+				_e.GetCaMap(0,func(b []byte){
+					vl_ := (b[I_/8]>>uint(I_%8)) &^ t
+					if vl_ != n_ {
+						return
+					}
+					l.SetOrderInfo(_l.GetOrderInfo())
+					//_l.GetOrderInfo()
+				})
+			})
+			//}
+
 			_e.SetCaMapV(1,I_,n)
 			l.sample.SetCaMapV(1,_i,n)
 
@@ -615,7 +690,6 @@ func (self *Cache) CheckOrder(l *Level,node config.Element,sumdif float64){
 	func(_nb []byte,e_ *cluster.Sample){
 		//e_.Wait()
 		var j uint
-		t := ^byte(3)
 		e_.GetCaMap(0,func(b []byte){
 			//fmt.Println(b)
 			for i,m := range b{

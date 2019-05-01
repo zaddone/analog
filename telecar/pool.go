@@ -192,9 +192,12 @@ func (self *Pool) add(e *Sample,n int) {
 		//	sa.GetCaMap(1,func(b []byte){
 		//		e.SetCaMapF(0,b)
 		//	})
+		//	sa.GetCaMap(2,func(b []byte){
+		//		e.SetCaMapF(0,b)
+		//	})
 		//}
 		//e.SetCaMapF(0,nil)
-		e.check = true
+		//e.check = true
 	//}else{
 	//	e.SetCaMapF(0,nil)
 	//}

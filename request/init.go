@@ -58,6 +58,7 @@ func clientHttp(num int ,methob string,path string,body interface{}, hand func(s
 	Req, err := http.NewRequest(methob, path, r)
 	//fmt.Println(Req.Form)
 	if err != nil {
+		fmt.Println("req",err)
 		return err
 	}
 	Req.Header = Header
@@ -80,6 +81,7 @@ func clientHttp(num int ,methob string,path string,body interface{}, hand func(s
 	}
 	err = hand(res.StatusCode,reader)
 	reader.Close()
+	//fmt.Println(path)
 	return err
 
 }

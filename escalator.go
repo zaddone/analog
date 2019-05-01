@@ -1,6 +1,5 @@
 package main
-import(
-	"fmt"
+import( "fmt"
 	"github.com/zaddone/analog/dbServer/proto"
 	"github.com/zaddone/analog/dbServer/cache"
 	"github.com/zaddone/analog/request"
@@ -45,6 +44,9 @@ func (self *_cache) SyncInit(cl cache.CacheList){
 	self.ca.SyncInit(cl)
 }
 
+//func (self *_cache) FindSample(e *cluster.Sample)(*Level,*cluster.Sample){
+//	return self.ca.FindSample(e)
+//}
 //func (self *_cache)TmpCheck(b,e int64)(max,min config.Element){
 //	return self.ca.CheckVal(e - b)
 //}
@@ -93,12 +95,12 @@ func (self *cacheList) Handle(ins string,d *oanda.Price){
 
 func (self *cacheList) Read(h func(int,interface{})){
 	for i,c := range self.cas {
-		h(i,c)
+		h(i,c.ca)
 	}
 }
 
 func (self *cacheList) ReadCa(i int) interface{} {
-	return self.cas[i]
+	return self.cas[i].ca
 }
 func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 
@@ -117,7 +119,7 @@ func (self *cacheList) HandMap(m []byte,hand func(interface{},byte)){
 			if t == 3 || t == 0 {
 				continue
 			}
-			hand(self.cas[i*4+int(j)],t)
+			hand(self.cas[i*4+int(j)].ca,t)
 		}
 	}
 
@@ -155,21 +157,28 @@ func (self *cacheList) add(ins *oanda.Instrument){
 		go self.UnixServer(fmt.Sprintf("%s_%s",config.Conf.Local,ins.Name))
 	}
 }
-func (self *cacheList) PriceVarUrl() string {
+func (self *cacheList) PriceVarUrl(n,l int) string {
 	var Ins []string
-	for n,_ := range self.casMap {
-		Ins = append(Ins,n)
+	//fmt.Println(n,l)
+	for _,c := range self.cas[n:] {
+		Ins = append(Ins,c.InsName())
+		if len(Ins) == l {
+			break
+		}
 	}
+	//fmt.Println(n,l,Ins)
 	return config.Conf.GetStreamAccPath()+"/pricing/stream?"+(&url.Values{"instruments":[]string{strings.Join(Ins,",")}}).Encode()
 }
-func (self *cacheList) syncGetPriceVar(){
+func (self *cacheList) syncGetPriceVar(u string){
 	var err error
 	var lr,r []byte
 	var p bool
+	//u := self.PriceVarUrl(n,l)
 	for{
+		fmt.Println(u)
 		err = request.ClientHttp(0,
 		"GET",
-		self.PriceVarUrl(),
+		u,
 		nil,
 		func(statusCode int,data io.Reader) error {
 			if statusCode != 200 {
@@ -192,20 +201,23 @@ func (self *cacheList) syncGetPriceVar(){
 					var d oanda.Price
 					er := json.Unmarshal(r,&d)
 					if er != nil {
+						//panic(er)
 						log.Println(er,string(r))
 						continue
 					}
 					name := string(d.Instrument)
 					if name != "" {
+						//fmt.Println(d)
 						self.Handle(name,&d)
 					}
 
 				}
 				if err != nil {
-					//if err != io.EOF {
+					//if err == io.EOF {
 					//	//panic(err)
-					//	//log.Println(err)
+					//	log.Println("eof")
 					//}
+					//log.Println("eof",err)
 					return err
 				}
 			}
@@ -213,7 +225,7 @@ func (self *cacheList) syncGetPriceVar(){
 		})
 		if err != nil {
 			//panic(err)
-			log.Println(err)
+			log.Println("err",err,u)
 		}
 	}
 
@@ -310,6 +322,7 @@ func (self *cacheList) StreamDB(R *proto.Proto,c *net.UnixConn,addr *net.UnixAdd
 	}
 
 }
+
 func (self *cacheList) read(ins string,b,e int64,h func([]byte,[]byte)bool){
 	begin := make([]byte,8)
 	binary.BigEndian.PutUint64(begin,uint64(b))
@@ -338,7 +351,11 @@ func (self *cacheList) read(ins string,b,e int64,h func([]byte,[]byte)bool){
 func main(){
 	fmt.Print("run")
 	loadCache()
-	go CL.syncGetPriceVar()
+	l := 150
+	for i:=0;i< CL.Len();i+=l{
+		go CL.syncGetPriceVar(CL.PriceVarUrl(i,l))
+	}
+	//go CL.syncGetPriceVar(config.Conf.GetStreamAccPath()+"/pricing/stream?"+(&url.Values{"instruments":[]string{config.Conf.InsName}}).Encode())
 	select{}
 
 }

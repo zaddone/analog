@@ -198,17 +198,17 @@ func (self *set) checkSample (e *Sample) bool {
 	//	}
 	//}
 
-	//for _,sa := range self.samp {
-	//	if sa.GetTag() ==  e.GetTag() {
-	//		if !sa.Long {
-	//			return false
-	//		}
-	//	}else{
-	//		if sa.Long {
-	//			return false
-	//		}
-	//	}
-	//}
+	for _,sa := range self.samp {
+		if sa.GetTag() ==  e.GetTag() {
+			if !sa.Long {
+				return false
+			}
+		}else{
+			if sa.Long {
+				return false
+			}
+		}
+	}
 
 	return true
 

@@ -47,7 +47,7 @@ type Level struct {
 	ca *Cache
 	//post []*postDB
 	Order *sync.Map
-	//Or *OrderInfo
+	Or *OrderInfo
 
 	sample *cluster.Sample
 	//OtherLevel []*LevelInfo
@@ -97,8 +97,24 @@ type Level struct {
 //	}
 //}
 
-func (self *Level)AddOrder(o *OrderInfo){
+func (self *Level) ClearOrderInfo(){
+	self.Order.Range(func(k,v interface{})bool{
+		(k.(*OrderInfo)).ClearCs(self.ca)
+		self.Order.Delete(k)
+		return true
+	})
+}
+func (self *Level) SetOrderInfo(o *OrderInfo){
 	self.Order.Store(o,true)
+	//o.SetCs(self.ca)
+}
+
+func (self *Level)GetOrderInfo() *OrderInfo {
+	//self.Order.Store(o,true)
+	if self.Or == nil || self.Or.End {
+		self.Or = NewOrderInfo(self.ca)
+	}
+	return self.Or
 }
 func (self *Level) GetCache() CacheInterface {
 	return self.ca
@@ -128,11 +144,18 @@ func NewLevel(tag int,c *Cache,le *Level) (l *Level) {
 //}
 
 func (self *Level) ClearOrder(){
-	go self.Order.Range(func(k,v interface{})bool{
-		k.(*OrderInfo).Clear()
-		self.Order.Delete(k)
-		return true
-	})
+
+	if self.Or == nil{
+		return
+	}
+	if self.Or.End ||
+	self.Or.e == nil {
+		self.Or = nil
+		return
+	}
+	self.Or.Clear()
+	self.Or = nil
+
 }
 
 
@@ -197,6 +220,7 @@ func (self *Level) readf( h func(e config.Element) bool){
 
 func (self *Level) add(e config.Element) {
 
+	//return
 	if e.Diff() == 0 {
 		return
 	}
@@ -209,15 +233,19 @@ func (self *Level) add(e config.Element) {
 	}
 	var sumdif,max,diff,absDiff float64
 	var maxid int
+	var max_i float64
 	self.AbsMax = 0
 	//var _e config.Element
 	for i,_e := range self.list[:le]{
 		sumdif += math.Abs(_e.Diff())
 		diff = e.Middle() - _e.Middle()
+		absDiff = math.Abs(diff)
+		if absDiff > max_i {
+			max_i = absDiff
+		}
 		if (diff>0) == (self.dis>0) {
 			continue
 		}
-		absDiff = math.Abs(diff)
 		if absDiff > self.AbsMax {
 			maxid = i
 			max = diff
@@ -226,6 +254,13 @@ func (self *Level) add(e config.Element) {
 	}
 
 	//PostOrder
+	//if (self.Or != nil) && (self.par.list[len(self.par.list)-1].Diff()> max_i) {
+		self.PostOrder(!(self.dis>0))
+	//}
+
+	if self.Or != nil {
+		self.Or.ClearCheck()
+	}
 
 	sumdif /= float64(le)
 
@@ -236,6 +271,7 @@ func (self *Level) add(e config.Element) {
 	}
 	//self.update = true
 	self.ClearOrder()
+	self.ClearOrderInfo()
 	//node := NewbNode(self.list[:maxid]...)
 	node := NewbNode(self.list[:maxid+1]...)
 	//fmt.Println(time.Unix(node.duration/config.Conf.DateUnixV,0),node.Diff(),node.Middle())
@@ -244,7 +280,9 @@ func (self *Level) add(e config.Element) {
 		self.par = NewLevel(tag,self.ca,self)
 	}else{
 		if self.ca != nil {
+			self.ca.Unlock()
 			self.ca.CheckOrder(self,node,sumdif)
+			self.ca.Lock()
 		}
 		//self.par.add(node,ins)
 	}
@@ -260,4 +298,10 @@ func (self *Level) add(e config.Element) {
 	}
 	self.dis = max
 
+}
+func (self *Level) PostOrder(diff bool){
+	if (self.Or == nil) || (self.sample== nil) {
+		return
+	}
+	self.Or.PostOrder(self.list[0],diff)
 }

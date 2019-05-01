@@ -50,7 +50,7 @@ func NewData(ins *oanda.Instrument) (c *Data) {
 	if err != nil {
 		panic(err)
 	}
-	go c.downCan()
+	//go c.downCan()
 	return c
 
 }
@@ -200,8 +200,13 @@ func (self *Data) downCan(){
 		//if f.Month() != b.Month() {
 		//	fmt.Println(self.Ins.Name,b)
 		//}
+		//if begin == from {
+		//	begin += config.Scale
+		//}
 		from = begin
-		if from > time.Now().Unix() {
+		kn := from - time.Now().Unix()
+		if kn>0 {
+			//<-time.After(time.Second*time.Duration(kn))
 			time.Sleep(time.Minute*5)
 		}
 	}
