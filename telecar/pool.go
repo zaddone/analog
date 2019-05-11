@@ -17,11 +17,12 @@ type tmpSet struct {
 }
 
 type CacheInter interface {
-	SetCShow(int,int)
+	SetCShow(int,float64)
 	//HandMap([]byte,func(interface{},byte))
 	//HandMapBlack([]byte,func(interface{},byte)bool)
 	//FindSample(sa *Sample) *Sample
 	InsName()string
+	GetCacheLen() int
 }
 
 type OrderMsg struct {
@@ -72,7 +73,7 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 		//self.addAndCheck(e,i)
 		//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
 
-		//e.stop<-true
+		e.stop<-true
 	}
 }
 
@@ -145,21 +146,24 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 //	if !t.s.checkSample(e){
 //		return false
 //	}
-//	for _,sa := range t.s.samp{
-//		e.SetTestMap(sa.GetCaMap()[0])
-//	}
-//	//t.s.SetTMap(e)
-//	return true
-//	//self._ca.HandMap(e.caMap[1],func(_c interface{},t byte){
-//	//	c := _c.(CacheInter)
-//	//})
-//	//for _,cm := range e.caMap{
-//	//	self._ca.
-//	//}
 //
+//	return true
 //
 //
 //}
+func (self *Pool) GetAllSample(h func(*Sample)bool){
+
+	for _,s_ := range self.sets{
+		for _,s := range s_ {
+			for _,e := range s.samp {
+				if !h(e) {
+					return
+				}
+			}
+		}
+	}
+
+}
 
 
 func (self *Pool) add(e *Sample,n int) {
@@ -176,32 +180,13 @@ func (self *Pool) add(e *Sample,n int) {
 		//e.stop<-true
 		return
 	}
-
-	self.mu[n].RLock()
-	//if t.s.checkSample(e){
-		//self._ca.SetCShow(int(e.GetTag()>>1)*2+1,1)
-		//self._ca.SetCShow(1,1)
-		sa_ := t.s.samp[len(t.s.samp)-1]
-		sa_.GetCaMap(1,func(b []byte){
-			e.SetCaMapF(0,b)
-		})
-		sa_.GetCaMap(2,func(b []byte){
-			e.SetCaMapF(0,b)
-		})
-		//for _,sa := range t.s.samp {
-		//	sa.GetCaMap(1,func(b []byte){
-		//		e.SetCaMapF(0,b)
-		//	})
-		//	sa.GetCaMap(2,func(b []byte){
-		//		e.SetCaMapF(0,b)
-		//	})
+	//e.s = t.s
+	if e.check {
+		//if !self.checkSample(e){
+		//	e.check=false
 		//}
-		//e.SetCaMapF(0,nil)
-		//e.check = true
-	//}else{
-	//	e.SetCaMapF(0,nil)
-	//}
-	self.mu[n].RUnlock()
+
+	}
 	//e.stop<-true
 
 	self.mu[n].Lock()
@@ -216,6 +201,99 @@ func (self *Pool) add(e *Sample,n int) {
 	self.Dressing_only(true,map[*set]bool{t.s:true},n,e.XMax())
 	self.mu[n].Unlock()
 
+}
+
+func (self *Pool) checkSample (e *Sample) bool {
+	var j uint
+	t:= ^byte(3)
+	var n byte
+	type tmpdb struct{
+		c float64
+		c_1 float64
+		t byte
+		i int
+	}
+	var countMap []*tmpdb
+	e.GetCaMap(0,func(b []byte){
+		for i,m := range b{
+			if m == 255 || m==0 {
+				continue
+			}
+			for j=0;j<8;j+=2 {
+				n = (m>>j) &^ t
+				if n == 3 || n == 0 {
+					continue
+				}
+				countMap = append(countMap,&tmpdb{
+					t:n,
+					i:i*8+int(j),
+				})
+			}
+		}
+	})
+	if len(countMap) == 0 {
+		return false
+	}
+	var c_1,c_2 float64
+	tag := e.GetTag()&^2
+
+	self.GetAllSample(func(_e *Sample)bool{
+		//if _e.GetTag()&^2 != tag {
+		//	return true
+		//}
+		_e.GetCaMap(0,func(b []byte){
+			for _,m := range b {
+				if m == 255 || m==0 {
+					continue
+				}
+				for j=0;j<8;j+=2{
+					n =(m>>j) &^t
+					if n !=3 && n!=0 {
+						c_1++
+					}
+				}
+			}
+		})
+
+
+		_e.GetCaMap(3,func(b []byte){
+			for _,m := range b {
+				if m == 255 || m==0 {
+					continue
+				}
+				for j=0;j<8;j+=2{
+					n =(m>>j) &^t
+					if n !=3 && n!=0 {
+						c_2++
+					}
+				}
+			}
+		})
+
+		if _e.GetTag()&^2 != tag {
+			return true
+		}
+		for _,cm := range countMap {
+			if _e.GetCaMapVal(0,cm.i)==cm.t{
+				cm.c++
+			}
+			if _e.GetCaMapVal(3,cm.i)==cm.t{
+				cm.c_1++
+			}
+		}
+		return true
+	})
+	//fmt.Println(c_2/c_1)
+	vc := c_2/c_1
+	for _,cm := range countMap {
+		if (cm.c_1/cm.c) < vc{
+			e.SetCaMapClear(0,cm.i)
+		}
+		//if cm.c!=0 && cm.c==cm.c_1 {
+		//	return true
+		//}
+	}
+	return true
 }
 
 func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){

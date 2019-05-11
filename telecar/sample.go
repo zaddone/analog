@@ -2,6 +2,7 @@ package telecar
 import(
 	"github.com/zaddone/analog/config"
 	"sync"
+	//"math"
 	//"fmt"
 )
 
@@ -19,7 +20,7 @@ type Sample struct {
 	X []int64
 	Y []float64
 
-	//stop chan bool
+	stop chan bool
 	eleLast config.Element
 	tag byte
 	dis float64
@@ -27,10 +28,12 @@ type Sample struct {
 	setMap *sync.Map
 	Long bool
 	check bool
+	checkBak bool
 
 	//leMap [2][]LevelInterface
-	caMap [3][]byte
+	caMap [4][]byte
 	m sync.RWMutex
+	//countMap []int
 
 	//t bool
 	//par *Sample
@@ -43,11 +46,59 @@ type Sample struct {
 	//CaMap []*Map
 	//node config.Element
 	//caMapCheck []byte
-	//s *Set
+	//s *set
+	par *Sample
+	child *Sample
+
+
+}
+func (self *Sample) CheckChild() (float64) {
+
+	ch   := self.child
+	if ch == nil {
+		return 0
+	}
+	diff := self.eleLast.Diff()
+	for{
+		diff+=ch.eleLast.Diff()
+		if ch.child == nil{
+			break
+		}
+		ch = ch.child
+	}
+	return diff
+
+}
+func (self *Sample) SetChild(p *Sample){
+	self.child = p
+}
+
+func (self *Sample) SetPar(p *Sample){
+	self.par = p
+	//if p != nil {
+	//	p.chile = self
+	//}
+}
+
+func (self *Sample) GetPar() *Sample {
+	return self.par
+}
+
+func (self *Sample) SetCheckBak(c bool) {
+	self.checkBak = c
+}
+func (self *Sample) GetCheckBak() bool {
+	return self.checkBak
 }
 func (self *Sample) SetCheck(c bool) {
 	self.check = c
 }
+//func (self *Sample) CheckSet() bool {
+//	if self.s == nil {
+//		return false
+//	}
+//	return self.s.checkSample(self)
+//}
 
 func (self *Sample) SetCaMapF(i int,m []byte){
 
@@ -70,9 +121,15 @@ func (self *Sample) SetCaMap(i int,m []byte){
 	}
 	self.m.Unlock()
 }
+
+func (self *Sample) SetCaMapClear(i,j int){
+	self.m.Lock()
+	self.caMap[i][j/8] &^= byte(3 << uint(j%8))
+	self.m.Unlock()
+}
 func (self *Sample) SetCaMapV(i,j int,m byte){
 	self.m.Lock()
-	self.caMap[i][j/8] |= m<<uint(j%8)
+	self.caMap[i][j/8] |= (m << uint(j%8))
 	self.m.Unlock()
 }
 
@@ -89,25 +146,30 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 		eleLast:eles[len(eles)-1],
 		Y:make([]float64,0,2000),
 		X:make([]int64,0,2000),
-		//stop:make(chan bool,1),
+		stop:make(chan bool,1),
 		setMap:new(sync.Map),
 	}
 	if le !=0 {
-		sa.caMap = [3][]byte{
+		sa.caMap = [4][]byte{
+			make([]byte,le),
 			make([]byte,le),
 			make([]byte,le),
 			make([]byte,le),
 		}
+		//sa.countMap = make(int,le/2)
 	}
 	var y float64
+	var minE,maxE config.Element
 	for _,ele := range eles {
 		ele.Read(func(e config.Element) bool {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
 				sa.YMin = y
+				minE = e
 				//sa.YMinEle = e
 			}else if (sa.YMax < y) {
 				sa.YMax = y
+				maxE = e
 				//sa.YMaxEle = e
 			}
 			sa.Y = append(sa.Y,y)
@@ -117,11 +179,12 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	}
 	//fmt.Println(sa.Y,sa.X)
 	sa.tag = func() (t byte) {
-		f := sa.Y[0] < sa.Y[len(sa.Y)-1]
+		f := minE.DateTime() < maxE.DateTime()
+		//f := sa.Y[0] < sa.Y[len(sa.Y)-1]
 		if f {
 			t = 2
 		}
-		if (eles[len(eles)-1].Diff() >0) == f {
+		if (sa.eleLast.Diff() >0) == f {
 			t++
 		}
 		return t
@@ -141,6 +204,13 @@ func (self *Sample) GetCaMap(i int,h func([]byte)){
 	self.m.RLock()
 	h(self.caMap[i])
 	self.m.RUnlock()
+}
+
+func (self *Sample) GetCaMapVal(I,i int) (v byte) {
+	self.GetCaMap(I,func(b []byte){
+		v = (b[i/8]>>uint(i%8)) &^ (^byte(3))
+	})
+	return
 }
 //func (self *Sample) GetCaMap() [3][]byte{
 //	return self.caMap

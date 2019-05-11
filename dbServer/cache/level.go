@@ -36,7 +36,6 @@ type Level struct {
 	child *Level
 	tag int
 
-	AbsMax float64
 	//max float64
 	//maxid int
 	//update bool
@@ -50,6 +49,10 @@ type Level struct {
 	Or *OrderInfo
 
 	sample *cluster.Sample
+	sampleTmp *cluster.Sample
+	maxid int
+
+	//AbsMax float64
 	//OtherLevel []*LevelInfo
 
 }
@@ -97,6 +100,7 @@ type Level struct {
 //	}
 //}
 
+
 func (self *Level) ClearOrderInfo(){
 	self.Order.Range(func(k,v interface{})bool{
 		(k.(*OrderInfo)).ClearCs(self.ca)
@@ -104,9 +108,26 @@ func (self *Level) ClearOrderInfo(){
 		return true
 	})
 }
+
 func (self *Level) SetOrderInfo(o *OrderInfo){
 	self.Order.Store(o,true)
 	//o.SetCs(self.ca)
+}
+
+func (self *Level)CheckOrderInfo() bool {
+
+	if self.Or == nil{
+		return true
+	}
+	if self.Or.End {
+		self.Or = nil
+		return true
+	}
+	if self.Or.e == nil {
+		return true
+	}
+	return false
+
 }
 
 func (self *Level)GetOrderInfo() *OrderInfo {
@@ -143,7 +164,7 @@ func NewLevel(tag int,c *Cache,le *Level) (l *Level) {
 //	}
 //}
 
-func (self *Level) ClearOrder(){
+func (self *Level) ClearOrder(diff float64){
 
 	if self.Or == nil{
 		return
@@ -153,6 +174,9 @@ func (self *Level) ClearOrder(){
 		self.Or = nil
 		return
 	}
+	if (self.Or.f>0) != (diff>0){
+		return
+	}
 	self.Or.Clear()
 	self.Or = nil
 
@@ -160,6 +184,7 @@ func (self *Level) ClearOrder(){
 
 
 func (self *Level) LastTime() int64 {
+
 	le := len(self.list)
 	if le == 0 {
 		return 0
@@ -232,9 +257,10 @@ func (self *Level) add(e config.Element) {
 		return
 	}
 	var sumdif,max,diff,absDiff float64
-	var maxid int
+	//var maxid int
+	var maxid int = 0
 	var max_i float64
-	self.AbsMax = 0
+	var AbsMax float64 = 0
 	//var _e config.Element
 	for i,_e := range self.list[:le]{
 		sumdif += math.Abs(_e.Diff())
@@ -246,34 +272,61 @@ func (self *Level) add(e config.Element) {
 		if (diff>0) == (self.dis>0) {
 			continue
 		}
-		if absDiff > self.AbsMax {
+		if absDiff > AbsMax {
 			maxid = i
 			max = diff
-			self.AbsMax = absDiff
+			AbsMax = absDiff
 		}
 	}
 
 	//PostOrder
-	//if (self.Or != nil) && (self.par.list[len(self.par.list)-1].Diff()> max_i) {
-		self.PostOrder(!(self.dis>0))
-	//}
-
-	if self.Or != nil {
-		self.Or.ClearCheck()
+	if maxid==0{
+		self.maxid = maxid
+		self.sampleTmp = nil
+		//return
+	}else{
+		if maxid != self.maxid {
+			self.maxid = maxid
+			if self.par== nil {
+				self.sampleTmp = nil
+			}else{
+				self.sampleTmp = cluster.NewSample(append(self.par.list, NewbNode(self.list[:maxid+1]...)),self.ca.GetSumLen())
+			}
+		}
 	}
 
-	sumdif /= float64(le)
+	//if self.Or != nil {
+	//	if self.sampleTmp != nil {
+	//		max_i = math.Abs(self.sampleTmp.GetLastElement().Diff())
+	//		if  (math.Abs(self.par.list[len(self.par.list)-1].Diff())> max_i) {
+	//			self.PostOrder(!(self.dis>0))
+	//		}
 
-	if (maxid <= 0) ||
-	(self.AbsMax == 0) ||
-	(self.AbsMax < sumdif) {
+	//	}
+	//	self.Or.ClearOrderCheck()
+	//}
+
+	if maxid==0{
+		return
+	}
+
+
+	sumdif /= float64(le)
+	if (AbsMax == 0) ||
+	(AbsMax <= sumdif) {
 		return
 	}
 	//self.update = true
-	self.ClearOrder()
-	self.ClearOrderInfo()
+	//self.ClearOrderInfo()
 	//node := NewbNode(self.list[:maxid]...)
-	node := NewbNode(self.list[:maxid+1]...)
+	//node := NewbNode(self.list[:maxid+1]...)
+	var node config.Element
+	if self.sampleTmp ==nil {
+		node = NewbNode(self.list[:maxid+1]...)
+	}else{
+		node = self.sampleTmp.GetLastElement()
+	}
+	self.ClearOrder(node.Diff())
 	//fmt.Println(time.Unix(node.duration/config.Conf.DateUnixV,0),node.Diff(),node.Middle())
 	if self.par == nil {
 		tag := self.tag+1
@@ -281,13 +334,15 @@ func (self *Level) add(e config.Element) {
 	}else{
 		if self.ca != nil {
 			self.ca.Unlock()
-			self.ca.CheckOrder(self,node,sumdif)
+			self.ca.CheckOrder(self,self.sampleTmp,sumdif)
 			self.ca.Lock()
 		}
 		//self.par.add(node,ins)
 	}
 	self.par.add(node)
 	self.list = self.list[maxid:]
+	self.sampleTmp = nil
+	self.maxid = 0
 
 	//li := self.list[maxid:]
 	//self.list = make([]config.Element,len(li),len(self.list))
@@ -300,8 +355,15 @@ func (self *Level) add(e config.Element) {
 
 }
 func (self *Level) PostOrder(diff bool){
+
 	if (self.Or == nil) || (self.sample== nil) {
 		return
 	}
-	self.Or.PostOrder(self.list[0],diff)
+	e_ := self.list[0]
+	if !self.Or.CheckPostOrder(e_,diff) {
+		return
+	}
+	e := self.ca.GetLastElement()
+	self.Or.SetPostOrder(e,e_.Middle()-e.Middle())
+
 }

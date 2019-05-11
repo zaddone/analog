@@ -19,6 +19,35 @@ type set struct {
 	count int
 }
 
+func (self *set) ReadAllSample(h func(*Sample)bool){
+
+	for _,e_ := range self.samp{
+		if !h(e_){
+			return
+		}
+		p := e_.par
+		for{
+			if p == nil {
+				break
+			}
+			if !h(p){
+				return
+			}
+			p=p.par
+		}
+		n := e_.child
+		for{
+			if n == nil {
+				break
+			}
+			if !h(n){
+				return
+			}
+			n=n.child
+		}
+	}
+
+}
 func NewSet(sa *Sample) (S *set) {
 	S = &set{
 		//tag:sa.tag>>1,
@@ -188,30 +217,62 @@ func (self *set) checkSample (e *Sample) bool {
 	if len(self.samp) < config.Conf.MinSam {
 		return false
 	}
-
-	//for _,sa := range self.samp {
-	//	if sa.GetTag() !=  e.GetTag() {
-	//		return false
-	//	}
-	//	if !sa.Long {
-	//		return false
-	//	}
-	//}
-
-	for _,sa := range self.samp {
-		if sa.GetTag() ==  e.GetTag() {
-			if !sa.Long {
-				return false
+	var j uint
+	t:= ^byte(3)
+	var n byte
+	type tmpdb struct{
+		//c int
+		//c_1 int
+		t byte
+		i int
+	}
+	var countMap []*tmpdb
+	e.GetCaMap(0,func(b []byte){
+		for i,m := range b{
+			if m == 255 || m==0 {
+				continue
 			}
-		}else{
-			if sa.Long {
-				return false
+			for j=0;j<8;j+=2 {
+				n = (m>>j) &^ t
+				if n == 3 || n == 0 {
+					continue
+				}
+				countMap = append(countMap,&tmpdb{
+					t:n,
+					i:i*8+int(j),
+				})
 			}
 		}
+	})
+	if len(countMap) == 0 {
+		return false
 	}
-
+	var c int
+	//self.ReadAllSample(func(_e *Sample)bool{
+	for _,_e := range self.samp{
+		c=0
+		for i,cm := range countMap {
+			if cm == nil {
+				continue
+			}
+			if _e.GetCaMapVal(0,cm.i) != cm.t{
+				countMap[i] = nil
+				continue
+			}
+			if _e.GetCaMapVal(3,cm.i) != cm.t{
+				countMap[i] = nil
+				continue
+			}
+			c++
+		}
+		if c == 0 {
+			break
+		}
+	}
+	if c == 0 {
+		return false
+	}
 	return true
-
 }
 
 //func (self *set) SetTMap(e *Sample) {
