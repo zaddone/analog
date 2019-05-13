@@ -291,6 +291,7 @@ func (self *Level) add(e config.Element) {
 				self.sampleTmp = nil
 			}else{
 				self.sampleTmp = cluster.NewSample(append(self.par.list, NewbNode(self.list[:maxid+1]...)),self.ca.GetSumLen())
+				
 			}
 		}
 	}

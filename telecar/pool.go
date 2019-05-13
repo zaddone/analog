@@ -181,12 +181,11 @@ func (self *Pool) add(e *Sample,n int) {
 		return
 	}
 	//e.s = t.s
-	if e.check {
-		//if !self.checkSample(e){
+	//if e.check {
+	//	if !self.checkSample(e){
 		//	e.check=false
-		//}
-
-	}
+	//	}
+	//}
 	//e.stop<-true
 
 	self.mu[n].Lock()
@@ -225,7 +224,7 @@ func (self *Pool) checkSample (e *Sample) bool {
 					continue
 				}
 				countMap = append(countMap,&tmpdb{
-					t:n,
+					t:n^3,
 					i:i*8+int(j),
 				})
 			}
@@ -274,11 +273,11 @@ func (self *Pool) checkSample (e *Sample) bool {
 			return true
 		}
 		for _,cm := range countMap {
-			if _e.GetCaMapVal(0,cm.i)==cm.t{
+			if _e.GetCaMapVal(2,cm.i)==cm.t{
 				cm.c++
-			}
-			if _e.GetCaMapVal(3,cm.i)==cm.t{
-				cm.c_1++
+				if _e.GetCaMapVal(1,cm.i)==cm.t{
+					cm.c_1++
+				}
 			}
 		}
 		return true
@@ -287,7 +286,7 @@ func (self *Pool) checkSample (e *Sample) bool {
 	vc := c_2/c_1
 	for _,cm := range countMap {
 		if (cm.c_1/cm.c) < vc{
-			e.SetCaMapClear(0,cm.i)
+			e.SetCaMapV(3,cm.i,3)
 		}
 		//if cm.c!=0 && cm.c==cm.c_1 {
 		//	return true

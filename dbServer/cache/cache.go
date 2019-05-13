@@ -403,6 +403,8 @@ func (self *Cache) ReadAll(h func(int64)){
 			//fmt.Println(time.Unix(e.DateTime()/v,0),"new")
 			self.part = NewLevel(0,self,nil)
 		}
+
+		self.last = p
 		//self.Add(p)
 
 		if (da - begin) > 3600*24*7 {
@@ -414,7 +416,6 @@ func (self *Cache) ReadAll(h func(int64)){
 			self.part = NewLevel(0,self,nil)
 		}
 
-		self.last = p
 		self.part.add(p)
 		self.Unlock()
 
@@ -431,6 +432,7 @@ func (self *Cache) Pool() *cluster.Pool {
 }
 
 func (self *Cache) syncAddPrice(){
+	return
 	var begin,da,v int64
 
 	v = config.Conf.DateUnixV
@@ -609,11 +611,10 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	(self.Cl == nil) {
 		return
 	}
-
-	//self.pool.Add(ea)
+	//defer self.pool.Add(ea)
 	if (l.sample == nil) {
 		ea.SetCaMapF(0,nil)
-		self.pool.Add(ea)
+		//self.pool.Add(ea)
 		l.sample = ea
 		return
 	}
@@ -621,14 +622,14 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	pli := l.par.list[len(l.par.list)-1]
 	if (l.sample.GetLastElement() == pli ){
 		l.sample.Long = math.Abs(ea.GetLastElement().Diff()) > math.Abs(pli.Diff())
-		if !l.sample.Long{
-			ea.SetCheck(true)
-			//ea.SetCheckBak(true)
-			//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
-		}
+		//if !l.sample.Long{
+		//	ea.SetCheck(true)
+		//	//ea.SetCheckBak(true)
+		//	//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
+		//}
 		ea.SetPar(l.sample)
 	}
-	if l.sample.Check() {
+	if l.sample.GetCheckBak() {
 		if l.sample.Long {
 			self.SetCShow(4+int(l.sample.GetTag()&^2) *2,1)
 		}else{
@@ -636,20 +637,26 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 		}
 	}
 
-
-
 	p := l.sample.GetPar()
 	if (p!=nil) {
 		if (p.Long == l.sample.Long){
 			l.sample.SetPar(nil)
-		}else{
-			p.SetChild(l.sample)
-		}
+				if !l.sample.Long{
+					ea.SetCheck(true)
+					//ea.SetCheckBak(true)
+					//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
+				}
+			}else{
+				p.SetChild(l.sample)
+			}
 	}
 
 	//l.sample = ea
 	//return
 
+	//l.sample.GetCaMap(2,func(b []byte){
+	//	ea.SetCaMapF(0,b)
+	//})
 
 	l.sample.GetCaMap(1,func(b []byte){
 		ea.SetCaMapF(0,b)
@@ -669,13 +676,13 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 			}
 			vl := l.sample.GetCaMapVal(1,_i)
 			if vl != 0 {
-				l.sample.SetCaMapClear(1,_i)
-				_e.SetCaMapClear(1,I_)
+				//l.sample.SetCaMapClear(1,_i)
+				//_e.SetCaMapClear(1,I_)
 				return
 			}
 			vl = _e.GetCaMapVal(1,I_)
 			if vl != 0 {
-				_e.SetCaMapClear(1,I_)
+				//_e.SetCaMapClear(1,I_)
 				return
 			}
 
@@ -692,7 +699,7 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	l.sample.GetCaMap(1,func(b []byte){
 		ea.SetCaMap(2,b)
 		nb_1 = b
-		ea.SetCaMapF(0,b)
+		//ea.SetCaMapF(0,b)
 	})
 	var j uint
 	l.sample.GetCaMap(0,func(b []byte){
@@ -734,7 +741,9 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	})
 	//var ls []*Level
 
-	count:=0
+	//count:=0
+	//var c_1,c_2 int
+
 	ea.GetCaMap(0,func(b []byte){
 		var j uint
 		for i,m := range b {
@@ -755,16 +764,15 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 					b[i] |= 3<<j
 					continue
 				}
+				if ea.Check() && _e.Check(){
+					ea.SetCheckBak(true)
+				}
 				//ls = append(ls,_l)
-				count++
+				//count++
 			}
 		}
 	})
-	if ea.Check() && (count == 0) {
-		ea.SetCheck(false)
-	}
 
-	self.pool.Add(ea)
 	l.sample = ea
 
 }
