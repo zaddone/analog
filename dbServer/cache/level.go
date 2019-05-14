@@ -291,10 +291,10 @@ func (self *Level) add(e config.Element) {
 				self.sampleTmp = nil
 			}else{
 				self.sampleTmp = cluster.NewSample(append(self.par.list, NewbNode(self.list[:maxid+1]...)),self.ca.GetSumLen())
-				
 			}
 		}
 	}
+	//self.CheckPostOrder()
 
 	//if self.Or != nil {
 	//	if self.sampleTmp != nil {
@@ -366,5 +366,64 @@ func (self *Level) PostOrder(diff bool){
 	}
 	e := self.ca.GetLastElement()
 	self.Or.SetPostOrder(e,e_.Middle()-e.Middle())
+
+}
+func (self *Level) CheckPostOrder(){
+	if self.sampleTmp == nil || self.sample ==nil {
+		return
+	}
+
+	if self.sampleTmp.GetCheckBak() {
+		return
+	}
+	long := math.Abs(self.sampleTmp.GetLastElement().Diff()) > math.Abs(self.sample.GetLastElement().Diff())
+	if long {
+		return
+	}
+	p := self.sample.GetPar()
+	if p == nil {
+		return
+	}
+	if p.Long != long {
+		return
+	}
+	if !self.ca.pool.CheckSample(self.sampleTmp){
+		return
+	}
+	self.sampleTmp.SetCheck(true)
+	//self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
+
+	var j uint
+	I_ := self.ca.GetI()*2
+	t := ^byte(3)
+	self.sample.GetCaMap(1,func(b []byte){
+		G:
+		for i,m := range b{
+			if m == 0 {
+				continue
+			}
+			for j=0;j<8;j+=2{
+				n:=(m>>j) &^ t
+				if n == 0 {
+					continue
+				}
+				_,_e := self.ca.Cl.ReadCa(i*4+int(j)/2).(CacheInterface).FindSample(self.sampleTmp)
+				if _e == nil {
+					continue
+				}
+				if _e.GetCaMapVal(2,I_) != n{
+					continue
+				}
+				if !_e.Check() {
+					continue
+				}
+				self.sampleTmp.SetCheckBak(true)
+				self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
+
+				break G
+			}
+		}
+
+	})
 
 }

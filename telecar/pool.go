@@ -181,11 +181,16 @@ func (self *Pool) add(e *Sample,n int) {
 		return
 	}
 	//e.s = t.s
-	//if e.check {
+	if e.checkBak {
+		if !t.s.checkSample(e){
+			e.checkBak = false
+		}else{
+			self._ca.SetCShow(5+int(e.GetTag()&^2) *2,1)
+		}
 	//	if !self.checkSample(e){
 		//	e.check=false
 	//	}
-	//}
+	}
 	//e.stop<-true
 
 	self.mu[n].Lock()
@@ -200,6 +205,18 @@ func (self *Pool) add(e *Sample,n int) {
 	self.Dressing_only(true,map[*set]bool{t.s:true},n,e.XMax())
 	self.mu[n].Unlock()
 
+}
+
+func (self *Pool) CheckSample (e *Sample) bool {
+
+	n := int(e.GetTag()>>1)
+	self.mu[n].RLock()
+	t := self.FindMinSet(e,n)
+	self.mu[n].RUnlock()
+	if t == nil {
+		return false
+	}
+	return t.s.checkSample(e)
 }
 
 func (self *Pool) checkSample (e *Sample) bool {

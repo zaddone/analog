@@ -217,60 +217,12 @@ func (self *set) checkSample (e *Sample) bool {
 	if len(self.samp) < config.Conf.MinSam {
 		return false
 	}
-	var j uint
-	t:= ^byte(3)
-	var n byte
-	type tmpdb struct{
-		//c int
-		//c_1 int
-		t byte
-		i int
-	}
-	var countMap []*tmpdb
-	e.GetCaMap(0,func(b []byte){
-		for i,m := range b{
-			if m == 255 || m==0 {
-				continue
-			}
-			for j=0;j<8;j+=2 {
-				n = (m>>j) &^ t
-				if n == 3 || n == 0 {
-					continue
-				}
-				countMap = append(countMap,&tmpdb{
-					t:n,
-					i:i*8+int(j),
-				})
-			}
+	//f := (e.GetTag()>>1) == 1
+	d := self.samp[0].CheckChild()
+	for _,e_ := range self.samp[1:] {
+		if (d>0) != (e_.CheckChild()>0){
+			return false
 		}
-	})
-	if len(countMap) == 0 {
-		return false
-	}
-	var c int
-	//self.ReadAllSample(func(_e *Sample)bool{
-	for _,_e := range self.samp{
-		c=0
-		for i,cm := range countMap {
-			if cm == nil {
-				continue
-			}
-			if _e.GetCaMapVal(0,cm.i) != cm.t{
-				countMap[i] = nil
-				continue
-			}
-			if _e.GetCaMapVal(3,cm.i) != cm.t{
-				countMap[i] = nil
-				continue
-			}
-			c++
-		}
-		if c == 0 {
-			break
-		}
-	}
-	if c == 0 {
-		return false
 	}
 	return true
 }

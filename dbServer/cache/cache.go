@@ -174,10 +174,13 @@ func (self *OrderInfo) GetDiff() float64 {
 
 func (self *OrderInfo) Clear(){
 	if self.End{
+		self.e = nil
+		self.f = 0
 		return
 	}
 	if self.e == nil {
 		self.End = true
+		self.f = 0
 		return
 	}
 	d := self.GetDiff()
@@ -204,14 +207,25 @@ type Cache struct {
 	//lastDateTime int64
 	stop chan bool
 	Cl CacheList
-	Cshow [8]float64
+	Cshow [11]float64
 	//LogDB *bolt.DB
 	sync.RWMutex
 	I int
 	m sync.Mutex
 	last config.Element
-	Order  *OrderInfo
+	Order  *Order
 
+}
+
+func (self *Cache) GetOrder() *Order {
+	if self.Order == nil {
+		self.Order = NewOrderInfo(self)
+	}else{
+		if self.Order.End {
+			self.Order
+		}
+	}
+	return self.Order
 }
 
 func (self *Cache) ClearOrderAll(){
@@ -619,21 +633,22 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 		return
 	}
 
-	pli := l.par.list[len(l.par.list)-1]
-	if (l.sample.GetLastElement() == pli ){
-		l.sample.Long = math.Abs(ea.GetLastElement().Diff()) > math.Abs(pli.Diff())
-		//if !l.sample.Long{
-		//	ea.SetCheck(true)
+	//pli := l.par.list[len(l.par.list)-1]
+	//if (l.sample.GetLastElement() == pli ){
+	l.sample.Long = math.Abs(ea.GetLastElement().Diff()) > math.Abs(l.sample.GetLastElement().Diff())
+		if !l.sample.Long{
+			ea.SetCheck(true)
 		//	//ea.SetCheckBak(true)
 		//	//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
-		//}
-		ea.SetPar(l.sample)
-	}
+		}
+	ea.SetPar(l.sample)
+	//}
 	if l.sample.GetCheckBak() {
 		if l.sample.Long {
 			self.SetCShow(4+int(l.sample.GetTag()&^2) *2,1)
+			self.SetCShow(int(l.sample.GetTag()&^2) *2,1)
 		}else{
-			self.SetCShow(5+int(l.sample.GetTag()&^2) *2,1)
+			self.SetCShow(1+int(l.sample.GetTag()&^2) *2,1)
 		}
 	}
 
@@ -641,14 +656,15 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	if (p!=nil) {
 		if (p.Long == l.sample.Long){
 			l.sample.SetPar(nil)
-				if !l.sample.Long{
-					ea.SetCheck(true)
-					//ea.SetCheckBak(true)
-					//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
-				}
-			}else{
-				p.SetChild(l.sample)
+			if !l.sample.Long{
+				//ea.SetCheck(true)
+				ea.SetCheckBak(true)
+				//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
 			}
+		//}else{
+		//	p.SetChild(l.sample)
+		//}
+		p.SetChild(l.sample)
 	}
 
 	//l.sample = ea
@@ -720,28 +736,28 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 					nb_0[i] |= byte(3)<<j
 					continue
 				}
-				self.SetCShow(1,1)
+				//self.SetCShow(1,1)
 			}
 		}
 	})
 	l.sample.SetCaMap(3,nb_0)
 	l.sample.SetCaMapF(3,nb_1)
-	l.sample.GetCaMap(3,func(b []byte){
-		for _,m := range b{
-			if (m == 255) || (m ==0){
-				continue
-			}
-			for j=0;j<8;j+=2 {
-				t := ((m>>j) &^ t)
-				if (t!=3) && (t!=0) {
-					self.SetCShow(0,1)
-				}
-			}
-		}
-	})
+	//l.sample.GetCaMap(3,func(b []byte){
+	//	for _,m := range b{
+	//		if (m == 255) || (m ==0){
+	//			continue
+	//		}
+	//		for j=0;j<8;j+=2 {
+	//			t := ((m>>j) &^ t)
+	//			if (t!=3) && (t!=0) {
+	//				self.SetCShow(0,1)
+	//			}
+	//		}
+	//	}
+	//})
 	//var ls []*Level
 
-	//count:=0
+	count:=0
 	//var c_1,c_2 int
 
 	ea.GetCaMap(0,func(b []byte){
@@ -764,15 +780,22 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 					b[i] |= 3<<j
 					continue
 				}
-				if ea.Check() && _e.Check(){
-					ea.SetCheckBak(true)
-				}
+				//if ea.GetCheckBak() && !_e.Check(){
+				//	ea.SetCheckBak(false)
+				//	//self.SetCShow(5+int(ea.GetTag()&^2) *2,1)
+				//}
 				//ls = append(ls,_l)
-				//count++
+				count++
 			}
 		}
 	})
-
+	if ea.GetCheckBak(){
+		if count==0 {
+			ea.SetCheckBak(false)
+		}else{
+			self.SetCShow(5+int(ea.GetTag()&^2) *2,1)
+		}
+	}
 	l.sample = ea
 
 }
