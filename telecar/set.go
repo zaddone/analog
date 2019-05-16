@@ -169,9 +169,56 @@ func (self *set) distance(e *Sample) float64 {
 
 }
 
+func ClearSamples(src []*Sample) ([]*Sample){
+
+	//return src
+	//le := len(src)
+	//if le <= config.Conf.MinSam {
+	//	return src
+	//}
+	m:=make(map[int64]*Sample)
+	for _,e := range src {
+		k:=e.XMin()
+		_e := m[k]
+		if _e == nil {
+			m[k] = e
+		}else{
+			if _e.XMax() > e.XMax() {
+				m[k] = e
+			}
+		}
+	}
+	es := make([]*Sample,0,len(m))
+	for _,e := range m {
+		es = append(es,e)
+	}
+	return SortSamples(es)
+
+}
+func ClearSortSamples(src []*Sample) []*Sample{
+	var sort func(int)
+	sort = func(i int){
+		if i == 0 {
+			return
+		}
+		I := i-1
+		if src[I].XMax() <= src[i].XMax() {
+			return
+		}
+		src[I],src[i] = src[i],src[I]
+		sort(I)
+	}
+	for i,_ := range src {
+		sort(i)
+	}
+	return src[1:]
+	//self.samp = self.samp[1:]
+	//self.update(self.samp)
+}
+
 func SortSamples(src []*Sample) []*Sample{
 
-	//return scr
+	//return src
 	le := len(src)
 	if le <= config.Conf.MinSam {
 		return src
@@ -213,19 +260,19 @@ func (self *set) SetDar() {
 	}
 }
 
-func (self *set) checkSample (e *Sample) bool {
-	if len(self.samp) < config.Conf.MinSam {
-		return false
-	}
-	//f := (e.GetTag()>>1) == 1
-	d := self.samp[0].CheckChild()
-	for _,e_ := range self.samp[1:] {
-		if (d>0) != (e_.CheckChild()>0){
-			return false
-		}
-	}
-	return true
-}
+//func (self *set) checkSample (e *Sample) bool {
+//	if len(self.samp) < config.Conf.MinSam {
+//		return false
+//	}
+//	//f := (e.GetTag()>>1) == 1
+//	d := self.samp[0].CheckChild()
+//	for _,e_ := range self.samp[1:] {
+//		if (d>0) != (e_.CheckChild()>0){
+//			return false
+//		}
+//	}
+//	return true
+//}
 
 //func (self *set) SetTMap(e *Sample) {
 //	for _,e_ := range self.samp {

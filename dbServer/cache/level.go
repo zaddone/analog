@@ -6,7 +6,7 @@ import(
 	cluster "github.com/zaddone/analog/telecar"
 	"math"
 	//"log"
-	"sync"
+	//"sync"
 	//"bytes"
 	//"fmt"
 	//"time"
@@ -45,12 +45,13 @@ type Level struct {
 	//lastOrder *order
 	ca *Cache
 	//post []*postDB
-	Order *sync.Map
-	Or *OrderInfo
+	//Order *sync.Map
+	//Or *OrderInfo
 
 	sample *cluster.Sample
 	sampleTmp *cluster.Sample
 	maxid int
+	addSample []*cluster.Sample
 
 	//AbsMax float64
 	//OtherLevel []*LevelInfo
@@ -101,42 +102,42 @@ type Level struct {
 //}
 
 
-func (self *Level) ClearOrderInfo(){
-	self.Order.Range(func(k,v interface{})bool{
-		(k.(*OrderInfo)).ClearCs(self.ca)
-		self.Order.Delete(k)
-		return true
-	})
-}
-
-func (self *Level) SetOrderInfo(o *OrderInfo){
-	self.Order.Store(o,true)
-	//o.SetCs(self.ca)
-}
-
-func (self *Level)CheckOrderInfo() bool {
-
-	if self.Or == nil{
-		return true
-	}
-	if self.Or.End {
-		self.Or = nil
-		return true
-	}
-	if self.Or.e == nil {
-		return true
-	}
-	return false
-
-}
-
-func (self *Level)GetOrderInfo() *OrderInfo {
-	//self.Order.Store(o,true)
-	if self.Or == nil || self.Or.End {
-		self.Or = NewOrderInfo(self.ca)
-	}
-	return self.Or
-}
+//func (self *Level) ClearOrderInfo(){
+//	self.Order.Range(func(k,v interface{})bool{
+//		(k.(*OrderInfo)).ClearCs(self.ca)
+//		self.Order.Delete(k)
+//		return true
+//	})
+//}
+//
+//func (self *Level) SetOrderInfo(o *OrderInfo){
+//	self.Order.Store(o,true)
+//	//o.SetCs(self.ca)
+//}
+//
+//func (self *Level)CheckOrderInfo() bool {
+//
+//	if self.Or == nil{
+//		return true
+//	}
+//	if self.Or.End {
+//		self.Or = nil
+//		return true
+//	}
+//	if self.Or.e == nil {
+//		return true
+//	}
+//	return false
+//
+//}
+//
+//func (self *Level)GetOrderInfo() *OrderInfo {
+//	//self.Order.Store(o,true)
+//	if self.Or == nil || self.Or.End {
+//		self.Or = NewOrderInfo(self.ca)
+//	}
+//	return self.Or
+//}
 func (self *Level) GetCache() CacheInterface {
 	return self.ca
 }
@@ -147,7 +148,7 @@ func NewLevel(tag int,c *Cache,le *Level) (l *Level) {
 		ca:c,
 		child:le,
 		list:make([]config.Element,0,1000),
-		Order:new(sync.Map),
+		//Order:new(sync.Map),
 		//post:make([]*postDB,0,100),
 	}
 	//if c.Cl != nil {
@@ -164,23 +165,23 @@ func NewLevel(tag int,c *Cache,le *Level) (l *Level) {
 //	}
 //}
 
-func (self *Level) ClearOrder(diff float64){
-
-	if self.Or == nil{
-		return
-	}
-	if self.Or.End ||
-	self.Or.e == nil {
-		self.Or = nil
-		return
-	}
-	if (self.Or.f>0) != (diff>0){
-		return
-	}
-	self.Or.Clear()
-	self.Or = nil
-
-}
+//func (self *Level) ClearOrder(diff float64){
+//
+//	if self.Or == nil{
+//		return
+//	}
+//	if self.Or.End ||
+//	self.Or.e == nil {
+//		self.Or = nil
+//		return
+//	}
+//	if (self.Or.f>0) != (diff>0){
+//		return
+//	}
+//	self.Or.Clear()
+//	self.Or = nil
+//
+//}
 
 
 func (self *Level) LastTime() int64 {
@@ -211,6 +212,16 @@ func (self *Level) readf( h func(e config.Element) bool){
 		self.par.readf(h)
 	}
 	//self.par
+}
+
+func (self *Level) ClearLevel(){
+	if self.addSample != nil {
+		self.ca.pool.Add(self.addSample)
+	}
+	if self.par == nil {
+		return
+	}
+	self.par.ClearLevel()
 }
 //func (self *level) ClearPostAll(){
 //	self.ClearPost()
@@ -311,7 +322,6 @@ func (self *Level) add(e config.Element) {
 		return
 	}
 
-
 	sumdif /= float64(le)
 	if (AbsMax == 0) ||
 	(AbsMax <= sumdif) {
@@ -327,7 +337,7 @@ func (self *Level) add(e config.Element) {
 	}else{
 		node = self.sampleTmp.GetLastElement()
 	}
-	self.ClearOrder(node.Diff())
+	//self.ClearOrder(node.Diff())
 	//fmt.Println(time.Unix(node.duration/config.Conf.DateUnixV,0),node.Diff(),node.Middle())
 	if self.par == nil {
 		tag := self.tag+1
@@ -354,76 +364,83 @@ func (self *Level) add(e config.Element) {
 	}
 	self.dis = max
 
-}
-func (self *Level) PostOrder(diff bool){
-
-	if (self.Or == nil) || (self.sample== nil) {
-		return
+	if len(self.addSample)>0{
+		self.ca.pool.Add(self.addSample)
+		self.addSample = nil
 	}
-	e_ := self.list[0]
-	if !self.Or.CheckPostOrder(e_,diff) {
-		return
-	}
-	e := self.ca.GetLastElement()
-	self.Or.SetPostOrder(e,e_.Middle()-e.Middle())
 
 }
-func (self *Level) CheckPostOrder(){
-	if self.sampleTmp == nil || self.sample ==nil {
-		return
-	}
 
-	if self.sampleTmp.GetCheckBak() {
-		return
-	}
-	long := math.Abs(self.sampleTmp.GetLastElement().Diff()) > math.Abs(self.sample.GetLastElement().Diff())
-	if long {
-		return
-	}
-	p := self.sample.GetPar()
-	if p == nil {
-		return
-	}
-	if p.Long != long {
-		return
-	}
-	if !self.ca.pool.CheckSample(self.sampleTmp){
-		return
-	}
-	self.sampleTmp.SetCheck(true)
-	//self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
+//func (self *Level) PostOrder(diff bool){
+//
+//	if (self.Or == nil) || (self.sample== nil) {
+//		return
+//	}
+//	e_ := self.list[0]
+//	if !self.Or.CheckPostOrder(e_,diff) {
+//		return
+//	}
+//	e := self.ca.GetLastElement()
+//	self.Or.SetPostOrder(e,e_.Middle()-e.Middle())
+//
+//}
 
-	var j uint
-	I_ := self.ca.GetI()*2
-	t := ^byte(3)
-	self.sample.GetCaMap(1,func(b []byte){
-		G:
-		for i,m := range b{
-			if m == 0 {
-				continue
-			}
-			for j=0;j<8;j+=2{
-				n:=(m>>j) &^ t
-				if n == 0 {
-					continue
-				}
-				_,_e := self.ca.Cl.ReadCa(i*4+int(j)/2).(CacheInterface).FindSample(self.sampleTmp)
-				if _e == nil {
-					continue
-				}
-				if _e.GetCaMapVal(2,I_) != n{
-					continue
-				}
-				if !_e.Check() {
-					continue
-				}
-				self.sampleTmp.SetCheckBak(true)
-				self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
-
-				break G
-			}
-		}
-
-	})
-
-}
+//func (self *Level) CheckPostOrder(){
+//	if self.sampleTmp == nil || self.sample ==nil {
+//		return
+//	}
+//
+//	if self.sampleTmp.GetCheckBak() {
+//		return
+//	}
+//	long := math.Abs(self.sampleTmp.GetLastElement().Diff()) > math.Abs(self.sample.GetLastElement().Diff())
+//	if long {
+//		return
+//	}
+//	p := self.sample.GetPar()
+//	if p == nil {
+//		return
+//	}
+//	if p.Long != long {
+//		return
+//	}
+//	if !self.ca.pool.CheckSample(self.sampleTmp){
+//		return
+//	}
+//	self.sampleTmp.SetCheck(true)
+//	//self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
+//
+//	var j uint
+//	I_ := self.ca.GetI()*2
+//	t := ^byte(3)
+//	self.sample.GetCaMap(1,func(b []byte){
+//		G:
+//		for i,m := range b{
+//			if m == 0 {
+//				continue
+//			}
+//			for j=0;j<8;j+=2{
+//				n:=(m>>j) &^ t
+//				if n == 0 {
+//					continue
+//				}
+//				_,_e := self.ca.Cl.ReadCa(i*4+int(j)/2).(CacheInterface).FindSample(self.sampleTmp)
+//				if _e == nil {
+//					continue
+//				}
+//				if _e.GetCaMapVal(2,I_) != n{
+//					continue
+//				}
+//				if !_e.Check() {
+//					continue
+//				}
+//				self.sampleTmp.SetCheckBak(true)
+//				self.ca.SetCShow(5+int(self.sampleTmp.GetTag()&^2) *2,1)
+//
+//				break G
+//			}
+//		}
+//
+//	})
+//
+//}

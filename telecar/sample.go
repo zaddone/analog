@@ -2,7 +2,7 @@ package telecar
 import(
 	"github.com/zaddone/analog/config"
 	"sync"
-	//"math"
+	"math"
 	//"fmt"
 )
 
@@ -49,26 +49,34 @@ type Sample struct {
 	//s *set
 	par *Sample
 	child *Sample
-
-
 }
-func (self *Sample) CheckChild() (float64) {
+
+func (self *Sample) CheckChild() (float64,bool) {
 
 	ch   := self.child
 	if ch == nil {
-		return 0
+		return 0,false
 	}
 	diff := self.eleLast.Diff()
+	absDiff := math.Abs(diff)
+	isOut:= false
 	for{
-		diff+=ch.eleLast.Diff()
+		f := ch.eleLast.Diff()
+		absDiff += math.Abs(f)
+		diff += f
+		if math.Abs(diff) > absDiff {
+			isOut = true
+			break
+		}
 		if ch.child == nil{
 			break
 		}
 		ch = ch.child
 	}
-	return diff
+	return diff,isOut
 
 }
+
 func (self *Sample) SetChild(p *Sample){
 	self.child = p
 }

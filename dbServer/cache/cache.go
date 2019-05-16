@@ -41,161 +41,161 @@ type CacheInterface interface {
 
 }
 
-type OrderInfo struct {
-
-	c CacheInterface
-	//l *Level
-	//c_ *sync.Map
-	//sa *cluster.Sample
-	e config.Element
-	f float64
-	//isOver bool
-	End bool
-
-}
-
-func NewOrderInfo(c CacheInterface) (o *OrderInfo) {
-	o = &OrderInfo{
-		c:c,
-		//c_:new(sync.Map),
-	}
-	return
-}
-
-func (self *OrderInfo) CheckPostOrder(e config.Element,f bool) bool {
-	if self.End || self.e != nil {
-		return false
-	}
-	_e := self.c.GetLastElement()
-	d := e.Middle() - _e.Middle()
-	//fmt.Println(d,f)
-	if (d>0) != f {
-		return false
-	}
-	dif := (math.Abs(_e.Diff()) + math.Abs(e.Diff()))/2
-	if dif > math.Abs(d) {
-		return false
-	}
-	return true
-}
-
-func (self *OrderInfo) SetPostOrder(_e config.Element,d float64) {
-
-	//if self.End || self.e != nil {
-	//	return false
-	//}
-	//_e := self.c.GetLastElement()
-	//d := e.Middle() - _e.Middle()
-	////fmt.Println(d,f)
-	//if (d>0) != f {
-	//	return false
-	//}
-	//dif := (math.Abs(_e.Diff()) + math.Abs(e.Diff()))/2
-	////fmt.Println(dif,d)
-	////fmt.Println(self.c.InsName(),d,dif)
-	//if dif > math.Abs(d) {
-	//	return false
-	//}
-
-	self.c.SetCShow(3,1)
-	self.e = _e
-	self.f = d
-	//return true
-
-}
+//type OrderInfo struct {
+//
+//	c CacheInterface
+//	//l *Level
+//	//c_ *sync.Map
+//	//sa *cluster.Sample
+//	e config.Element
+//	f float64
+//	//isOver bool
+//	End bool
+//
+//}
+//
+//func NewOrderInfo(c CacheInterface) (o *OrderInfo) {
+//	o = &OrderInfo{
+//		c:c,
+//		//c_:new(sync.Map),
+//	}
+//	return
+//}
+//
+//func (self *OrderInfo) CheckPostOrder(e config.Element,f bool) bool {
+//	if self.End || self.e != nil {
+//		return false
+//	}
+//	_e := self.c.GetLastElement()
+//	d := e.Middle() - _e.Middle()
+//	//fmt.Println(d,f)
+//	if (d>0) != f {
+//		return false
+//	}
+//	dif := (math.Abs(_e.Diff()) + math.Abs(e.Diff()))/2
+//	if dif > math.Abs(d) {
+//		return false
+//	}
+//	return true
+//}
+//
+//func (self *OrderInfo) SetPostOrder(_e config.Element,d float64) {
+//
+//	//if self.End || self.e != nil {
+//	//	return false
+//	//}
+//	//_e := self.c.GetLastElement()
+//	//d := e.Middle() - _e.Middle()
+//	////fmt.Println(d,f)
+//	//if (d>0) != f {
+//	//	return false
+//	//}
+//	//dif := (math.Abs(_e.Diff()) + math.Abs(e.Diff()))/2
+//	////fmt.Println(dif,d)
+//	////fmt.Println(self.c.InsName(),d,dif)
+//	//if dif > math.Abs(d) {
+//	//	return false
+//	//}
+//
+//	self.c.SetCShow(3,1)
+//	self.e = _e
+//	self.f = d
+//	//return true
+//
+//}
 //func (self *OrderInfo) SetCs(c CacheInterface){
 //	self.c_.Store(c,true)
 //}
 
-func (self *OrderInfo) ClearOrderCheck(){
-
-	if self.End {
-		return
-	}
-	if self.e == nil {
-		self.End = true
-		return
-	}
-	f := self.c.GetLastElement().Middle() - self.e.Middle()
-	if (f>0)!=(self.f>0){
-		return
-	}
-	//absf := math.Abs(f) - math.Abs(self.c.GetLastElement().Diff())
-	absf := math.Abs(f)
-	if absf < math.Abs(self.f) {
-		return
-	}
-
-	self.c.SetCShow(7,absf)
-	self.c.SetCShow(2,1)
-	self.End = true
-
-
-}
-func (self *OrderInfo) ClearCs(c CacheInterface){
-	//self.Clear()
-	//self.c_.Delete(c)
-
-	if self.End {
-		return
-	}
-	if self.e == nil {
-		self.End = true
-		return
-	}
-	f := self.c.GetLastElement().Middle() - self.e.Middle()
-	if (f>0) != (self.f>0) {
-		//self.Clear()
-		return
-	}
-	var dif float64
-	//dif = (math.Abs(self.c.GetLastElement().Diff()) +math.Abs(self.e.Diff())) /2
-	f = (math.Abs(f) - dif)
-	if f > 0 {
-		self.End = true
-		self.c.SetCShow(7,f)
-		self.c.SetCShow(2,1)
-	}
-
-}
-
-func (self *OrderInfo) GetDiff() float64 {
-
-	d := self.c.GetLastElement().Middle() - self.e.Middle()
-	var dif float64
-	//diff = 0
-	//dif = math.Abs(self.c.GetLastElement().Diff())
-	if (self.f>0) == (d>0) {
-		return math.Abs(d)-dif
-	}
-	return -(math.Abs(d)) - dif
-
-}
-
-func (self *OrderInfo) Clear(){
-	if self.End{
-		self.e = nil
-		self.f = 0
-		return
-	}
-	if self.e == nil {
-		self.End = true
-		self.f = 0
-		return
-	}
-	d := self.GetDiff()
-	self.c.SetCShow(7,d)
-	//if self.c.InsName() == "EUR_USD"{
-	//	fmt.Println(d)
-	//}
-	if d >0{
-
-		self.c.SetCShow(2,1)
-	}
-	//self.c.SetCShowF(3,1)
-	//self.c.ClearOrder(self)
-	self.End = true
-}
+//func (self *OrderInfo) ClearOrderCheck(){
+//
+//	if self.End {
+//		return
+//	}
+//	if self.e == nil {
+//		self.End = true
+//		return
+//	}
+//	f := self.c.GetLastElement().Middle() - self.e.Middle()
+//	if (f>0)!=(self.f>0){
+//		return
+//	}
+//	//absf := math.Abs(f) - math.Abs(self.c.GetLastElement().Diff())
+//	absf := math.Abs(f)
+//	if absf < math.Abs(self.f) {
+//		return
+//	}
+//
+//	self.c.SetCShow(7,absf)
+//	self.c.SetCShow(2,1)
+//	self.End = true
+//
+//
+//}
+//func (self *OrderInfo) ClearCs(c CacheInterface){
+//	//self.Clear()
+//	//self.c_.Delete(c)
+//
+//	if self.End {
+//		return
+//	}
+//	if self.e == nil {
+//		self.End = true
+//		return
+//	}
+//	f := self.c.GetLastElement().Middle() - self.e.Middle()
+//	if (f>0) != (self.f>0) {
+//		//self.Clear()
+//		return
+//	}
+//	var dif float64
+//	//dif = (math.Abs(self.c.GetLastElement().Diff()) +math.Abs(self.e.Diff())) /2
+//	f = (math.Abs(f) - dif)
+//	if f > 0 {
+//		self.End = true
+//		self.c.SetCShow(7,f)
+//		self.c.SetCShow(2,1)
+//	}
+//
+//}
+//
+//func (self *OrderInfo) GetDiff() float64 {
+//
+//	d := self.c.GetLastElement().Middle() - self.e.Middle()
+//	var dif float64
+//	//diff = 0
+//	//dif = math.Abs(self.c.GetLastElement().Diff())
+//	if (self.f>0) == (d>0) {
+//		return math.Abs(d)-dif
+//	}
+//	return -(math.Abs(d)) - dif
+//
+//}
+//
+//func (self *OrderInfo) Clear(){
+//	if self.End{
+//		self.e = nil
+//		self.f = 0
+//		return
+//	}
+//	if self.e == nil {
+//		self.End = true
+//		self.f = 0
+//		return
+//	}
+//	d := self.GetDiff()
+//	self.c.SetCShow(7,d)
+//	//if self.c.InsName() == "EUR_USD"{
+//	//	fmt.Println(d)
+//	//}
+//	if d >0{
+//
+//		self.c.SetCShow(2,1)
+//	}
+//	//self.c.SetCShowF(3,1)
+//	//self.c.ClearOrder(self)
+//	self.End = true
+//}
 
 
 type Cache struct {
@@ -213,30 +213,30 @@ type Cache struct {
 	I int
 	m sync.Mutex
 	last config.Element
-	Order  *Order
+	//Order  *Order
 
 }
 
-func (self *Cache) GetOrder() *Order {
-	if self.Order == nil {
-		self.Order = NewOrderInfo(self)
-	}else{
-		if self.Order.End {
-			self.Order
-		}
-	}
-	return self.Order
-}
+//func (self *Cache) GetOrder() *Order {
+//	if self.Order == nil {
+//		self.Order = NewOrderInfo(self)
+//	}else{
+//		if self.Order.End {
+//			self.Order
+//		}
+//	}
+//	return self.Order
+//}
 
-func (self *Cache) ClearOrderAll(){
-	self.ReadLevel(func(l *Level)bool{
-		if l.Or != nil {
-			l.Or.Clear()
-		}
-		l.ClearOrderInfo()
-		return true
-	})
-}
+//func (self *Cache) ClearOrderAll(){
+//	self.ReadLevel(func(l *Level)bool{
+//		if l.Or != nil {
+//			l.Or.Clear()
+//		}
+//		l.ClearOrderInfo()
+//		return true
+//	})
+//}
 func (self *Cache) GetCacheLen() int {
 	return self.Cl.Len()
 }
@@ -413,8 +413,10 @@ func (self *Cache) ReadAll(h func(int64)){
 		h(da)
 		da /=v
 		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
-			self.ClearOrderAll()
+			//self.ClearOrderAll()
 			//fmt.Println(time.Unix(e.DateTime()/v,0),"new")
+			self.part.ClearLevel()
+
 			self.part = NewLevel(0,self,nil)
 		}
 
@@ -625,7 +627,8 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	(self.Cl == nil) {
 		return
 	}
-	//defer self.pool.Add(ea)
+	//self.pool.Add(ea)
+	l.par.addSample = append(l.par.addSample,ea)
 	if (l.sample == nil) {
 		ea.SetCaMapF(0,nil)
 		//self.pool.Add(ea)
@@ -633,17 +636,13 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 		return
 	}
 
-	//pli := l.par.list[len(l.par.list)-1]
-	//if (l.sample.GetLastElement() == pli ){
 	l.sample.Long = math.Abs(ea.GetLastElement().Diff()) > math.Abs(l.sample.GetLastElement().Diff())
-		if !l.sample.Long{
-			ea.SetCheck(true)
-		//	//ea.SetCheckBak(true)
-		//	//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
-		}
-	ea.SetPar(l.sample)
+	//if !l.sample.Long{
+	//	ea.SetCheck(true)
 	//}
-	if l.sample.GetCheckBak() {
+	ea.SetPar(l.sample)
+	////}
+	if l.sample.Check() {
 		if l.sample.Long {
 			self.SetCShow(4+int(l.sample.GetTag()&^2) *2,1)
 			self.SetCShow(int(l.sample.GetTag()&^2) *2,1)
@@ -657,18 +656,15 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 		if (p.Long == l.sample.Long){
 			l.sample.SetPar(nil)
 			if !l.sample.Long{
-				//ea.SetCheck(true)
-				ea.SetCheckBak(true)
-				//self.SetCShow(4+int(ea.GetTag()&^2) *2+1,1)
+				ea.SetCheck(true)
+				//ea.SetCheckBak(true)
+				//self.SetCShow(5+int(ea.GetTag()&^2) *2,1)
 			}
 		//}else{
 		//	p.SetChild(l.sample)
-		//}
+		}
 		p.SetChild(l.sample)
 	}
-
-	//l.sample = ea
-	//return
 
 	//l.sample.GetCaMap(2,func(b []byte){
 	//	ea.SetCaMapF(0,b)
@@ -789,9 +785,9 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 			}
 		}
 	})
-	if ea.GetCheckBak(){
+	if ea.Check(){
 		if count==0 {
-			ea.SetCheckBak(false)
+			ea.SetCheck(false)
 		}else{
 			self.SetCShow(5+int(ea.GetTag()&^2) *2,1)
 		}
@@ -800,7 +796,7 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 
 }
 
-func (self *Cache) SaveTestLog(from int64){
+func (self *Cache) SaveTestLog(from int64) {
 
 	p := filepath.Join(config.Conf.ClusterPath,self.ins.Name)
 	_,err := os.Stat(p)
@@ -811,7 +807,7 @@ func (self *Cache) SaveTestLog(from int64){
 	}
 
 	str := fmt.Sprintf(
-			"%s %s %.2f %.2f %.2f %.2f %.0f %d\r\n",
+			"%s %s %.2f %.2f %.2f %.2f %.0f %f\r\n",
 			time.Now().Format(config.TimeFormat),
 			time.Unix(from,0).Format(config.TimeFormat),
 			self.Cshow[0]/self.Cshow[1],

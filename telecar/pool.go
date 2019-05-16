@@ -2,7 +2,7 @@ package telecar
 import(
 	"github.com/zaddone/analog/config"
 	"sync"
-	//"fmt"
+	"fmt"
 	//"time"
 
 )
@@ -33,7 +33,7 @@ type OrderMsg struct {
 type Pool struct {
 	ins string
 	//sets [2][]*set
-	//chanSam [2]chan *Sample
+	chanSam [2]chan []*Sample
 	sets [2][]*set
 	//chanSam [2]chan *Sample
 	//mu sync.RWMutex
@@ -49,20 +49,38 @@ func NewPool(ins string,c CacheInter) (po *Pool){
 			make([]*set,0,1000),
 			make([]*set,0,1000),
 		},
-		//chanSam:[2]chan *Sample{
-		//	make(chan *Sample,1),
-		//	make(chan *Sample,1),
-		//},
+		chanSam:[2]chan []*Sample{
+			make(chan []*Sample,1),
+			make(chan []*Sample,1),
+		},
 		_ca:c,
 	}
-	//for i,sam := range po.chanSam {
-	//	go po.syncAdd(sam,i)
-	//}
+	for i,sam := range po.chanSam {
+		go po.syncAdd(sam,i)
+	}
 	return
 
 }
 
-func (self *Pool) syncAdd(chanSa chan *Sample,i int){
+func (self *Pool) FindSame(e *Sample) (s_ *set) {
+
+	n := e.GetTag()>>1
+	var minDis float64
+	for _,s := range self.sets[n]{
+		if s.active == e.XMin() {
+			fmt.Println(self._ca.InsName(),"active",e.XMin)
+			continue
+		}
+		dis := s.distance(e)
+		if minDis > dis {
+			minDis = dis
+			s_ = s
+		}
+	}
+	return
+}
+
+func (self *Pool) syncAdd(chanSa chan []*Sample,i int){
 	for{
 		e:=<-chanSa
 		//fmt.Println(time.Unix(e.XMax(),0),i)
@@ -73,13 +91,13 @@ func (self *Pool) syncAdd(chanSa chan *Sample,i int){
 		//self.addAndCheck(e,i)
 		//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
 
-		e.stop<-true
+		//e.stop<-true
 	}
 }
 
-func (sp *Pool) Add(e *Sample) {
-	sp.add(e,int(e.GetTag()>>1))
-	//sp.chanSam[int(e.GetTag()>>1)]<- e
+func (sp *Pool) Add(e []*Sample) {
+	//sp.add(e,int(e.GetTag()>>1))
+	sp.chanSam[int(e[0].GetTag()>>1)]<- e
 	//sp.chanSam <- e
 }
 
@@ -166,58 +184,79 @@ func (self *Pool) GetAllSample(h func(*Sample)bool){
 }
 
 
-func (self *Pool) add(e *Sample,n int) {
+func (self *Pool) add(es []*Sample,n int) {
 
-	self.mu[n].RLock()
-	t := self.FindMinSet(e,n)
-	self.mu[n].RUnlock()
-	if t == nil {
-		//self.SaveSet(NewSet(e))
-		//e.SetTestMap(e.caMap[2])
-		self.mu[n].Lock()
-		self.sets[n] = append(self.sets[n],NewSet(e))
-		self.mu[n].Unlock()
-		//e.stop<-true
-		return
-	}
-	//e.s = t.s
-	if e.checkBak {
-		if !t.s.checkSample(e){
-			e.checkBak = false
-		}else{
-			self._ca.SetCShow(5+int(e.GetTag()&^2) *2,1)
-		}
-	//	if !self.checkSample(e){
-		//	e.check=false
+	//self.mu[n].RLock()
+	//t := self.FindMinSet(e,n)
+	//self.mu[n].RUnlock()
+	//if t == nil {
+	//	self.mu[n].Lock()
+	//	self.sets[n] = append(self.sets[n],NewSet(e))
+	//	self.mu[n].Unlock()
+	//	return
+	//}
+
+	////e.s = t.s
+	//if e.check {
+	//	s := self.FindSame(e)
+	//	if s== nil {
+	//		e.check = false
+	//	}else{
+	//	d,o := s.samp[0].CheckChild()
+	//	if !o {
+	//		e.check = false
+	//	}else{
+	//		if (d>0) != e.DisU(){
+	//			e.check = false
+	//		}else{
+	//			self._ca.SetCShow(5+int(e.GetTag()&^2) *2,1)
+	//		}
 	//	}
-	}
+	//	}
+	//}
 	//e.stop<-true
 
 	self.mu[n].Lock()
-	if t.s.check(t.dis) {
-		t.s.update(append(t.s.samp,e))
-		t.s.active = e.XMax()
-	}else{
-		t.s = NewSet(e)
-		self.sets[n] = append(self.sets[n],t.s)
-		//fmt.Println(len(self.sets[n]))
+	//if t.s.check(t.dis) {
+	//	t.s.update(append(t.s.samp,e))
+	//	t.s.active = e.XMax()
+	//}else{
+	//	t.s = NewSet(e)
+	//	self.sets[n] = append(self.sets[n],t.s)
+	//	//fmt.Println(len(self.sets[n]))
+	//}
+
+	//if len(t.s.samp) == 1{
+	//	t.s.update(append(t.s.samp,e))
+	//	t.s.active = e.XMax()
+	//}else{
+	//	t.s = NewSet(e)
+	//	self.sets[n] = append(self.sets[n],t.s)
+	//}
+
+	mapSet := make(map[*set]bool)
+	for _,e := range es{
+		s := NewSet(e)
+		self.sets[n] = append(self.sets[n],s)
+		mapSet[s] =true
 	}
-	self.Dressing_only(true,map[*set]bool{t.s:true},n,e.XMax())
+	//self.clearSet(s.active,n)
+	self.Dressing_only(true,mapSet,n,self.sets[n][len(self.sets[n])-1].active)
 	self.mu[n].Unlock()
 
 }
 
-func (self *Pool) CheckSample (e *Sample) bool {
-
-	n := int(e.GetTag()>>1)
-	self.mu[n].RLock()
-	t := self.FindMinSet(e,n)
-	self.mu[n].RUnlock()
-	if t == nil {
-		return false
-	}
-	return t.s.checkSample(e)
-}
+//func (self *Pool) CheckSample (e *Sample) bool {
+//
+//	n := int(e.GetTag()>>1)
+//	self.mu[n].RLock()
+//	t := self.FindMinSet(e,n)
+//	self.mu[n].RUnlock()
+//	if t == nil {
+//		return false
+//	}
+//	return t.s.checkSample(e)
+//}
 
 func (self *Pool) checkSample (e *Sample) bool {
 	var j uint
@@ -314,16 +353,22 @@ func (self *Pool) checkSample (e *Sample) bool {
 
 func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){
 
-	for _s,_ := range tmp {
-		if _s.tmpSamp != nil {
-			_s.tmpSamp = nil
-		}
-	}
-	_tmp:= make(map[*set]bool)
+
 	for _,s := range self.sets[n] {
 		if s.tmpSamp != nil {
 			s.tmpSamp = nil
 		}
+	}
+	//for _s,_ := range tmp {
+	//	if _s.tmpSamp != nil {
+	//		_s.tmpSamp = nil
+	//	}
+	//}
+	_tmp:= make(map[*set]bool)
+	for _,s := range self.sets[n] {
+		//if s.tmpSamp != nil {
+		//	s.tmpSamp = nil
+		//}
 		for _,e := range s.samp{
 			if init {
 				e.InitSetMap(s)
@@ -353,8 +398,10 @@ func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){
 			_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
 		}
 	}
+
 	le := len(_tmp)
 	if le == 0 {
+
 		self.clearSet(d,n)
 		return
 	}
@@ -365,7 +412,8 @@ func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){
 			continue
 		}
 		_s.active = d
-		_s.update(SortSamples(_s.tmpSamp))
+		//_s.update(ClearSamples(_s.tmpSamp))
+		_s.update(_s.tmpSamp)
 	}
 	self.Dressing_only(false,_tmp,n,d)
 
@@ -458,27 +506,55 @@ func (self *Pool) clearSet(d int64,n int){
 	}
 	le := len(self.sets)
 	sets := make([]*set,0,le)
-	var i int
+	var i,l,maxl int
+	var maxs *set
 	for _,s := range self.sets[n] {
+		l= len(s.samp)
 		if (len(s.samp) == 0){
 			continue
+		}
+		if l> maxl {
+			maxl = l
+			maxs = s
 		}
 		sets = append(sets,s)
 		sort(sets,i)
 		i++
 	}
-
-	if ((d - sets[0].active)/config.Conf.DateUnixV > config.Conf.DateOut){
-		sets = sets[1:]
+	//sets = self.sets[n]
+	for{
+		if ((d - sets[0].active)/config.Conf.DateUnixV > config.Conf.DateOut){
+			sets = sets[1:]
+			//fmt.Println(self._ca.InsName(),len(sets))
+		}else{
+			break
+		}
+	}
+	if (maxs != nil) && (maxl > config.Conf.MinSam) {
+		//fmt.Println(maxl,maxs.sn.Wei)
+		maxs.update(ClearSortSamples(maxs.samp))
 	}
 	self.sets[n] = sets
 
 }
 
-func (self *Pool) ShowPoolNum() (count [2]int) {
+func (self *Pool) ShowPoolNum() (count [4]float64) {
 
-	count[0] = len(self.sets[0])
-	count[1] = len(self.sets[1])
+	var c_1,c_2 int
+	self.mu[0].RLock()
+	count[0] = float64(len(self.sets[0]))
+	for _,s := range self.sets[0] {
+		c_1 += len(s.samp)
+	}
+	self.mu[0].RUnlock()
+	self.mu[1].RLock()
+	count[1] = float64(len(self.sets[1]))
+	for _,s := range self.sets[1] {
+		c_2 += len(s.samp)
+	}
+	self.mu[1].RUnlock()
+	count[2] = float64(c_1)/count[0]
+	count[3] = float64(c_2)/count[1]
 	return
 
 }

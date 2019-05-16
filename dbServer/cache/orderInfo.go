@@ -11,7 +11,7 @@ type Order struct {
 }
 func NewOrder(c CacheInterface,f float64) *Order {
 
-	self.c.SetCShow(9,d)
+	c.SetCShow(9,1)
 	return &Order{
 		c:c,
 		e:c.GetLastElement(),
@@ -21,11 +21,11 @@ func NewOrder(c CacheInterface,f float64) *Order {
 }
 
 func (self *Order) Check(){
-	e := self.c.GetLastElement()
-	e.Middle() - self.e.Middle()
+	//e := self.c.GetLastElement()
+	//e.Middle() - self.e.Middle()
 }
 func (self *Order) New(f float64){
-	self.c.SetCShow(9,d)
+	self.c.SetCShow(9,1)
 	self.e = self.c.GetLastElement()
 	self.f = f
 }

@@ -262,10 +262,10 @@ func loadCache(){
 				if err != nil {
 					panic(err)
 				}
-				//if _ins.Name == config.Conf.InsName {
+				if _ins.Name == config.Conf.InsName {
 					InsList.w.Add(1)
 					NewCache(_ins,InsList)
-				//}
+				}
 				return nil
 			})
 		})
