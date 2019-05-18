@@ -20,12 +20,12 @@ type Sample struct {
 	X []int64
 	Y []float64
 
-	stop chan bool
+	//stop chan bool
 	eleLast config.Element
 	tag byte
 	dis float64
 
-	setMap *sync.Map
+	//setMap *sync.Map
 	Long bool
 	check bool
 	checkBak bool
@@ -49,6 +49,7 @@ type Sample struct {
 	//s *set
 	par *Sample
 	child *Sample
+	//NewC int
 }
 
 func (self *Sample) CheckChild() (float64,bool) {
@@ -152,10 +153,10 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 
 	sa = &Sample{
 		eleLast:eles[len(eles)-1],
-		Y:make([]float64,0,2000),
-		X:make([]int64,0,2000),
-		stop:make(chan bool,1),
-		setMap:new(sync.Map),
+		//Y:make([]float64,0,2000),
+		//X:make([]int64,0,2000),
+		//stop:make(chan bool,1),
+		//setMap:new(sync.Map),
 	}
 	if le !=0 {
 		sa.caMap = [4][]byte{
@@ -329,13 +330,13 @@ func (self *Sample) GetDB(dur int64,f func(x ,y float64)) (durdiff int64) {
 //		return
 //	}
 //}
-func (self *Sample)CheckSetMap(s *set) bool {
-	_,ok := self.setMap.Load(s)
-	return ok
-}
-func (self *Sample)InitSetMap(s *set){
-	self.setMap = new(sync.Map)
-	self.setMap.Store(s,true)
-}
+//func (self *Sample)CheckSetMap(s *set) (ok bool) {
+//	_,ok = self.setMap.Load(s)
+//	return ok
+//}
+//func (self *Sample)InitSetMap(s *set){
+//	self.setMap = new(sync.Map)
+//	self.setMap.Store(s,true)
+//}
 
 

@@ -629,6 +629,8 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	}
 	//self.pool.Add(ea)
 	l.par.addSample = append(l.par.addSample,ea)
+	l.sample = ea
+	return
 	if (l.sample == nil) {
 		ea.SetCaMapF(0,nil)
 		//self.pool.Add(ea)

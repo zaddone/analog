@@ -82,11 +82,11 @@ func (self *Pool) FindSame(e *Sample) (s_ *set) {
 
 func (self *Pool) syncAdd(chanSa chan []*Sample,i int){
 	for{
-		e:=<-chanSa
+		//e:=<-chanSa
 		//fmt.Println(time.Unix(e.XMax(),0),i)
 		//self.count[i]++
 		//self.mu[i].Lock()
-		self.add(e,i)
+		self.add(<-chanSa,i)
 		//self.mu[i].Unlock()
 		//self.addAndCheck(e,i)
 		//fmt.Println(time.Unix(e.XMax(),0),len(e.X),i)
@@ -111,7 +111,7 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 	var diff float64
 	for _,s := range self.sets[n] {
 		//fmt.Println(s.sn)
-		s.tmpSamp = nil
+		//s.tmpSamp = nil
 		diff = s.distance(e)
 		if (diff < t.dis) || (t.dis == 0) {
 			t.dis = diff
@@ -185,6 +185,7 @@ func (self *Pool) GetAllSample(h func(*Sample)bool){
 
 
 func (self *Pool) add(es []*Sample,n int) {
+	//return
 
 	//self.mu[n].RLock()
 	//t := self.FindMinSet(e,n)
@@ -216,7 +217,6 @@ func (self *Pool) add(es []*Sample,n int) {
 	//}
 	//e.stop<-true
 
-	self.mu[n].Lock()
 	//if t.s.check(t.dis) {
 	//	t.s.update(append(t.s.samp,e))
 	//	t.s.active = e.XMax()
@@ -234,14 +234,21 @@ func (self *Pool) add(es []*Sample,n int) {
 	//	self.sets[n] = append(self.sets[n],t.s)
 	//}
 
-	mapSet := make(map[*set]bool)
-	for _,e := range es{
-		s := NewSet(e)
-		self.sets[n] = append(self.sets[n],s)
-		mapSet[s] =true
+	//s := &set{active : es[len(es)-1].XMax()}
+	//s.active = es[len(es)-1].XMax()
+	//s.update(es)
+	//self.sets[n] = append(self.sets[n],s)
+
+	mapSet := make([]*set,0,len(es))
+	var s *set
+	for _,e := range es {
+		s = NewSet(e)
+		mapSet = append(mapSet,s)
 	}
-	//self.clearSet(s.active,n)
-	self.Dressing_only(true,mapSet,n,self.sets[n][len(self.sets[n])-1].active)
+
+	self.mu[n].Lock()
+	self.Dressing_only(mapSet,n,s.active)
+	self.sets[n] = append(self.sets[n],mapSet...)
 	self.mu[n].Unlock()
 
 }
@@ -351,38 +358,41 @@ func (self *Pool) checkSample (e *Sample) bool {
 	return true
 }
 
-func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){
+func (self *Pool)Dressing_only(tmp []*set,n int,d int64){
 
 
-	for _,s := range self.sets[n] {
-		if s.tmpSamp != nil {
-			s.tmpSamp = nil
-		}
-	}
-	//for _s,_ := range tmp {
-	//	if _s.tmpSamp != nil {
-	//		_s.tmpSamp = nil
+	//for _,s := range self.sets[n] {
+	//	if s.tmpSamp != nil {
+	//		s.tmpSamp = nil
 	//	}
 	//}
 	_tmp:= make(map[*set]bool)
-	for _,s := range self.sets[n] {
-		//if s.tmpSamp != nil {
-		//	s.tmpSamp = nil
+	var _tmpSet *tmpSet
+	sets:= self.sets[n]
+	for _i := len(sets)-1; _i>=0; _i--{
+		s:= sets[_i]
+		if !CheckTimeOut(s.active,d){
+			self.sets[n] = sets[_i:]
+			break
+		}
+	//for _,s := range self.sets[n] {
+		//if tmp[s] {
+		//	continue
 		//}
-		for _,e := range s.samp{
-			if init {
-				e.InitSetMap(s)
+		for i:= len(s.samp)-1;i>=0;i--{
+			e:=s.samp[i]
+			if !CheckTimeOut(e.XMax(),d){
+				continue
 			}
+		//for _,e := range s.samp {
+
 			if e.dis == 0 {
 				e.dis = s.distance(e)
 			}
-			_tmpSet := &tmpSet{s:s,dis:e.dis}
+			_tmpSet = &tmpSet{s:s,dis:e.dis}
 			var diff float64
-			for _s,_ := range tmp {
+			for _,_s := range tmp {
 				if s == _s {
-					continue
-				}
-				if e.CheckSetMap(_s){
 					continue
 				}
 				diff = _s.distance(e)
@@ -392,169 +402,206 @@ func (self *Pool)Dressing_only(init bool,tmp map[*set]bool,n int,d int64){
 				}
 			}
 			if _tmpSet.s != s {
+
+				_tmpSet.s.samp = append(_tmpSet.s.samp,e)
+				s.samp = append(s.samp[:i],s.samp[(i+1):]...)
+				//e.s = _tmpSet.s
 				_tmp[s] = true
 				_tmp[_tmpSet.s] = true
 			}
-			_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
+			//_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
 		}
 	}
-
-	le := len(_tmp)
-	if le == 0 {
-
-		self.clearSet(d,n)
-		return
-	}
+	//le := len(_tmp)
+	//if le == 0 {
+	//	self.clearSet(d,n)
+	//	return
+	//}
+	//new_tmp:=make(map[*set]bool)
 	for _s,_ := range _tmp {
-		if len(_s.tmpSamp) == 0{
+		//for _,_e:= range _s.samp {
+		//	if _e.s == _s{
+		//		_s.tmpSamp = append(_s.tmpSamp,_e)
+		//	}
+		//}
+		if len(_s.samp) == 0{
 			_s.clear()
-			delete(_tmp,_s)
+			//delete(_tmp,_s)
 			continue
 		}
-		_s.active = d
+		//new_tmp[_s] = true
+		//_s.active = d
+		//_s.update(SortSamples(_s.samp))
+		_s.update(ClearSamples(_s.samp))
+		//s1,s2 := SortSamples(_s.tmpSamp)
+		////_s.update(_s.tmpSamp)
+		//for _,e_ := range s1 {
+		//	s_ := NewSet(e_)
+		//	self.sets[n] = append(self.sets[n],s_)
+		//	new_tmp[s_] = true
+		//}
 		//_s.update(ClearSamples(_s.tmpSamp))
-		_s.update(_s.tmpSamp)
+		//_s.update(_s.tmpSamp)
 	}
-	self.Dressing_only(false,_tmp,n,d)
+
+	//self.clearSet(d,n)
+	return
+
+	//self.Dressing_only(false,_tmp,n,d)
 
 }
 
-func (self *Pool)Dressing(init bool,mu *sync.Mutex,w *sync.WaitGroup,tmp map[*set]bool,n int,d int64){
+//func (self *Pool)Dressing(init bool,mu *sync.Mutex,w *sync.WaitGroup,tmp map[*set]bool,n int,d int64){
+//
+//	_tmp:= make(map[*set]bool)
+//	//var NewS []*set
+//	for _,s_ := range self.sets[n] {
+//		//le := len(s_.samp)
+//		if s_.tmpSamp != nil {
+//			//s_.Lock()
+//			s_.tmpSamp = nil
+//			//s_.Unlock()
+//		}
+//		w.Add(len(s_.samp))
+//		for _,e_ := range s_.samp{
+//			if init {
+//				e_.InitSetMap(s_)
+//			}
+//			go func(s *set,e *Sample){
+//				if e.dis == 0 {
+//					e.dis = s.distance(e)
+//				}
+//				_tmpSet := &tmpSet{s:s,dis:e.dis}
+//				var diff float64
+//				for _s,_ := range tmp {
+//					if s == _s {
+//						continue
+//					}
+//					if e.CheckSetMap(_s){
+//						continue
+//					}
+//					diff = _s.distance(e)
+//					if _tmpSet.dis > diff {
+//						_tmpSet.dis = diff
+//						_tmpSet.s = _s
+//					}
+//				}
+//				if _tmpSet.s != s {
+//					_tmp[s] = true
+//					_tmp[_tmpSet.s] = true
+//				}
+//				_tmpSet.s.Lock()
+//				_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
+//				_tmpSet.s.Unlock()
+//				w.Done()
+//			}(s_,e_)
+//		}
+//	}
+//	w.Wait()
+//
+//	le := len(_tmp)
+//	if le == 0 {
+//		self.clearSet(d,n)
+//		return
+//	}
+//	for _s,_ := range _tmp {
+//		if len(_s.tmpSamp) == 0{
+//			_s.clear()
+//			delete(_tmp,_s)
+//			continue
+//		}
+//		_s.active = d
+//		w.Add(1)
+//		go func(s *set){
+//			//s.update(SortSamples(s.tmpSamp))
+//			s.update(s.tmpSamp)
+//			w.Done()
+//		}(_s)
+//	}
+//	w.Wait()
+//	self.Dressing(false,mu,w,_tmp,n,d)
+//
+//}
 
-	_tmp:= make(map[*set]bool)
-	//var NewS []*set
-	for _,s_ := range self.sets[n] {
-		//le := len(s_.samp)
-		if s_.tmpSamp != nil {
-			//s_.Lock()
-			s_.tmpSamp = nil
-			//s_.Unlock()
-		}
-		w.Add(len(s_.samp))
-		for _,e_ := range s_.samp{
-			if init {
-				e_.InitSetMap(s_)
-			}
-			go func(s *set,e *Sample){
-				if e.dis == 0 {
-					e.dis = s.distance(e)
-				}
-				_tmpSet := &tmpSet{s:s,dis:e.dis}
-				var diff float64
-				for _s,_ := range tmp {
-					if s == _s {
-						continue
-					}
-					if e.CheckSetMap(_s){
-						continue
-					}
-					diff = _s.distance(e)
-					if _tmpSet.dis > diff {
-						_tmpSet.dis = diff
-						_tmpSet.s = _s
-					}
-				}
-				if _tmpSet.s != s {
-					_tmp[s] = true
-					_tmp[_tmpSet.s] = true
-				}
-				_tmpSet.s.Lock()
-				_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
-				_tmpSet.s.Unlock()
-				w.Done()
-			}(s_,e_)
-		}
-	}
-	w.Wait()
-
-	le := len(_tmp)
-	if le == 0 {
-		self.clearSet(d,n)
-		return
-	}
-	for _s,_ := range _tmp {
-		if len(_s.tmpSamp) == 0{
-			_s.clear()
-			delete(_tmp,_s)
-			continue
-		}
-		_s.active = d
-		w.Add(1)
-		go func(s *set){
-			s.update(SortSamples(s.tmpSamp))
-			w.Done()
-		}(_s)
-	}
-	w.Wait()
-	self.Dressing(false,mu,w,_tmp,n,d)
-
+func CheckTimeOut(b,e int64)bool{
+	return (e - b)/config.Conf.DateUnixV < config.Conf.DateOut
 }
 
 func (self *Pool) clearSet(d int64,n int){
 
-	var sort func([]*set,int)
-	sort = func(_s []*set,i int){
-		if i == 0 {
-			return
-		}
-		I := i -1
-		if (_s[I].active <= _s[i].active) {
-			return
-		}
-		_s[I],_s[i] = _s[i],_s[I]
-		sort(_s,I)
-	}
-	le := len(self.sets)
-	sets := make([]*set,0,le)
-	var i,l,maxl int
-	var maxs *set
-	for _,s := range self.sets[n] {
-		l= len(s.samp)
-		if (len(s.samp) == 0){
-			continue
-		}
-		if l> maxl {
-			maxl = l
-			maxs = s
-		}
-		sets = append(sets,s)
-		sort(sets,i)
-		i++
-	}
+	//var sort func([]*set,int)
+	//sort = func(_s []*set,i int){
+	//	if i == 0 {
+	//		return
+	//	}
+	//	I := i -1
+	//	if (_s[I].active <= _s[i].active) {
+	//		return
+	//	}
+	//	_s[I],_s[i] = _s[i],_s[I]
+	//	sort(_s,I)
+	//}
+	//le := len(self.sets[n])
+	//sets := make([]*set,0,le)
+	//var l int
+	////var maxs *set
+	//for _,s := range self.sets[n] {
+	//	l= len(s.samp)
+	//	if l == 0{
+	//		continue
+	//	}
+	//	//if l> config.Conf.MinSam {
+	//	//	//s.update(SortSamples(s.samp))
+	//	//	for _,_e := range s.Sort(){
+	//	//		sets = append(sets,NewSet(_e))
+	//	//		sort(sets,len(sets)-1)
+	//	//	}
+	//	//}
+	//	sets = append(sets,s)
+	//	sort(sets,len(sets)-1)
+	//	//}
+	//}
 	//sets = self.sets[n]
-	for{
-		if ((d - sets[0].active)/config.Conf.DateUnixV > config.Conf.DateOut){
-			sets = sets[1:]
-			//fmt.Println(self._ca.InsName(),len(sets))
-		}else{
+	for i,s := range self.sets[n] {
+		if ((d - s.active)/config.Conf.DateUnixV < config.Conf.DateOut){
+			self.sets[n] = self.sets[n][i:]
 			break
 		}
 	}
-	if (maxs != nil) && (maxl > config.Conf.MinSam) {
-		//fmt.Println(maxl,maxs.sn.Wei)
-		maxs.update(ClearSortSamples(maxs.samp))
-	}
-	self.sets[n] = sets
+	return
+
+	//if (maxs != nil) && (maxl > config.Conf.MinSam) {
+	//	//fmt.Println(maxl,maxs.sn.Wei)
+	//	maxs.update(ClearSortSamples(maxs.samp))
+	//	if maxl>10 {
+	//		maxs.SaveImg()
+	//	}
+	//}
+	//self.sets[n] = sets
 
 }
 
 func (self *Pool) ShowPoolNum() (count [4]float64) {
 
-	var c_1,c_2 int
+	var c_1,c_2 float64
 	self.mu[0].RLock()
 	count[0] = float64(len(self.sets[0]))
 	for _,s := range self.sets[0] {
-		c_1 += len(s.samp)
+		if len(s.samp)>= config.Conf.MinSam{
+			c_1 ++
+		}
 	}
 	self.mu[0].RUnlock()
 	self.mu[1].RLock()
 	count[1] = float64(len(self.sets[1]))
 	for _,s := range self.sets[1] {
-		c_2 += len(s.samp)
+		if len(s.samp)>= config.Conf.MinSam{
+			c_2 ++
+		}
 	}
 	self.mu[1].RUnlock()
-	count[2] = float64(c_1)/count[0]
-	count[3] = float64(c_2)/count[1]
+	count[2] = c_1
+	count[3] = c_2
 	return
 
 }
