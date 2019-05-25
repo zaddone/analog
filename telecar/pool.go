@@ -110,6 +110,9 @@ func (self *Pool) FindMinSet(e *Sample,n int) (t *tmpSet) {
 	t = &tmpSet{}
 	var diff float64
 	for _,s := range self.sets[n] {
+		if len(s.samp) == 0 {
+			continue
+		}
 		//fmt.Println(s.sn)
 		//s.tmpSamp = nil
 		diff = s.distance(e)
@@ -253,17 +256,37 @@ func (self *Pool) add(es []*Sample,n int) {
 
 }
 
-//func (self *Pool) CheckSample (e *Sample) bool {
-//
-//	n := int(e.GetTag()>>1)
-//	self.mu[n].RLock()
-//	t := self.FindMinSet(e,n)
-//	self.mu[n].RUnlock()
-//	if t == nil {
-//		return false
-//	}
-//	return t.s.checkSample(e)
-//}
+func (self *Pool) CheckSample (e *Sample) bool {
+
+	n := int(e.GetTag()>>1)
+	self.mu[n].RLock()
+	defer self.mu[n].RUnlock()
+	t := self.FindMinSet(e,n)
+	if t == nil {
+		return false
+	}
+	//if len(t.s.samp)<config.Conf.MinSam {
+	//	return false
+	//}
+
+	//if len(t.s.samp)==1 {
+	//	return false
+	//}
+	d := e.DisU()
+	out := false
+	for _,_e := range t.s.samp{
+		f,ok := _e.CheckChild()
+		if !ok{
+			continue
+		}
+		if (f>0) != d{
+			return false
+		}else{
+			out = true
+		}
+	}
+	return out
+}
 
 func (self *Pool) checkSample (e *Sample) bool {
 	var j uint
@@ -360,12 +383,6 @@ func (self *Pool) checkSample (e *Sample) bool {
 
 func (self *Pool)Dressing_only(tmp []*set,n int,d int64){
 
-
-	//for _,s := range self.sets[n] {
-	//	if s.tmpSamp != nil {
-	//		s.tmpSamp = nil
-	//	}
-	//}
 	_tmp:= make(map[*set]bool)
 	var _tmpSet *tmpSet
 	sets:= self.sets[n]
@@ -375,17 +392,11 @@ func (self *Pool)Dressing_only(tmp []*set,n int,d int64){
 			self.sets[n] = sets[_i:]
 			break
 		}
-	//for _,s := range self.sets[n] {
-		//if tmp[s] {
-		//	continue
-		//}
 		for i:= len(s.samp)-1;i>=0;i--{
 			e:=s.samp[i]
 			if !CheckTimeOut(e.XMax(),d){
 				continue
 			}
-		//for _,e := range s.samp {
-
 			if e.dis == 0 {
 				e.dis = s.distance(e)
 			}
@@ -402,52 +413,25 @@ func (self *Pool)Dressing_only(tmp []*set,n int,d int64){
 				}
 			}
 			if _tmpSet.s != s {
-
 				_tmpSet.s.samp = append(_tmpSet.s.samp,e)
 				s.samp = append(s.samp[:i],s.samp[(i+1):]...)
-				//e.s = _tmpSet.s
 				_tmp[s] = true
 				_tmp[_tmpSet.s] = true
 			}
-			//_tmpSet.s.tmpSamp = append(_tmpSet.s.tmpSamp,e)
 		}
 	}
-	//le := len(_tmp)
-	//if le == 0 {
-	//	self.clearSet(d,n)
-	//	return
-	//}
-	//new_tmp:=make(map[*set]bool)
 	for _s,_ := range _tmp {
-		//for _,_e:= range _s.samp {
-		//	if _e.s == _s{
-		//		_s.tmpSamp = append(_s.tmpSamp,_e)
-		//	}
-		//}
 		if len(_s.samp) == 0{
 			_s.clear()
 			//delete(_tmp,_s)
 			continue
 		}
-		//new_tmp[_s] = true
-		//_s.active = d
 		//_s.update(SortSamples(_s.samp))
-		_s.update(ClearSamples(_s.samp))
-		//s1,s2 := SortSamples(_s.tmpSamp)
-		////_s.update(_s.tmpSamp)
-		//for _,e_ := range s1 {
-		//	s_ := NewSet(e_)
-		//	self.sets[n] = append(self.sets[n],s_)
-		//	new_tmp[s_] = true
-		//}
-		//_s.update(ClearSamples(_s.tmpSamp))
-		//_s.update(_s.tmpSamp)
+		//_s.update(ClearSamples(_s.samp))
+		_s.update(_s.samp)
+
 	}
-
-	//self.clearSet(d,n)
 	return
-
-	//self.Dressing_only(false,_tmp,n,d)
 
 }
 

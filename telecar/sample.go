@@ -24,6 +24,7 @@ type Sample struct {
 	eleLast config.Element
 	tag byte
 	dis float64
+	diff float64
 
 	//setMap *sync.Map
 	Long bool
@@ -52,6 +53,28 @@ type Sample struct {
 	//NewC int
 }
 
+
+//func (self *Sample) GetParDiff() ( d float64) {
+//	d = math.Abs(self.eleLast.Diff())
+//	p := self.par
+//	var c float64 = 1
+//	for {
+//		if p == nil {
+//			break
+//		}
+//		d += math.Abs(p.eleLast.Diff())
+//		c++
+//	}
+//	d /= c
+//	if !self.DisU(){
+//		d = -d
+//	}
+//	return
+//}
+
+func (self *Sample) GetDiff() float64 {
+	return self.diff
+}
 func (self *Sample) CheckChild() (float64,bool) {
 
 	ch   := self.child
@@ -59,13 +82,14 @@ func (self *Sample) CheckChild() (float64,bool) {
 		return 0,false
 	}
 	diff := self.eleLast.Diff()
-	absDiff := math.Abs(diff)
+	//absDiff := math.Abs(diff)
 	isOut:= false
+	//var count float64 = 1
 	for{
-		f := ch.eleLast.Diff()
-		absDiff += math.Abs(f)
-		diff += f
-		if math.Abs(diff) > absDiff {
+		//absDiff += math.Abs(f)
+		diff += ch.eleLast.Diff()
+		//count++
+		if math.Abs(diff) > self.diff {
 			isOut = true
 			break
 		}
@@ -170,6 +194,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	var y float64
 	var minE,maxE config.Element
 	for _,ele := range eles {
+		sa.diff += math.Abs(ele.Diff())
 		ele.Read(func(e config.Element) bool {
 			y = e.Middle()
 			if (sa.YMin==0) || (y < sa.YMin) {
@@ -186,6 +211,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 			return true
 		})
 	}
+	sa.diff/=float64(len(eles))
 	//fmt.Println(sa.Y,sa.X)
 	sa.tag = func() (t byte) {
 		f := minE.DateTime() < maxE.DateTime()

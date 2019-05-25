@@ -1,4 +1,4 @@
-package telecar
+package pool
 import(
 	"github.com/zaddone/analog/config"
 	"fmt"
@@ -22,41 +22,7 @@ type set struct {
 	//maps [][4]int
 	//count int
 }
-func abs(x int) int {
-	if x >= 0 {
-		return x
-	}
-	return -x
-}
-func drawline(x0, y0, x1, y1 int,h func(x,y int)) {
-	dx := abs(x1 - x0)
-	dy := abs(y1 - y0)
-	sx, sy := 1, 1
-	if x0 >= x1 {
-		//h(x0,y0)
-		return
-		//sx = -1
-	}
-	if y0 >= y1 {
-		sy = -1
-	}
-	err := dx - dy
-	for {
-		h(x0, y0)
-		if x0 == x1 && y0 == y1 {
-			return
-		}
-		e2 := err * 2
-		if e2 > -dy {
-	    		err -= dy
-	    		x0 += sx
-		}
-		if e2 < dx {
-			err += dx
-			y0 += sy
-		}
-	}
-}
+
 
 func (self *set) SaveImg(){
 
@@ -64,47 +30,31 @@ func (self *set) SaveImg(){
 	//dy :=int(self.sn.LengthY)
 	dx := 1200
 	dy := 600
-	imgfile, err := os.Create(fmt.Sprintf("%d_%d_%d.png",int(self.sn.LengthX),int(self.sn.LengthY),len(self.samp)))
+	imgfile, err := os.Create(fmt.Sprintf("%d_%d_%d.png",int(self.sn.lengthX),int(self.sn.lengthY),len(self.samp)))
 	if err != nil {
 		panic(err)
 	}
 	defer imgfile.Close()
 	img := image.NewNRGBA(image.Rect(0, 0, dx, dy))
-	x_ := self.sn.LengthX/float64(dx)
-	y_ := float64(dy)/self.sn.LengthY
-	x__ := float64(dx)/self.sn.LengthX
+	x_ := self.sn.lengthX/float64(dx)
+	y_ := float64(dy)/self.sn.lengthY
+	x__ := float64(dx)/self.sn.lengthX
 	for i:=0;i<dx;i++{
-		y := int(self.sn.GetWeiY(x_*float64(i)/self.sn.LengthX)*self.sn.LengthY*y_)
+		y := int(self.sn.getWeiY(x_*float64(i)/self.sn.lengthX)*self.sn.lengthY*y_)
 		img.Set(i, y, color.RGBA{0, 0, 0, 255})
 	}
 	var lx,ly,lx_,ly_ int
-	for i,e := range self.samp {
-		col := uint8(256/len(self.samp)*(i+1))
-		if (e.tag>>1) == 0 {
-			e.GetDBf(int64(self.sn.LengthX),func(x,y float64){
-				lx_ = int(x*x__)
-				ly_ = int(y*y_)
-				if lx==0{
-					img.Set(lx_, ly_, color.RGBA{col, 255-col, 0, 255})
-				}else{
-					drawline(lx,ly,lx_,ly_,func(_x,_y int){
-						img.Set(_x, _y, color.RGBA{col, 255-col, 0, 255})
-					})
-				}
-				lx = lx_
-				ly = ly_
+	for _,e := range self.samp {
+		//col := uint8(256/len(self.samp)*(i+1))
+		e.GetDB(int64(self.sn.lengthX),func(x,y float64){
+			lx_ = int(x*x__)
+			ly_ = int(y*y_)
+			drawline(lx,ly,lx_,ly_,func(_x,_y int){
+				img.Set(_x, _y, color.RGBA{0, 0, 0, 255})
 			})
-		}else{
-			e.GetDB(int64(self.sn.LengthX),func(x,y float64){
-				lx_ = int(x*x__)
-				ly_ = int(y*y_)
-				drawline(lx,ly,lx_,ly_,func(_x,_y int){
-					img.Set(_x, _y, color.RGBA{col, 255-col, 0, 255})
-				})
-				lx = lx_
-				ly = ly_
-			})
-		}
+			lx = lx_
+			ly = ly_
+		})
 	}
 	err = png.Encode(imgfile, img)
 	if err != nil {
@@ -145,30 +95,30 @@ func NewSet(sa *Sample) (S *set) {
 		//tag:sa.tag>>1,
 		samp:[]*Sample{sa},
 		sn:snap{
-			LengthX:float64(sa.XMax()-sa.XMin()),
-			LengthY:sa.YMax - sa.YMin,
+			lengthX:float64(sa.xMax()-sa.xMin()),
+			lengthY:float64(sa.yMax - sa.yMin),
 		},
-		active:sa.XMax(),
+		active:sa.xMax(),
 		//maps:[][]byte{sa.caMap}
 	}
-	X := make([]float64,0,len(sa.X))
-	Y := make([]float64,0,len(sa.X))
+	X := make([]float64,0,len(sa.x))
+	Y := make([]float64,0,len(sa.x))
 	var i int
 	var x int64
-	for i,x = range sa.X {
-		X = append(X,float64(x-sa.XMin())/S.sn.LengthX)
+	for i,x = range sa.x {
+		X = append(X,float64(x-sa.xMin())/S.sn.lengthX)
 		if sa.tag>>1 == 0 {
-			Y = append(Y,(sa.YMax - sa.Y[i])/S.sn.LengthY)
+			Y = append(Y,float64(sa.yMax - sa.y[i])/S.sn.lengthY)
 		}else{
-			Y = append(Y,(sa.Y[i]-sa.YMin)/S.sn.LengthY)
+			Y = append(Y,float64(sa.y[i]-sa.yMin)/S.sn.lengthY)
 		}
 	}
-	S.sn.Wei = CurveFitting(X,Y)
-	if len(S.sn.Wei) == 0 {
+	S.sn.wei = curveFitting(X,Y)
+	if len(S.sn.wei) == 0 {
 		panic("w1")
 	}
 	//sa.setMap.Store(S,true)
-	sa.dis = 0
+	//sa.dis = 0
 	//sa.s = S
 	//sa.NewC++
 	//S.SaveImg()
@@ -200,13 +150,13 @@ func (S *set) update(sa []*Sample) {
 	var count float64 = 0
 	for _, _s := range S.samp {
 		//_s.setMap.Store(S,true)
-		_s.dis = 0
+		//_s.dis = 0
 		//_s.s = S
 		//if i>= config.Conf.MinSam{
 		//	continue
 		//}
-		sum += _s.Duration()
-		df += _s.YMax - _s.YMin
+		sum += _s.duration()
+		df += float64(_s.yMax - _s.yMin)
 		count++
 		//if df > S.sn.LengthY  {
 		//	S.sn.LengthY = df
@@ -217,39 +167,33 @@ func (S *set) update(sa []*Sample) {
 	var X,Y []float64
 	//X := make([]float64,0,int(sum/5))
 	//Y := make([]float64,0,int(sum/5))
-	S.sn.LengthY = df/count
+	S.sn.lengthY = df/count
 	sum /= int64(count)
-	S.sn.LengthX = float64(sum)
+	S.sn.lengthX = float64(sum)
 	for _,e := range S.samp {
 		//if i>= config.Conf.MinSam{
 		//	break
 		//}
 		//s.setMap[S] = true
-		if e.tag>>1 == 0 {
-			e.GetDBf(sum,func(x,y float64){
-				X = append(X,x/S.sn.LengthX)
-				Y = append(Y,y/S.sn.LengthY)
-			})
-		}else{
-			e.GetDB(sum,func(x,y float64){
-				X = append(X,x/S.sn.LengthX)
-				Y = append(Y,y/S.sn.LengthY)
-			})
-		}
+
+		e.GetDB(sum,func(x,y float64){
+			X = append(X,x/S.sn.lengthX)
+			Y = append(Y,y/S.sn.lengthY)
+		})
 	}
-	S.sn.Wei = CurveFitting(X,Y)
-	if len(S.sn.Wei) == 0 {
+	S.sn.wei = curveFitting(X,Y)
+	if len(S.sn.wei) == 0 {
 		fmt.Println(X,Y)
 		panic("w")
 	}
 	//S.active++
-	S.SaveImg()
+	//S.SaveImg()
 
 }
 
 func (S *set) clear(){
 	//S.Lock()
-	S.sn.Wei = nil
+	S.sn.wei = nil
 	//S.dar = nil
 	S.samp = nil
 	//S.tmpSamp = nil
@@ -261,17 +205,11 @@ func (self *set) distance(e *Sample) float64 {
 
 	//fmt.Println(len(self.samp))
 	var longDis,l float64
-	if (e.tag>>1) == 0 {
-		e.GetDBf(int64(self.sn.LengthX),func(x,y float64){
-			longDis += math.Pow(self.sn.GetWeiY(x/self.sn.LengthX)-y/self.sn.LengthY,2)
-			l++
-		})
-	}else{
-		e.GetDB(int64(self.sn.LengthX),func(x,y float64){
-			longDis += math.Pow(self.sn.GetWeiY(x/self.sn.LengthX)-y/self.sn.LengthY,2)
-			l++
-		})
-	}
+
+	e.GetDB(int64(self.sn.lengthX),func(x,y float64){
+		longDis += math.Pow(self.sn.getWeiY(x/self.sn.lengthX)-y/self.sn.lengthY,2)
+		l++
+	})
 	return longDis/l
 	//return longDis
 
@@ -286,12 +224,12 @@ func ClearSamples(src []*Sample) ([]*Sample){
 	//}
 	m:=make(map[int64]*Sample)
 	for _,e := range src {
-		k:=e.XMin()
+		k:=e.xMin()
 		_e := m[k]
 		if _e == nil {
 			m[k] = e
 		}else{
-			if _e.XMax() > e.XMax() {
+			if _e.xMax() > e.xMax() {
 				m[k] = e
 			}
 		}
@@ -310,7 +248,7 @@ func ClearSortSamples(src []*Sample) []*Sample{
 			return
 		}
 		I := i-1
-		if src[I].XMax() <= src[i].XMax() {
+		if src[I].xMax() <= src[i].xMax() {
 			return
 		}
 		src[I],src[i] = src[i],src[I]
@@ -337,7 +275,7 @@ func SortSamples(src []*Sample) []*Sample {
 			return
 		}
 		I := i-1
-		if src[I].XMax() >= src[i].XMax() {
+		if src[I].xMax() >= src[i].xMax() {
 			return
 		}
 		src[I],src[i] = src[i],src[I]
@@ -353,34 +291,34 @@ func SortSamples(src []*Sample) []*Sample {
 	//self.update(self.samp)
 }
 
-func (self *set) Sort() (out []*Sample) {
-	var sort func(i int)
-	sort = func(i int){
-		if i == 0 {
-			return
-		}
-		I := i-1
-		if self.samp[I].dis <= self.samp[i].dis{
-			return
-		}
-		self.samp[I],self.samp[i] = self.samp[i],self.samp[I]
-		sort(I)
-	}
-	for _i,e := range self.samp{
-		if e.dis == 0 {
-			e.dis = self.distance(e)
-		}
-		sort(_i)
-	}
-	out = self.samp[config.Conf.MinSam:]
-	//self.samp = self.samp[:config.Conf.MinSam]
-	self.update(self.samp[:config.Conf.MinSam])
-	return
-
-	//self.samp = SortSamples(self.samp)
-}
+//func (self *set) Sort() (out []*Sample) {
+//	var sort func(i int)
+//	sort = func(i int){
+//		if i == 0 {
+//			return
+//		}
+//		I := i-1
+//		if self.samp[I].dis <= self.samp[i].dis{
+//			return
+//		}
+//		self.samp[I],self.samp[i] = self.samp[i],self.samp[I]
+//		sort(I)
+//	}
+//	for _i,e := range self.samp{
+//		if e.dis == 0 {
+//			e.dis = self.distance(e)
+//		}
+//		sort(_i)
+//	}
+//	out = self.samp[config.Conf.MinSam:]
+//	//self.samp = self.samp[:config.Conf.MinSam]
+//	self.update(self.samp[:config.Conf.MinSam])
+//	return
+//
+//	//self.samp = SortSamples(self.samp)
+//}
 func (self *set) GetLastTime() int64 {
-	return self.samp[len(self.samp)-1].XMax()
+	return self.samp[len(self.samp)-1].xMax()
 }
 
 //func (self *set) SetDar() {
