@@ -27,19 +27,18 @@ func NewPools(ca CacheInter) *Pools {
 
 func (self *Pools) Check(e *Sample) {
 
-
+	//return
 	if !e.check_1{
 		return
 	}
 	n := int(e.tag>>1)
-	//var _k1,_k2,_k3,_k4 float64
-	var _k3,_k4 float64
-	dis:=e.DisU()
+	var _k1,_k2 float64
+	dis := e.DisU()
 	self.p[n].readList(func(i int,_e *Sample)bool{
-		if (_e.CheckChild() >0) == dis {
-			_k3++
+		if (_e.val >0) == dis {
+			_k1++
 		}else{
-			_k4++
+			_k2++
 		}
 
 		//if _e.Check() {
@@ -54,7 +53,30 @@ func (self *Pools) Check(e *Sample) {
 		//}
 		return true
 	})
-	e.check_1 = (_k3>_k4)
+
+	//var _k3,_k4 float64
+	//self.p[n^1].readList(func(i int,_e *Sample)bool{
+	//	if (_e.val >0) == dis {
+	//		_k1++
+	//	}else{
+	//		_k2++
+	//	}
+	//	return true
+	//})
+
+	//if (e.tag &^ 2) == 0 {
+	//	e.check_1 = (_k1 + _k3) > (_k2 + _k4)
+	//	//e.check_1 = false
+	//}else{
+		e.check_1 = _k1>_k2
+		//e.check_1 = (_k1>_k2) && (_k3>_k4)
+	//}
+
+	//e.check_1 = _k1>_k2
+	//e.check_1 = (_k1 + _k3) > (_k2 + _k4)
+	//}else{
+		//e.check_1 = (_k1>_k2) && (_k3>_k4)
+	//}
 		//e.check_1 = ((_k1/_k2)> 1.3)
 	return
 
@@ -99,9 +121,9 @@ func (self *Pools)ShowPoolNum()[]float64 {
 			if !e.check_1 {
 				continue
 			}
-			f := e.CheckChild()
+			//f := e.CheckChild()
 			n1 := int(e.tag&^2)*2
-			if ((f>0) == e.DisU()) {
+			if ((e.val>0) == e.DisU()) {
 				self.ca.SetCShow(n1,1)
 			}else{
 				self.ca.SetCShow(n1+1,1)
@@ -125,11 +147,11 @@ func (self *Pools)ShowPoolNum()[]float64 {
 	}
 	return nil
 }
-func (self *Pools) Add(es []*Sample){
-	for _,e := range es {
-		self.p[int(e.tag>>1)].tmp <- e
+func (self *Pools) Add(e *Sample){
+	//for _,e := range es {
+	self.p[int(e.tag>>1)].tmp <- e
 		//self.p[0].tmp <- e
-	}
+	//}
 }
 
 type Pool struct {

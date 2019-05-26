@@ -48,7 +48,7 @@ type Sample struct {
 	long bool
 	check bool
 	check_1 bool
-	diff int64
+	diff float64
 	//last *Sample
 	//next *Sample
 	par *Sample
@@ -76,7 +76,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	var y int64
 	var minE,maxE config.Element
 	for _,ele := range eles {
-		sa.diff += int64(math.Abs(ele.Diff()))
+		sa.diff += math.Abs(ele.Diff())
 		ele.Read(func(e config.Element) bool {
 			y = int64(e.Middle())
 			if (sa.yMin==0) || (y < sa.yMin) {
@@ -93,7 +93,7 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 			return true
 		})
 	}
-	sa.diff /= int64(len(eles))
+	sa.diff /= float64(len(eles))
 	sa.tag = func() (t byte) {
 		f := minE.DateTime() < maxE.DateTime()
 		//f := sa.Y[0] < sa.Y[len(sa.Y)-1]
@@ -107,6 +107,11 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	}()
 	return
 
+}
+
+func (self *Sample) CheckVal(_e config.Element)bool{
+	self.val = _e.Middle() - self.eleLast.Middle()
+	return math.Abs(self.val) > self.diff
 }
 func (self *Sample) SetSnap(){
 	self.sn.lengthX = float64(self.duration())
@@ -287,32 +292,31 @@ func (self *Sample) SetCheck(c bool) {
 func (self *Sample) Check() bool {
 	return self.check
 }
-func (self *Sample) GetDiff() int64 {
+func (self *Sample) GetDiff() float64 {
 	return self.diff
 }
-func (self *Sample) CheckChild() (float64) {
-
-	ch := self.child
-	if ch == nil {
-		return self.val
-	}
-	diff_ := float64(self.diff)
-	m := self.eleLast.Middle()
-	self.val = 0
-	for{
-		self.val = ch.eleLast.Middle() - m
-		if math.Abs(self.val) > diff_ {
-			self.child = nil
-			break
-		}
-		if ch.child == nil{
-			break
-		}
-		ch = ch.child
-	}
-	return self.val
-
-}
+//func (self *Sample) CheckChild() (val float64) {
+//
+//	ch := self.child
+//	if ch == nil {
+//		return 0
+//	}
+//	diff_ := float64(self.diff)
+//	m := self.eleLast.Middle()
+//	for{
+//		val = ch.eleLast.Middle() - m
+//		if math.Abs(val) > diff_ {
+//			//self.child = nil
+//			break
+//		}
+//		if ch.child == nil{
+//			break
+//		}
+//		ch = ch.child
+//	}
+//	return val
+//
+//}
 func (self *Sample) DisU() (bool) {
 
 	t := self.tag>>1

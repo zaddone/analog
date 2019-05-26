@@ -217,7 +217,12 @@ func (self *Level) readf( h func(e config.Element) bool){
 
 func (self *Level) ClearLevel(){
 	if self.addSample != nil {
-		self.ca.pool.Add(self.addSample)
+		for _,e := range self.addSample{
+
+			self.ca.pool.Add(e)
+		}
+		//self.ca.pool.Add(self.addSample)
+		self.addSample = nil
 	}
 	if self.par == nil {
 		return
@@ -261,6 +266,16 @@ func (self *Level) add(e config.Element) {
 	if e.Diff() == 0 {
 		return
 	}
+
+	tmp:=make([]*cluster.Sample,0,len(self.addSample))
+	for _,sa := range self.addSample {
+		if sa.CheckVal(e){
+			self.ca.pool.Add(sa)
+		}else{
+			tmp = append(tmp,sa)
+		}
+	}
+	self.addSample = tmp
 	//self.update = false
 	le := len(self.list)
 
@@ -365,10 +380,11 @@ func (self *Level) add(e config.Element) {
 	}
 	self.dis = max
 
-	if len(self.addSample)>0{
-		self.ca.pool.Add(self.addSample)
-		self.addSample = nil
-	}
+
+	//if len(self.addSample)>0{
+	//	self.ca.pool.Add(self.addSample)
+	//	self.addSample = nil
+	//}
 
 }
 

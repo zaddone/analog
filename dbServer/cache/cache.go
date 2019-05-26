@@ -407,6 +407,8 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	//	}
 	//}
 
+
+	//ea.SetCheckBak(true)
 	if !l.sample.GetLong() {
 		ea.SetCheck(true)
 		ea.SetCheckBak(true)
