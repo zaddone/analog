@@ -4,6 +4,7 @@ import(
 	"sync"
 	//"os"
 	//"fmt"
+	"math"
 	//"time"
 )
 
@@ -11,147 +12,105 @@ type CacheInter interface {
 	SetCShow(int,float64)
 	InsName()string
 	GetCacheLen() int
+	GetLastElement() config.Element
+
 }
 type Pools struct{
-	p [2]*Pool
+	//p [2]*Pool
 	ca  CacheInter
+	t *Tree
+	tmp chan *Sample
+
 }
-func NewPools(ca CacheInter) *Pools {
+func NewPools(ca CacheInter) (p *Pools) {
 
-	return &Pools{
+	p = &Pools{
 		ca:ca,
-		p:[2]*Pool{NewPool(),NewPool()},
+		//p:[2]*Pool{NewPool(),NewPool()},
+		t:&Tree{},
+		tmp:make(chan *Sample,1),
 	}
+	go p.syncRun()
+	return p
 
+}
+func (self *Pools) syncRun(){
+	for{
+		e := <-self.tmp
+		e.SetSnap()
+		self.t.update(NewNode(e))
+	}
 }
 
 func (self *Pools) Check(e *Sample) {
 
-	//return
-	if !e.check_1{
+	return
+	ms := self.t.Find(NewNode(e))
+	if ms == nil {
 		return
 	}
-	n := int(e.tag>>1)
-	var _k1,_k2 float64
-	dis := e.DisU()
-	self.p[n].readList(func(i int,_e *Sample)bool{
-		if (_e.val >0) == dis {
-			_k1++
+	var k1,k2 float64
+	var nt [2]float64
+	t := e.tag>>1
+	var _t byte
+	dn := (e.tag>>1) ^ (e.tag&^2)
+	for n,_ := range ms {
+		_t = n.sa.tag>>1
+		nt[int(_t)]++
+		if _t == t {
+			if (n.sa.val>0) == (dn==1) {
+				k1++
+			}else{
+				k2++
+			}
 		}else{
-			_k2++
+			if (n.sa.val>0) == (dn==1) {
+				k2++
+			}else{
+				k1++
+			}
 		}
+	}
 
-		//if _e.Check() {
-		//	if (_e.tag == e.tag) {
-		//		if f {
-		//			_k1++
-		//		}else{
-		//			_k2++
-		//		}
-		//	}
-
-		//}
-		return true
-	})
-
-	//var _k3,_k4 float64
-	//self.p[n^1].readList(func(i int,_e *Sample)bool{
-	//	if (_e.val >0) == dis {
-	//		_k1++
-	//	}else{
-	//		_k2++
-	//	}
-	//	return true
-	//})
-
-	//if (e.tag &^ 2) == 0 {
-	//	e.check_1 = (_k1 + _k3) > (_k2 + _k4)
-	//	//e.check_1 = false
-	//}else{
-		e.check_1 = _k1>_k2
-		//e.check_1 = (_k1>_k2) && (_k3>_k4)
-	//}
-
-	//e.check_1 = _k1>_k2
-	//e.check_1 = (_k1 + _k3) > (_k2 + _k4)
-	//}else{
-		//e.check_1 = (_k1>_k2) && (_k3>_k4)
-	//}
-		//e.check_1 = ((_k1/_k2)> 1.3)
+	//fmt.Println(k1,k2,nt,dn,e.tag,len(ms))
+	//e.check_1 = (nt[int(dn)] > nt[int(dn^1)]) && (k1>k2)
+	e.check_1 = (nt[int(dn)] < nt[int(dn^1)])
+	//e.check_1 = k1>k2
 	return
-
-	//__e := self.p[n^1].FindSame(e)
-	//if __e == nil {
-	//	return
-	//}
-	//__f,_ :=  __e.CheckChild()
-	//if (__f>0)  == (_f>0){
-	//	return
-	//}
-	////if (e.tag>>1) == (_e.tag>>1){
-	//e.same = _e
-	//}
-	//self.ca.SetCShow(0,1)
-	//s := &set{}
-	//s.update([]*Sample{e,_e})
-	//s.SaveImg()
-
-
-
-	//f ,ok := _e.CheckChild()
-	//if !ok{
-	//	e.SetCheck(false)
-	////	self.ca.SetCShow(8,1)
-	//	return
-	//}
-	//if f>0 != e.DisU() {
-	//	e.SetCheck(false)
-	////	self.ca.SetCShow(9,1)
-	//	return
-	//}
-	//self.ca.SetCShow(5,1)
 
 }
 func (self *Pools)ShowPoolNum()[]float64 {
-	//return nil
-	for _,p := range self.p {
-		//I :=i*4+2
-		p.m.RLock()
-		for _,e := range p.list {
-			if !e.check_1 {
-				continue
-			}
-			//f := e.CheckChild()
-			n1 := int(e.tag&^2)*2
-			if ((e.val>0) == e.DisU()) {
-				self.ca.SetCShow(n1,1)
-			}else{
-				self.ca.SetCShow(n1+1,1)
-			}
-
-			//f,ok := e.CheckChild()
-			//if !ok{
-			//	self.ca.SetCShow(1,1)
-			//}else{
-			//	if (f>0) == e.DisU(){
-			//		self.ca.SetCShow(I+int(e.tag&^2)*2+1,1)
-			//	}else{
-			//		self.ca.SetCShow(I+int(e.tag&^2)*2,1)
-			//	}
-			//}
-			//}
-		}
-
-		//self.ca.SetCShow(0,float64(len(p.list)))
-		p.m.RUnlock()
-	}
-	return nil
+	return []float64{self.ca.GetLastElement().Diff()}
 }
+
 func (self *Pools) Add(e *Sample){
+
 	//for _,e := range es {
-	self.p[int(e.tag>>1)].tmp <- e
-		//self.p[0].tmp <- e
-	//}
+	if e.check_1 {
+
+		n1 := int(e.tag&^2)*2
+		e.Relval = self.ca.GetLastElement().Middle() - e.begin.Middle()
+		if e.DisU() == (e.Relval>0) {
+
+			e.Relval = math.Abs(e.Relval)
+		}else{
+			e.Relval = -math.Abs(e.Relval)
+		}
+		//e.Relval -= (math.Abs(e.begin.Diff()) + math.Abs(self.ca.GetLastElement().Diff()))/2
+
+		self.ca.SetCShow(4+n1,e.Relval)
+		self.ca.SetCShow(4+n1+1,1)
+		if e.DisU() == (e.val>0) {
+			self.ca.SetCShow(n1,1)
+		}else{
+			self.ca.SetCShow(n1+1,1)
+		}
+		//fmt.Println(e.Relval,e.begin.Diff(),e.diff)
+	}
+
+	self.tmp <- e
+
+
 }
 
 type Pool struct {
@@ -177,7 +136,6 @@ func (self *Pool) add(e *Sample){
 	self.list = append(self.list,e)
 	for i,_e := range self.list {
 		if (e.xMax() - _e.xMax())/config.Conf.DateUnixV < config.Conf.DateOut{
-
 			self.list = self.list[i:]
 			break
 		}

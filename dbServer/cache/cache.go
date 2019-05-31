@@ -74,6 +74,8 @@ type Cache struct {
 	last config.Element
 	Order  *Order
 
+	//addSample []*cluster.Sample
+
 }
 func (self *Cache) PostOrder(diff float64){
 	if self.Order == nil {
@@ -385,17 +387,19 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	}
 	//self.pool.Add(ea)
 	//ea.SetSnap()
-	l.par.addSample = append(l.par.addSample,ea)
 	//l.sample = ea
 	//return
+	l.par.addSample = append(l.par.addSample,ea)
+
 	if (l.sample == nil) {
 		ea.SetCaMapF(0,nil)
 		//self.pool.Add(ea)
 		l.sample = ea
 		return
 	}
-
 	l.sample.SetLong(math.Abs(ea.GetLastElement().Diff()) > math.Abs(l.sample.GetLastElement().Diff()))
+
+	l.sample.SetChild(ea)
 	ea.SetPar(l.sample)
 	////}
 	//if l.sample.Check() {
@@ -407,26 +411,27 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	//	}
 	//}
 
-
 	//ea.SetCheckBak(true)
-	if !l.sample.GetLong() {
+	//if !l.sample.GetLong() {
 		ea.SetCheck(true)
 		ea.SetCheckBak(true)
-	}
+	//}
+	ea.SetBegin(self.getLastElement())
 
 	p := l.sample.GetPar()
 	if (p!=nil) {
-		if (p.GetLong() == l.sample.GetLong()){
-			l.sample.SetPar(nil)
+		//if (p.GetLong() == l.sample.GetLong()){
+			//l.sample.SetPar(nil)
 			//if !l.sample.GetLong(){
 			//	ea.SetCheckBak(true)
+			//	//ea.SetBegin(self.getLastElement())
 			//}
 		//}else{
 		//	if ea.GetTag()&^2==0 {
 		//		ea.SetCheckBak(false)
 		//	}
-		}
-		p.SetChild(l.sample)
+		//}
+		//p.SetChild(l.sample)
 	}
 
 	//l.sample.GetCaMap(2,func(b []byte){

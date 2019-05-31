@@ -44,6 +44,8 @@ type Sample struct {
 	m sync.RWMutex
 
 	eleLast config.Element
+	begin config.Element
+
 	tag byte
 	long bool
 	check bool
@@ -59,6 +61,7 @@ type Sample struct {
 	sn snap
 	tmp float64
 	val float64
+	Relval float64
 }
 
 func NewSample(eles []config.Element,le int) (sa *Sample) {
@@ -109,9 +112,28 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 
 }
 
+func (self *Sample) SetBegin(e config.Element){
+	self.begin = e
+}
+
 func (self *Sample) CheckVal(_e config.Element)bool{
 	self.val = _e.Middle() - self.eleLast.Middle()
 	return math.Abs(self.val) > self.diff
+	//ch := self.child
+	//d := self.eleLast.Diff()
+	//for {
+	//	if ch == nil{
+	//		break
+	//	}
+	//	d += ch.eleLast.Diff()
+	//	ch = ch.child
+	//}
+
+	//f:= math.Abs(self.val) > self.diff
+	//if f {
+	//	fmt.Println(d,self.val)
+	//}
+	//return f
 }
 func (self *Sample) SetSnap(){
 	self.sn.lengthX = float64(self.duration())
@@ -210,6 +232,9 @@ func (self *Sample) GetDB(dur int64,f func(float64,float64)) (int64) {
 		return self.getDB(dur,f)
 	}
 
+}
+func (self *Sample) GetDis(e *Sample) float64 {
+	return self.getDis(e)
 }
 func (self *Sample) getDis(e *Sample) float64 {
 	var longDis,l float64
@@ -319,10 +344,7 @@ func (self *Sample) GetDiff() float64 {
 //}
 func (self *Sample) DisU() (bool) {
 
-	t := self.tag>>1
-	if ((self.tag &^ 2)  == 1) {
-		t ^= 1
-	}
+	t := (self.tag>>1) ^ (self.tag &^ 2)
 	if t ==1 {
 		return true
 	}else{
