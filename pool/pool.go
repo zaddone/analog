@@ -37,6 +37,7 @@ func NewPools(ca CacheInter) (p *Pools) {
 func (self *Pools) syncRun(){
 	for{
 		e := <-self.tmp
+		//continue
 		e.SetSnap()
 		self.t.update(NewNode(e))
 	}
@@ -44,38 +45,50 @@ func (self *Pools) syncRun(){
 
 func (self *Pools) Check(e *Sample) {
 
-	return
+	//return
 	ms := self.t.Find(NewNode(e))
 	if ms == nil {
 		return
 	}
 	var k1,k2 float64
-	var nt [2]float64
-	t := e.tag>>1
-	var _t byte
+	//var nt [2]float64
+	//t := e.tag>>1
+	//var _t byte
 	dn := (e.tag>>1) ^ (e.tag&^2)
 	for n,_ := range ms {
-		_t = n.sa.tag>>1
-		nt[int(_t)]++
-		if _t == t {
-			if (n.sa.val>0) == (dn==1) {
-				k1++
-			}else{
-				k2++
-			}
-		}else{
-			if (n.sa.val>0) == (dn==1) {
-				k2++
-			}else{
-				k1++
-			}
+		if !n.sa.check {
+			continue
 		}
+		if  n.sa.tag != e.tag {
+			continue
+		}
+		//if (n.sa.val>0) != (dn==1) {
+		//	e.check_1 = false
+		//	return
+		//}
+
+
+		//_t = n.sa.tag>>1
+		//nt[int(_t)]++
+		//if _t == t {
+		if (n.sa.val>0) == (dn==1) {
+			k1++
+		}else{
+			k2++
+		}
+		//}else{
+		//	//if (n.sa.val>0) == (dn==1) {
+		//	//	k2++
+		//	//}else{
+		//	//	k1++
+		//	//}
+		//}
 	}
 
 	//fmt.Println(k1,k2,nt,dn,e.tag,len(ms))
 	//e.check_1 = (nt[int(dn)] > nt[int(dn^1)]) && (k1>k2)
-	e.check_1 = (nt[int(dn)] < nt[int(dn^1)])
-	//e.check_1 = k1>k2
+	//e.check_1 = (nt[int(dn)] < nt[int(dn^1)])
+	e.check_1 = (k1>k2) || (k2==0)
 	return
 
 }

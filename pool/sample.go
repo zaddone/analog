@@ -137,7 +137,7 @@ func (self *Sample) CheckVal(_e config.Element)bool{
 }
 func (self *Sample) SetSnap(){
 	self.sn.lengthX = float64(self.duration())
-	self.sn.lengthY = float64(self.yMax- self.yMin)
+	self.sn.lengthY = float64(self.yMax- self.yMin) + self.diff
 
 	le := len(self.x)
 	X := make([]float64,0,le)

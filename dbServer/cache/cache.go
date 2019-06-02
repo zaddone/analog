@@ -412,24 +412,23 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	//}
 
 	//ea.SetCheckBak(true)
-	//if !l.sample.GetLong() {
+	if !l.sample.GetLong() {
 		ea.SetCheck(true)
 		ea.SetCheckBak(true)
-	//}
+	}
 	ea.SetBegin(self.getLastElement())
 
 	p := l.sample.GetPar()
 	if (p!=nil) {
 		//if (p.GetLong() == l.sample.GetLong()){
-			//l.sample.SetPar(nil)
-			//if !l.sample.GetLong(){
-			//	ea.SetCheckBak(true)
-			//	//ea.SetBegin(self.getLastElement())
-			//}
-		//}else{
-		//	if ea.GetTag()&^2==0 {
-		//		ea.SetCheckBak(false)
+		//	l.sample.SetPar(nil)
+		//	if !l.sample.GetLong(){
+		//		ea.SetCheckBak(true)
 		//	}
+		////}else{
+		////	if ea.GetTag()&^2==0 {
+		////		ea.SetCheckBak(false)
+		////	}
 		//}
 		//p.SetChild(l.sample)
 	}
