@@ -3,7 +3,7 @@ import(
 	"github.com/zaddone/analog/config"
 	"sync"
 	//"os"
-	//"fmt"
+	"fmt"
 	"math"
 	//"time"
 )
@@ -45,7 +45,7 @@ func (self *Pools) syncRun(){
 
 func (self *Pools) Check(e *Sample) {
 
-	return
+	//return
 	ms := self.t.Find(NewNode(e))
 	if ms == nil {
 		return
@@ -96,11 +96,11 @@ func (self *Pools) Check(e *Sample) {
 		//}
 		return true
 	})
-	//fmt.Println(c,len(self.t.list))
+	fmt.Println(c,len(self.t.list))
 	//if ((k3[0]+k3[1])/float64(len(self.t.list))) > 0.1{
 	//	e.check_1 = (k3[int(dn)]>k3[int(dn^1)]) && (k1>k2)
 	//}else{
-	e.check_1 = (k1>k2)
+	//	e.check_1 = false
 	//}
 	return
 

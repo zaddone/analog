@@ -358,17 +358,20 @@ func (self *Level) add(e config.Element) {
 	//self.ClearOrder(node.Diff())
 	//fmt.Println(time.Unix(node.duration/config.Conf.DateUnixV,0),node.Diff(),node.Middle())
 	if self.par == nil {
-		tag := self.tag+1
-		self.par = NewLevel(tag,self.ca,self)
+		if math.Abs(node.Diff()) < self.ca.GetMinDiff() {
+			tag := self.tag+1
+			self.par = NewLevel(tag,self.ca,self)
+			self.par.add(node)
+		}
 	}else{
 		if self.ca != nil {
 			self.ca.Unlock()
 			self.ca.CheckOrder(self,self.sampleTmp,sumdif)
 			self.ca.Lock()
 		}
-		//self.par.add(node,ins)
+		self.par.add(node)
 	}
-	self.par.add(node)
+	//self.par.add(node)
 	self.list = self.list[maxid:]
 	self.sampleTmp = nil
 	self.maxid = 0

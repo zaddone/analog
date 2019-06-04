@@ -187,7 +187,7 @@ func (self *Cache) ReadAll(h func(int64)){
 		da := p.DateTime()
 		h(da)
 		da /=v
-		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
+		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) > 3600) {
 			//self.ClearOrderAll()
 			//fmt.Println(time.Unix(e.DateTime()/v,0),"new")
 			self.part.ClearLevel()
@@ -203,10 +203,6 @@ func (self *Cache) ReadAll(h func(int64)){
 			begin = da
 		}
 		self.Lock()
-		if e := self.getLastElement();(e!= nil) && ((da - e.DateTime()/v) >100) {
-			self.part = NewLevel(0,self,nil)
-		}
-
 		self.part.add(p)
 		self.Unlock()
 
@@ -401,6 +397,7 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 
 	l.sample.SetChild(ea)
 	ea.SetPar(l.sample)
+
 	////}
 	//if l.sample.Check() {
 	//	if l.sample.Long {
@@ -412,24 +409,27 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	//}
 
 	//ea.SetCheckBak(true)
+
 	if !l.sample.GetLong() {
 		ea.SetCheck(true)
-		ea.SetCheckBak(true)
+		//l.par.addSample = append(l.par.addSample,ea)
+		//ea.SetCheckBak(true)
 	}
 	ea.SetBegin(self.getLastElement())
 
 	p := l.sample.GetPar()
 	if (p!=nil) {
-		//if (p.GetLong() == l.sample.GetLong()){
-		//	l.sample.SetPar(nil)
-		//	if !l.sample.GetLong(){
-		//		ea.SetCheckBak(true)
+		if (p.GetLong() == l.sample.GetLong()){
+			l.sample.SetPar(nil)
+			if !l.sample.GetLong(){
+				//ea.SetCheck(true)
+				ea.SetCheckBak(true)
+			}
+		//}else{
+		//	if ea.GetTag()&^2==0 {
+		//		ea.SetCheckBak(false)
 		//	}
-		////}else{
-		////	if ea.GetTag()&^2==0 {
-		////		ea.SetCheckBak(false)
-		////	}
-		//}
+		}
 		//p.SetChild(l.sample)
 	}
 
@@ -559,6 +559,7 @@ func (self *Cache) CheckOrder(l *Level, ea *cluster.Sample, sumdif float64){
 	//}
 	//if ea.Check(){
 	self.pool.Check(ea)
+	//}
 	//	if count==0 {
 	//		ea.SetCheck(false)
 	//	//}else{
@@ -607,4 +608,8 @@ func (self *Cache) SaveTestLog(from int64) {
 	//self.Cshow[6] = 0
 	//self.Cshow = [11]float64{0,0,0,0,0,0,0,0,0,0,0}
 
+}
+
+func (self *Cache) GetMinDiff() float64 {
+	return self.ins.Integer()*self.ins.MinimumTrailingStopDistance
 }

@@ -62,6 +62,7 @@ type Sample struct {
 	tmp float64
 	val float64
 	Relval float64
+	topDiff float64
 }
 
 func NewSample(eles []config.Element,le int) (sa *Sample) {
@@ -78,9 +79,11 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	}
 	var y int64
 	var minE,maxE config.Element
+	//var topDiff float64
 	for _,ele := range eles {
 		sa.diff += math.Abs(ele.Diff())
 		ele.Read(func(e config.Element) bool {
+			sa.topDiff += math.Abs(ele.Diff())
 			y = int64(e.Middle())
 			if (sa.yMin==0) || (y < sa.yMin) {
 				sa.yMin = y
@@ -96,6 +99,8 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 			return true
 		})
 	}
+	//sa.full = math.Abs(sa.eleLast.Diff()) > topDiff/float64(len(sa.x))
+	sa.topDiff /= float64(len(sa.x))
 	sa.diff /= float64(len(eles))
 	sa.tag = func() (t byte) {
 		f := minE.DateTime() < maxE.DateTime()
@@ -111,6 +116,10 @@ func NewSample(eles []config.Element,le int) (sa *Sample) {
 	return
 
 }
+
+//func (self *Sample) Full() bool {
+//	return self.full
+//}
 
 func (self *Sample) SetBegin(e config.Element){
 	self.begin = e
